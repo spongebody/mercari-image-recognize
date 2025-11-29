@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mercari 商品画像識別テスター</title>
+    <style>
+      :root {
+        --bg: #f7f8fa;
+        --card: #ffffff;
+        --text: #1c1f25;
+        --muted: #6b7280;
+        --accent: #2f80ed;
+        --border: #e5e7eb;
+        --danger: #e11d48;
+        --success: #16a34a;
+        --shadow: 0 14px 40px rgba(15, 23, 42, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: radial-gradient(circle at 10% 20%, #eef2ff 0, transparent 25%),
+          radial-gradient(circle at 80% 0%, #e0f2fe 0, transparent 28%),
+          var(--bg);
+        color: var(--text);
+        font-family: "Inter", "Noto Sans JP", system-ui, -apple-system, sans-serif;
+        min-height: 100vh;
+      }
+
+      .page {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 28px 20px 40px;
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 26px;
+        letter-spacing: -0.2px;
+      }
+
+      .pill {
+        background: #e0e7ff;
+        color: #1e3a8a;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.1px;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 18px;
+        box-shadow: var(--shadow);
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .controls {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 12px;
+        align-items: end;
+      }
+
+      label {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      input[type="file"],
+      select,
+      button {
+        width: 100%;
+      }
+
+      input[type="file"],
+      select {
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: #fdfdfd;
+        font-size: 14px;
+      }
+
+      button {
+        border: none;
+        background: linear-gradient(135deg, var(--accent), #1d4ed8);
+        color: white;
+        padding: 12px 16px;
+        border-radius: 12px;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.08s ease, box-shadow 0.08s ease;
+        box-shadow: 0 10px 25px rgba(47, 128, 237, 0.2);
+      }
+
+      button:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+        box-shadow: none;
+      }
+
+      button:not(:disabled):hover {
+        transform: translateY(-1px);
+        box-shadow: 0 12px 32px rgba(47, 128, 237, 0.28);
+      }
+
+      .preview {
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        padding: 10px 12px;
+        background: #f8fafc;
+        border: 1px dashed #cbd5e1;
+        border-radius: 12px;
+      }
+
+      .preview img {
+        width: 72px;
+        height: 72px;
+        border-radius: 10px;
+        object-fit: cover;
+        border: 1px solid #e2e8f0;
+      }
+
+      .preview .meta {
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .meta strong {
+        color: var(--text);
+        display: block;
+        margin-bottom: 4px;
+        font-size: 14px;
+      }
+
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+        color: var(--muted);
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--muted);
+      }
+
+      .dot.live {
+        background: var(--accent);
+        animation: pulse 1.2s ease-in-out infinite;
+      }
+
+      @keyframes pulse {
+        0% {
+          transform: scale(0.95);
+          opacity: 0.7;
+        }
+        50% {
+          transform: scale(1.1);
+          opacity: 1;
+        }
+        100% {
+          transform: scale(0.95);
+          opacity: 0.7;
+        }
+      }
+
+      .result {
+        font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+        font-size: 13px;
+        background: #0b1220;
+        color: #d7e1ff;
+        border-radius: 12px;
+        padding: 14px;
+        overflow: auto;
+        max-height: 360px;
+      }
+
+      .error {
+        color: var(--danger);
+        font-weight: 600;
+      }
+
+      .footer {
+        margin-top: 16px;
+        font-size: 13px;
+        color: var(--muted);
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header>
+        <div>
+          <h1>Mercari 商品图片识别测试</h1>
+          <p class="status">
+            <span class="dot" id="status-dot"></span>
+            <span id="status-text">待命</span>
+          </p>
+        </div>
+        <span class="pill">简约界面</span>
+      </header>
+
+      <div class="card grid">
+        <div class="controls">
+          <div>
+            <label for="image">商品图片</label>
+            <input type="file" id="image" accept="image/*" />
+          </div>
+          <div>
+            <label for="language">标题/描述语言</label>
+            <select id="language">
+              <option value="ja" selected>日语</option>
+              <option value="en">英语</option>
+              <option value="zh">简体中文</option>
+            </select>
+          </div>
+          <div>
+            <label for="api-endpoint">接口地址</label>
+            <input
+              type="text"
+              id="api-endpoint"
+              value="http://localhost:8000/api/v1/mercari/image/analyze"
+            />
+          </div>
+          <div>
+            <label>&nbsp;</label>
+            <button id="submit-btn">开始识别</button>
+          </div>
+        </div>
+
+        <div class="preview" id="preview" style="display: none">
+          <img id="preview-img" alt="preview" />
+          <div class="meta">
+            <strong id="preview-name"></strong>
+            <span id="preview-size"></span>
+          </div>
+        </div>
+
+        <div class="status">
+          <span class="dot" id="timer-dot"></span>
+          <div>
+            <div id="elapsed">耗时：--</div>
+            <div id="message"></div>
+          </div>
+        </div>
+
+        <div>
+          <label>结果</label>
+          <pre class="result" id="result">{ }</pre>
+        </div>
+      </div>
+
+      <div class="footer">
+        <span>POST /api/v1/mercari/image/analyze</span>
+        <span>multipart/form-data</span>
+        <span>提示：若页面与接口不在同源，请配置 CORS 或前置代理</span>
+      </div>
+    </div>
+
+    <script>
+      const imageInput = document.getElementById("image");
+      const languageSelect = document.getElementById("language");
+      const apiInput = document.getElementById("api-endpoint");
+      const submitBtn = document.getElementById("submit-btn");
+      const preview = document.getElementById("preview");
+      const previewImg = document.getElementById("preview-img");
+      const previewName = document.getElementById("preview-name");
+      const previewSize = document.getElementById("preview-size");
+      const resultEl = document.getElementById("result");
+      const statusText = document.getElementById("status-text");
+      const statusDot = document.getElementById("status-dot");
+      const timerDot = document.getElementById("timer-dot");
+      const elapsedEl = document.getElementById("elapsed");
+      const messageEl = document.getElementById("message");
+
+      function formatBytes(bytes) {
+        const units = ["B", "KB", "MB"];
+        let size = bytes;
+        let i = 0;
+        while (size >= 1024 && i < units.length - 1) {
+          size /= 1024;
+          i++;
+        }
+        return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[i]}`;
+      }
+
+      imageInput.addEventListener("change", (e) => {
+        const file = e.target.files?.[0];
+        if (!file) {
+          preview.style.display = "none";
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+          previewImg.src = reader.result;
+          previewName.textContent = file.name;
+          previewSize.textContent = `${file.type || "image"} ・ ${formatBytes(file.size)}`;
+          preview.style.display = "flex";
+        };
+        reader.readAsDataURL(file);
+      });
+
+      async function handleSubmit() {
+        const file = imageInput.files?.[0];
+        if (!file) {
+          messageEl.textContent = "请先选择图片。";
+          messageEl.classList.add("error");
+          return;
+        }
+        const endpoint = apiInput.value.trim();
+        if (!endpoint) {
+          messageEl.textContent = "请填写接口地址。";
+          messageEl.classList.add("error");
+          return;
+        }
+
+        submitBtn.disabled = true;
+        messageEl.textContent = "识别中...";
+        messageEl.classList.remove("error");
+        statusText.textContent = "处理中...";
+        statusDot.classList.add("live");
+        timerDot.classList.add("live");
+        resultEl.textContent = "{ }";
+        elapsedEl.textContent = "耗时：--";
+
+        const formData = new FormData();
+        formData.append("image", file);
+        formData.append("language", languageSelect.value);
+
+        const start = performance.now();
+        try {
+          const resp = await fetch(endpoint, {
+            method: "POST",
+            body: formData,
+          });
+
+          const elapsedMs = performance.now() - start;
+          elapsedEl.textContent = `耗时：${(elapsedMs / 1000).toFixed(2)} 秒`;
+          timerDot.classList.remove("live");
+
+          const text = await resp.text();
+          let payload = {};
+          try {
+            payload = JSON.parse(text);
+          } catch (err) {
+            payload = { error: "JSON parse failed", raw: text };
+          }
+
+          if (!resp.ok) {
+            messageEl.textContent = `错误：${payload.detail || resp.statusText}`;
+            messageEl.classList.add("error");
+            statusText.textContent = "错误";
+            statusDot.classList.remove("live");
+          } else {
+            messageEl.textContent = "识别成功";
+            messageEl.classList.remove("error");
+            statusText.textContent = "完成";
+            statusDot.classList.remove("live");
+          }
+
+          resultEl.textContent = JSON.stringify(payload, null, 2);
+        } catch (err) {
+          const elapsedMs = performance.now() - start;
+          elapsedEl.textContent = `耗时：${(elapsedMs / 1000).toFixed(2)} 秒`;
+          timerDot.classList.remove("live");
+          statusText.textContent = "错误";
+          statusDot.classList.remove("live");
+          messageEl.textContent = "网络错误";
+          messageEl.classList.add("error");
+          resultEl.textContent = JSON.stringify({ error: String(err) }, null, 2);
+        } finally {
+          submitBtn.disabled = false;
+        }
+      }
+
+      submitBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        handleSubmit();
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,49 @@
+import os
+from dataclasses import dataclass, field
+from typing import Set
+
+from dotenv import load_dotenv
+
+from .constants import ALLOWED_MIME_TYPES
+
+# Load .env early so os.getenv can pick up values defined there.
+load_dotenv()
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+@dataclass
+class Settings:
+    openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "")
+    vision_model: str = os.getenv("VISION_MODEL", "")
+    category_model: str = os.getenv("CATEGORY_MODEL", "")
+    brand_csv_path: str = os.getenv("BRAND_CSV_PATH", "data/brand.csv")
+    category_csv_path: str = os.getenv("CATEGORY_CSV_PATH", "data/category.csv")
+    openrouter_base_url: str = os.getenv(
+        "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1/chat/completions"
+    )
+    openrouter_referer: str = os.getenv("OPENROUTER_REFERER", "")
+    openrouter_app_name: str = os.getenv("OPENROUTER_APP_NAME", "mercari-image-backend")
+    request_timeout: int = _env_int("REQUEST_TIMEOUT", 60)
+    enable_debug_param: bool = _env_bool("ENABLE_DEBUG", True)
+    max_image_bytes: int = _env_int("MAX_IMAGE_BYTES", 5 * 1024 * 1024)
+    allowed_mime_types: Set[str] = field(default_factory=lambda: set(ALLOWED_MIME_TYPES))
+
+
+def load_settings() -> Settings:
+    return Settings()
