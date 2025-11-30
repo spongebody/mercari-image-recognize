@@ -7,8 +7,10 @@ from dotenv import load_dotenv
 from .constants import ALLOWED_MIME_TYPES
 
 # Load .env early so os.getenv can pick up values defined there.
-load_dotenv()
+BASE_DIR = Path(__file__).resolve().parent.parent
 
+# 明确指定 .env 路径
+load_dotenv(BASE_DIR / ".env")
 
 def _env_bool(name: str, default: bool) -> bool:
     raw = os.getenv(name)

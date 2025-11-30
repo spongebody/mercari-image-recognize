@@ -738,7 +738,7 @@
                 <input
                   type="text"
                   id="api-endpoint"
-                  value="http://localhost:8000/api/v1/mercari/image/analyze"
+                  value=""
                   placeholder="请输入API地址"
                 />
               </div>
@@ -1188,7 +1188,7 @@
           return;
         }
         
-        const endpoint = apiInput.value.trim();
+        const endpoint = apiInput.value.trim() || '/api/v1/mercari/image/analyze';
         if (!endpoint) {
           alert("请填写接口地址");
           return;
