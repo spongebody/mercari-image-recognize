@@ -142,7 +142,6 @@ class MercariAnalyzer:
                     group_name=group_name or "",
                     category_candidates=categories,
                     language=language,
-                    vision_prices=price_info,
                 )
                 prices = price_info_model["tiers"]
                 price_points = price_info_model["list"]
@@ -204,7 +203,7 @@ class MercariAnalyzer:
             model=model,
             messages=messages,
             temperature=0.2,
-            max_tokens=800,
+            max_tokens=10000,
         )
         self._log_raw("vision_content", content)
         self._log_raw("vision_raw_response", raw_response)
@@ -225,7 +224,6 @@ class MercariAnalyzer:
         group_name: str,
         category_candidates: List[Dict[str, str]],
         language: str,
-        vision_prices: Dict[str, Any],
     ) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]], Optional[str]]:
         if not self.settings.price_model:
             raise BadRequestError("PRICE_MODEL is not configured.")
@@ -238,7 +236,6 @@ class MercariAnalyzer:
             group_name=group_name,
             category_candidates=candidate_names or "N/A",
             language_label=_language_label(language),
-            vision_price_hints=vision_prices,
         )
         messages = [
             {"role": "system", "content": PRICE_SYSTEM_PROMPT},
@@ -255,7 +252,7 @@ class MercariAnalyzer:
                 model=self.settings.price_model,
                 messages=messages,
                 temperature=0.3,
-                max_tokens=700,
+                max_tokens=120000,
             )
         except Exception as exc:
             error = str(exc)
@@ -323,7 +320,7 @@ class MercariAnalyzer:
             model=self.settings.category_model,
             messages=messages,
             temperature=0.1,
-            max_tokens=600,
+            max_tokens=6000,
         )
         self._log_raw("category_content", content)
         self._log_raw("category_raw_response", raw_response)

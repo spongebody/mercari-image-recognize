@@ -35,7 +35,7 @@ class Settings:
     openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "")
     vision_model: str = os.getenv("VISION_MODEL", "")
     vision_model_online: str = os.getenv("VISION_MODEL_ONLINE", "")
-    price_model: str = os.getenv("PRICE_MODEL", "openai/gpt-5.1:online")
+    price_model: str = os.getenv("PRICE_MODEL", "openai/gpt-4.1:online")
     category_model: str = os.getenv("CATEGORY_MODEL", "")
     brand_csv_path: str = os.getenv("BRAND_CSV_PATH", "data/brand.csv")
     category_csv_path: str = os.getenv("CATEGORY_CSV_PATH", "data/category.csv")

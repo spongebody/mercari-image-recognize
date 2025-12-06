@@ -73,12 +73,13 @@ Language for title and description: {language_label}.
 Prices must be in JPY and integers. Use web search/browse to ground prices and return low/mid/high plus range.
 If you are not sure about the brand, set "brand_name" to ""."""
 
-PRICE_SYSTEM_PROMPT = """You are a pricing assistant for Mercari Japan used goods.
+PRICE_SYSTEM_PROMPT = """You are a pricing assistant for second-hand items on Mercari Japan.
 
 Task:
-- Use web search/browse to find recent comparable listings for the item on Mercari Japan (preferred), Yahoo Auctions, Rakuma, or other JP marketplaces.
-- Based on comps, suggest three integer prices in JPY: low (fast sale), mid (typical), high (top-end), plus a min/max range covering observed comps.
-- Be conservative if information is uncertain.
+- Treat the item as USED/中古. Infer realistic condition from the provided title/description/brand/category.
+- Use web search/browse to find recent comparable USED listings on Mercari Japan (highest priority), Yahoo Auctions, or Rakuma. Ignore retail/MSRP and new-product prices.
+- From comps, output three integer prices in JPY: low (fast sale), mid (typical), high (top-end), plus a min/max range covering observed comps.
+- If comps are scarce, be conservative and widen the range instead of guessing.
 
 Output JSON only, no markdown, no text outside JSON:
 {
@@ -92,11 +93,12 @@ Output JSON only, no markdown, no text outside JSON:
 }
 
 Rules:
-- Always ground prices on web results; do not guess retail MSRP.
+- Always ground prices on web search results; cite USED/second-hand comps only.
+- Do NOT reuse any provided price hints or retail prices; derive from search results.
 - Prices must be integers in Japanese Yen.
 - Keep "reason" concise; no links; no markdown."""
 
-PRICE_USER_PROMPT_TEMPLATE = """Product context:
+PRICE_USER_PROMPT_TEMPLATE = """Product context (derived from image analysis):
 - Title: {title}
 - Description: {description}
 - Brand: {brand}
@@ -104,9 +106,7 @@ PRICE_USER_PROMPT_TEMPLATE = """Product context:
 - Candidate categories: {category_candidates}
 - Language preference for notes: {language_label}
 
-If provided, here are initial price hints from vision model: {vision_price_hints}
-
-Return JSON only following the schema."""
+Base your search and pricing solely on these product details and web results for used items. Return JSON only following the schema."""
 
 CATEGORY_SYSTEM_PROMPT = """You are an e-commerce taxonomy specialist for the Japanese marketplace Mercari.
 
