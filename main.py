@@ -55,6 +55,7 @@ async def analyze_image(
     image: UploadFile = File(...),
     language: str = Form(DEFAULT_LANGUAGE),
     debug: str = Form("false"),
+    category_count: int = Form(1),
 ):
     if not image:
         raise HTTPException(status_code=400, detail="Image file is required.")
@@ -78,6 +79,7 @@ async def analyze_image(
         raise HTTPException(status_code=400, detail="Invalid language.")
 
     debug_enabled = settings.enable_debug_param and parse_bool_param(debug, False)
+    category_count = max(1, min(category_count, 3))
 
     try:
         result = await run_in_threadpool(
@@ -86,6 +88,7 @@ async def analyze_image(
             mime_type=image.content_type or "application/octet-stream",
             language=language,
             debug=debug_enabled,
+            category_limit=category_count,
         )
     except BadRequestError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

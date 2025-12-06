@@ -72,10 +72,16 @@ class MercariAnalyzer:
         self.category_client = category_client
 
     def analyze(
-        self, image_bytes: bytes, mime_type: str, language: str, debug: bool = False
+        self,
+        image_bytes: bytes,
+        mime_type: str,
+        language: str,
+        debug: bool = False,
+        category_limit: int = 1,
     ) -> Dict[str, Any]:
         if language not in SUPPORTED_LANGUAGES:
             raise BadRequestError("Unsupported language.")
+        category_limit = max(1, min(int(category_limit), 3))
 
         data_url = image_bytes_to_data_url(image_bytes, mime_type)
         ai_raw, ai_full = self._call_vision_llm(data_url, language)
@@ -88,6 +94,7 @@ class MercariAnalyzer:
 
         brand_match = self.brand_store.match(brand_raw)
         brand_name = brand_match["name"] if brand_match else ""
+        brand_id = brand_match["id"] if brand_match else ""
 
         group_name = _map_top_level_category(top_level_category)
 
@@ -100,6 +107,7 @@ class MercariAnalyzer:
                 description=description or ai_raw.get("description", ""),
                 brand_for_prompt=brand_raw or brand_name,
                 group_name=group_name,
+                category_limit=category_limit,
             )
 
         result: Dict[str, Any] = {
@@ -108,6 +116,7 @@ class MercariAnalyzer:
             "prices": prices,
             "categories": categories,
             "brand_name": brand_name,
+            "brand_id": brand_id,
         }
 
         if debug:
@@ -149,7 +158,12 @@ class MercariAnalyzer:
         return parsed, raw_response
 
     def _choose_categories(
-        self, title: str, description: str, brand_for_prompt: str, group_name: str
+        self,
+        title: str,
+        description: str,
+        brand_for_prompt: str,
+        group_name: str,
+        category_limit: int,
     ) -> Tuple[List[Dict[str, str]], Optional[Dict[str, Any]]]:
         candidates = self.category_store.get_categories_by_group(group_name)
         if not candidates:
@@ -196,6 +210,7 @@ class MercariAnalyzer:
                 if isinstance(path, str) and path.strip():
                     ordered_paths.append(path)
 
+        category_limit = max(1, min(category_limit, 3))
         seen = set()
         results: List[Dict[str, str]] = []
         for path in ordered_paths:
@@ -207,7 +222,7 @@ class MercariAnalyzer:
             match = self.category_store.find_category(group_name, path_clean)
             if match:
                 results.append({"id": match["id"], "name": match["name"]})
-            if len(results) >= 3:
+            if len(results) >= category_limit:
                 break
 
         return results, parsed

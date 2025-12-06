@@ -669,7 +669,7 @@
 
       .controls-row {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
         gap: 12px;
       }
 
@@ -731,6 +731,14 @@
                   <option value="ja" selected>日语</option>
                   <option value="en">英语</option>
                   <option value="zh">简体中文</option>
+                </select>
+              </div>
+              <div>
+                <label for="category-count">返回类别个数</label>
+                <select id="category-count">
+                  <option value="1" selected>1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
                 </select>
               </div>
               <div>
@@ -832,6 +840,7 @@
       const previewGrid = document.getElementById("preview-grid");
       const fileCount = document.getElementById("file-count");
       const languageSelect = document.getElementById("language");
+      const categoryCountSelect = document.getElementById("category-count");
       const apiInput = document.getElementById("api-endpoint");
       const submitBtn = document.getElementById("submit-btn");
       const buttonText = document.getElementById("button-text");
@@ -1000,12 +1009,14 @@
 
         // 品牌
         if (data.brand_id || data.brand_name) {
+          const brandName = data.brand_name ? escapeHtml(data.brand_name) : "未知品牌";
+          const brandId = data.brand_id ? escapeHtml(String(data.brand_id)) : "";
+          const brandLabel = brandId ? `${brandName} (ID: ${brandId})` : brandName;
           html += `
             <div class="field-group">
               <div class="field-label">🔖 品牌</div>
               <div class="tags-container">
-                ${data.brand_name ? `<span class="tag primary">${escapeHtml(data.brand_name)}</span>` : ''}
-                ${data.brand_id ? `<span class="tag">ID: ${escapeHtml(String(data.brand_id))}</span>` : ''}
+                <span class="tag primary">${brandLabel}</span>
               </div>
             </div>
           `;
@@ -1220,6 +1231,7 @@
             const formData = new FormData();
             formData.append("image", fileObj.file);
             formData.append("language", languageSelect.value);
+            formData.append("category_count", categoryCountSelect.value || "1");
             
             const start = performance.now();
             const resp = await fetch(endpoint, {
