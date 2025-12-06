@@ -65,6 +65,9 @@ async def analyze_image(
     debug: str = Form("false"),
     category_count: int = Form(1),
     price_strategy: str = Form("dedicated"),
+    vision_model: str = Form(None),
+    category_model: str = Form(None),
+    price_model: str = Form(None),
 ):
     if not image:
         raise HTTPException(status_code=400, detail="Image file is required.")
@@ -100,6 +103,9 @@ async def analyze_image(
             debug=debug_enabled,
             category_limit=category_count,
             price_strategy=price_strategy,
+            vision_model_override=vision_model,
+            category_model_override=category_model,
+            price_model_override=price_model,
         )
     except BadRequestError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -113,4 +119,12 @@ async def analyze_image(
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "models": {
+            "vision_model": settings.vision_model,
+            "vision_model_online": settings.vision_model_online,
+            "category_model": settings.category_model,
+            "price_model": settings.price_model,
+        },
+    }
