@@ -34,6 +34,8 @@ def _env_int(name: str, default: int) -> int:
 class Settings:
     openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "")
     vision_model: str = os.getenv("VISION_MODEL", "")
+    vision_model_online: str = os.getenv("VISION_MODEL_ONLINE", "")
+    price_model: str = os.getenv("PRICE_MODEL", "openai/gpt-5.1:online")
     category_model: str = os.getenv("CATEGORY_MODEL", "")
     brand_csv_path: str = os.getenv("BRAND_CSV_PATH", "data/brand.csv")
     category_csv_path: str = os.getenv("CATEGORY_CSV_PATH", "data/category.csv")
@@ -46,6 +48,15 @@ class Settings:
     enable_debug_param: bool = _env_bool("ENABLE_DEBUG", True)
     max_image_bytes: int = _env_int("MAX_IMAGE_BYTES", 5 * 1024 * 1024)
     allowed_mime_types: Set[str] = field(default_factory=lambda: set(ALLOWED_MIME_TYPES))
+    log_llm_raw: bool = _env_bool("LOG_LLM_RAW", False)
+
+    def __post_init__(self) -> None:
+        if not self.vision_model_online and self.vision_model:
+            suffix = ":online"
+            if self.vision_model.endswith(suffix):
+                self.vision_model_online = self.vision_model
+            else:
+                self.vision_model_online = f"{self.vision_model}{suffix}"
 
 
 def load_settings() -> Settings:

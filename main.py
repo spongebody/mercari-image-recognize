@@ -29,6 +29,13 @@ category_client = OpenRouterClient(
     referer=settings.openrouter_referer,
     app_name=settings.openrouter_app_name,
 )
+price_client = OpenRouterClient(
+    api_key=settings.openrouter_api_key,
+    base_url=settings.openrouter_base_url,
+    timeout=settings.request_timeout,
+    referer=settings.openrouter_referer,
+    app_name=settings.openrouter_app_name,
+)
 
 analyzer = MercariAnalyzer(
     settings=settings,
@@ -36,6 +43,7 @@ analyzer = MercariAnalyzer(
     category_store=category_store,
     vision_client=vision_client,
     category_client=category_client,
+    price_client=price_client,
 )
 
 app = FastAPI(title="Mercari Image Analyzer", version="1.0.0")
@@ -56,6 +64,7 @@ async def analyze_image(
     language: str = Form(DEFAULT_LANGUAGE),
     debug: str = Form("false"),
     category_count: int = Form(1),
+    price_strategy: str = Form("dedicated"),
 ):
     if not image:
         raise HTTPException(status_code=400, detail="Image file is required.")
@@ -80,6 +89,7 @@ async def analyze_image(
 
     debug_enabled = settings.enable_debug_param and parse_bool_param(debug, False)
     category_count = max(1, min(category_count, 3))
+    price_strategy = price_strategy or "dedicated"
 
     try:
         result = await run_in_threadpool(
@@ -89,6 +99,7 @@ async def analyze_image(
             language=language,
             debug=debug_enabled,
             category_limit=category_count,
+            price_strategy=price_strategy,
         )
     except BadRequestError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

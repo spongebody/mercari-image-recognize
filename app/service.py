@@ -1,4 +1,7 @@
 import difflib
+import json
+from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from .config import Settings
@@ -10,14 +13,16 @@ from .llm.client import OpenRouterClient
 from .llm.prompts import (
     CATEGORY_SYSTEM_PROMPT,
     CATEGORY_USER_PROMPT_TEMPLATE,
+    PRICE_SYSTEM_PROMPT,
+    PRICE_USER_PROMPT_TEMPLATE,
     VISION_SYSTEM_PROMPT,
     VISION_USER_PROMPT_TEMPLATE,
 )
 from .utils import (
-    clean_prices,
     compress_whitespace,
     image_bytes_to_data_url,
     normalize_category_label,
+    normalize_price_info,
     safe_json_loads,
 )
 
@@ -64,12 +69,15 @@ class MercariAnalyzer:
         category_store: CategoryStore,
         vision_client: OpenRouterClient,
         category_client: OpenRouterClient,
+        price_client: OpenRouterClient,
     ):
         self.settings = settings
         self.brand_store = brand_store
         self.category_store = category_store
         self.vision_client = vision_client
         self.category_client = category_client
+        self.price_client = price_client
+        self._logs_dir = Path(__file__).resolve().parent.parent / "logs"
 
     def analyze(
         self,
@@ -78,17 +86,29 @@ class MercariAnalyzer:
         language: str,
         debug: bool = False,
         category_limit: int = 1,
+        price_strategy: str = "dedicated",
     ) -> Dict[str, Any]:
         if language not in SUPPORTED_LANGUAGES:
             raise BadRequestError("Unsupported language.")
         category_limit = max(1, min(int(category_limit), 3))
+        price_strategy = price_strategy or "dedicated"
+        if price_strategy not in {"dedicated", "vision_online"}:
+            price_strategy = "dedicated"
 
         data_url = image_bytes_to_data_url(image_bytes, mime_type)
-        ai_raw, ai_full = self._call_vision_llm(data_url, language)
+        use_online = price_strategy == "vision_online"
+        ai_raw, ai_full = self._call_vision_llm(
+            data_url,
+            language,
+            force_online=use_online,
+        )
 
         title = _clean_string(ai_raw.get("title", ""))
         description = _clean_string(ai_raw.get("description", ""))
-        prices = clean_prices(ai_raw.get("prices", []))
+        price_info = normalize_price_info(ai_raw.get("prices", []), ai_raw.get("price_range"))
+        prices = price_info["tiers"]
+        price_points = price_info["list"]
+        price_range = price_info["range"]
         top_level_category = _clean_string(ai_raw.get("top_level_category", ""))
         brand_raw = _clean_string(ai_raw.get("brand_name", ""))
 
@@ -110,13 +130,44 @@ class MercariAnalyzer:
                 category_limit=category_limit,
             )
 
+        price_raw = None
+        price_error = None
+        price_source = "vision"
+        if price_strategy == "dedicated":
+            try:
+                price_info_model, price_raw, price_error = self._predict_price_with_model(
+                    title=title,
+                    description=description,
+                    brand=brand_raw or brand_name,
+                    group_name=group_name or "",
+                    category_candidates=categories,
+                    language=language,
+                    vision_prices=price_info,
+                )
+                prices = price_info_model["tiers"]
+                price_points = price_info_model["list"]
+                price_range = price_info_model["range"]
+                price_source = "price_model" if not price_error else "price_model_with_error"
+            except Exception as exc:
+                price_error = str(exc)
+                self._log_raw("price_unhandled_error", {"error": price_error})
+                price_source = "price_model_failed"
+
         result: Dict[str, Any] = {
             "title": title,
             "description": description,
             "prices": prices,
+            "price_points": price_points,
+            "price_range": price_range,
+            "price_low": prices.get("low"),
+            "price_mid": prices.get("mid"),
+            "price_high": prices.get("high"),
             "categories": categories,
             "brand_name": brand_name,
             "brand_id": brand_id,
+            "price_strategy": price_strategy,
+            "price_source": price_source,
+            "price_error": price_error,
         }
 
         if debug:
@@ -124,12 +175,14 @@ class MercariAnalyzer:
                 "ai_raw": ai_raw,
                 "group_name": group_name,
                 "llm_category_raw": llm_category_raw,
+                "price_raw": price_raw,
+                "price_strategy": price_strategy,
             }
 
         return result
 
     def _call_vision_llm(
-        self, image_data_url: str, language: str
+        self, image_data_url: str, language: str, force_online: bool = False
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         user_prompt = VISION_USER_PROMPT_TEMPLATE.format(language_label=_language_label(language))
         messages = [
@@ -142,20 +195,103 @@ class MercariAnalyzer:
                 ],
             },
         ]
-
+        model = (
+            self.settings.vision_model_online
+            if force_online and self.settings.vision_model_online
+            else self.settings.vision_model
+        )
         content, raw_response = self.vision_client.chat(
-            model=self.settings.vision_model,
+            model=model,
             messages=messages,
             temperature=0.2,
             max_tokens=800,
         )
+        self._log_raw("vision_content", content)
+        self._log_raw("vision_raw_response", raw_response)
         try:
             parsed = safe_json_loads(content)
         except Exception as exc:
+            self._log_raw("vision_parse_error", {"error": str(exc), "content": content})
             raise BadRequestError("Failed to parse vision LLM JSON.") from exc
         if not isinstance(parsed, dict):
             raise BadRequestError("Vision LLM did not return a JSON object.")
         return parsed, raw_response
+
+    def _predict_price_with_model(
+        self,
+        title: str,
+        description: str,
+        brand: str,
+        group_name: str,
+        category_candidates: List[Dict[str, str]],
+        language: str,
+        vision_prices: Dict[str, Any],
+    ) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]], Optional[str]]:
+        if not self.settings.price_model:
+            raise BadRequestError("PRICE_MODEL is not configured.")
+
+        candidate_names = ", ".join(cat.get("name", "") for cat in category_candidates if cat.get("name"))
+        user_prompt = PRICE_USER_PROMPT_TEMPLATE.format(
+            title=title,
+            description=description,
+            brand=brand,
+            group_name=group_name,
+            category_candidates=candidate_names or "N/A",
+            language_label=_language_label(language),
+            vision_price_hints=vision_prices,
+        )
+        messages = [
+            {"role": "system", "content": PRICE_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        content: Optional[str] = None
+        raw_response: Optional[Dict[str, Any]] = None
+        parsed: Optional[Dict[str, Any]] = None
+        error: Optional[str] = None
+
+        try:
+            content, raw_response = self.price_client.chat(
+                model=self.settings.price_model,
+                messages=messages,
+                temperature=0.3,
+                max_tokens=700,
+            )
+        except Exception as exc:
+            error = str(exc)
+            self._log_raw("price_call_error", {"error": error})
+        else:
+            self._log_raw("price_content", content)
+            self._log_raw("price_raw_response", raw_response)
+            try:
+                parsed = safe_json_loads(content or "")
+            except Exception as exc:
+                error = str(exc)
+                self._log_raw("price_parse_error", {"error": error, "content": content})
+
+        if isinstance(parsed, dict):
+            price_block = parsed.get("prices") or parsed
+        else:
+            price_block = parsed
+
+        normalized = normalize_price_info(price_block, None)
+        return normalized, parsed, error
+
+    def _log_raw(self, name: str, payload: Any) -> None:
+        if not self.settings.log_llm_raw:
+            return
+        try:
+            self._logs_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")
+            path = self._logs_dir / f"{name}_{timestamp}.log"
+            with path.open("w", encoding="utf-8") as f:
+                if isinstance(payload, str):
+                    f.write(payload)
+                else:
+                    json.dump(payload, f, ensure_ascii=False, indent=2)
+        except Exception:
+            # Swallow logging errors to avoid breaking main flow.
+            return
 
     def _choose_categories(
         self,
@@ -189,9 +325,12 @@ class MercariAnalyzer:
             temperature=0.1,
             max_tokens=600,
         )
+        self._log_raw("category_content", content)
+        self._log_raw("category_raw_response", raw_response)
         try:
             parsed = safe_json_loads(content)
         except Exception as exc:
+            self._log_raw("category_parse_error", {"error": str(exc), "content": content})
             raise BadRequestError("Failed to parse category LLM JSON.") from exc
         if not isinstance(parsed, dict):
             raise BadRequestError("Category LLM did not return a JSON object.")

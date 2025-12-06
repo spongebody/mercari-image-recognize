@@ -742,6 +742,13 @@
                 </select>
               </div>
               <div>
+                <label for="price-strategy">价格策略</label>
+                <select id="price-strategy">
+                  <option value="dedicated" selected>方式1：独立价格模型+搜索</option>
+                  <option value="vision_online">方式2：图片模型开启搜索</option>
+                </select>
+              </div>
+              <div>
                 <label for="api-endpoint">接口地址</label>
                 <input
                   type="text"
@@ -841,6 +848,7 @@
       const fileCount = document.getElementById("file-count");
       const languageSelect = document.getElementById("language");
       const categoryCountSelect = document.getElementById("category-count");
+      const priceStrategySelect = document.getElementById("price-strategy");
       const apiInput = document.getElementById("api-endpoint");
       const submitBtn = document.getElementById("submit-btn");
       const buttonText = document.getElementById("button-text");
@@ -1032,48 +1040,85 @@
           `;
         }
 
-        // 价格列表（多个候选或价格范围）
-        if (data.prices) {
+        // 价格列表（低/中/高 + 区间）
+        if (data.prices || (data.price_points && data.price_points.length) || data.price_range) {
           html += `<div class="field-group"><div class="field-label">💰 价格建议</div>`;
-          
-          // 如果是数组
-          if (Array.isArray(data.prices)) {
-            html += `<div class="tags-container">`;
-            data.prices.forEach((priceItem, index) => {
-              const isPrimary = index === 0 ? 'primary' : '';
-              if (typeof priceItem === 'number') {
-                html += `<span class="tag ${isPrimary}">¥${escapeHtml(String(priceItem))}</span>`;
-              } else if (typeof priceItem === 'object') {
-                const price = priceItem.price || priceItem.value;
-                const confidence = priceItem.confidence || priceItem.score;
-                let label = `¥${escapeHtml(String(price))}`;
-                if (confidence !== undefined) {
-                  label += ` (${(confidence * 100).toFixed(1)}%)`;
-                }
-                html += `<span class="tag ${isPrimary}">${label}</span>`;
-              }
-            });
-            html += `</div>`;
-          } 
-          // 如果是对象（价格范围）
-          else if (typeof data.prices === 'object') {
-            const minPrice = data.prices.min || data.prices.minimum;
-            const maxPrice = data.prices.max || data.prices.maximum;
-            const avgPrice = data.prices.avg || data.prices.average || data.prices.suggested;
+
+          const priceTags = [];
+          const priceData = data.prices;
+          const pricePoints = Array.isArray(data.price_points) ? data.price_points : [];
+
+          let low, mid, high;
+
+          if (Array.isArray(priceData) && priceData.length) {
+            const sorted = [...priceData]
+              .map((p) => (typeof p === 'number' ? p : parseFloat(p)))
+              .filter((p) => !Number.isNaN(p))
+              .sort((a, b) => a - b);
+            if (sorted.length) {
+              low = sorted[0];
+              mid = sorted[Math.min(1, sorted.length - 1)];
+              high = sorted[sorted.length - 1];
+            }
+          } else if (priceData && typeof priceData === "object") {
+            low = priceData.low ?? priceData.min ?? priceData.minimum;
+            mid = priceData.mid ?? priceData.avg ?? priceData.average ?? priceData.median;
+            high = priceData.high ?? priceData.max ?? priceData.maximum;
+          }
+
+          if (!low && pricePoints.length) {
+            const sorted = [...pricePoints]
+              .map((p) => (typeof p === 'number' ? p : parseFloat(p)))
+              .filter((p) => !Number.isNaN(p))
+              .sort((a, b) => a - b);
+            if (sorted.length) {
+              low = low ?? sorted[0];
+              mid = mid ?? sorted[Math.min(1, sorted.length - 1)];
+              high = high ?? sorted[sorted.length - 1];
+            }
+          }
+
+          const rangeSource =
+            (priceData && typeof priceData === "object" && priceData.range) ||
+            data.price_range ||
+            {};
+          const rangeMin =
+            rangeSource.min ?? rangeSource.minimum ?? rangeSource.low ?? priceData?.range_min;
+          const rangeMax =
+            rangeSource.max ?? rangeSource.maximum ?? rangeSource.high ?? priceData?.range_max;
+
+          if (low !== undefined && low !== null) {
+            priceTags.push(`<span class="tag">低价: ¥${escapeHtml(String(low))}</span>`);
+          }
+          if (mid !== undefined && mid !== null) {
+            priceTags.push(`<span class="tag primary">均价: ¥${escapeHtml(String(mid))}</span>`);
+          }
+          if (high !== undefined && high !== null) {
+            priceTags.push(`<span class="tag">高价: ¥${escapeHtml(String(high))}</span>`);
+          }
+          if (rangeMin !== undefined || rangeMax !== undefined || rangeMin === 0 || rangeMax === 0) {
+            const minLabel = rangeMin !== undefined && rangeMin !== null ? `¥${escapeHtml(String(rangeMin))}` : "?";
+            const maxLabel = rangeMax !== undefined && rangeMax !== null ? `¥${escapeHtml(String(rangeMax))}` : "?";
+            priceTags.push(`<span class="tag">区间: ${minLabel} - ${maxLabel}</span>`);
+          }
+
+          if (!priceTags.length && priceData && typeof priceData === "object") {
+            const minPrice = priceData.min || priceData.minimum;
+            const maxPrice = priceData.max || priceData.maximum;
+            const avgPrice = priceData.avg || priceData.average || priceData.suggested;
             
-            html += `<div class="tags-container">`;
             if (minPrice !== undefined) {
-              html += `<span class="tag">最低: ¥${escapeHtml(String(minPrice))}</span>`;
+              priceTags.push(`<span class="tag">最低: ¥${escapeHtml(String(minPrice))}</span>`);
             }
             if (avgPrice !== undefined) {
-              html += `<span class="tag primary">建议: ¥${escapeHtml(String(avgPrice))}</span>`;
+              priceTags.push(`<span class="tag primary">建议: ¥${escapeHtml(String(avgPrice))}</span>`);
             }
             if (maxPrice !== undefined) {
-              html += `<span class="tag">最高: ¥${escapeHtml(String(maxPrice))}</span>`;
+              priceTags.push(`<span class="tag">最高: ¥${escapeHtml(String(maxPrice))}</span>`);
             }
-            html += `</div>`;
           }
-          
+
+          html += `<div class="tags-container">${priceTags.join("") || '<span class="tag">暂无价格</span>'}</div>`;
           html += `</div>`;
         }
 
@@ -1232,6 +1277,7 @@
             formData.append("image", fileObj.file);
             formData.append("language", languageSelect.value);
             formData.append("category_count", categoryCountSelect.value || "1");
+            formData.append("price_strategy", priceStrategySelect.value || "dedicated");
             
             const start = performance.now();
             const resp = await fetch(endpoint, {
