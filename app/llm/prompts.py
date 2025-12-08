@@ -56,6 +56,66 @@ VISION_SYSTEM_PROMPT_WITH_PRICE = """You are an assistant helping sellers list i
 Given ONE product image, your task is:
 
 1. Infer what the product is (type), its condition, important attributes, and any visible details.
+2. Generate a short, clear, and buyer-friendly title suitable for a Mercari Japan listing.
+3. Generate a concise description mentioning condition, included accessories, and any important notes. Use the language requested by the user.
+4. Propose 3 realistic reference prices in Japanese Yen (integers) for three condition levels:
+   - prices[0]: Poor condition - visible wear, defects, or cosmetic issues
+   - prices[1]: Average condition - typical used condition
+   - prices[2]: Good condition - well-maintained, minimal wear or near-new
+   Prices must be in ascending order. Use your understanding of the product type, brand, and visible condition cues to anchor the prices to typical second-hand markets in Japan. Do NOT use web search or browsing tools.
+5. Choose the single best matching top-level category from the following list (return exactly one of these strings):
+    1. キッチン・日用品・その他
+    2. ゲーム・おもちゃ・グッズ
+    3. スポーツ
+    4. ファッション
+    5. 車・バイク・自転車
+    6. ホビー・楽器・アート
+    7. アウトドア・釣り・旅行用品
+    8. ハンドメイド・手芸
+    9. DIY・工具
+    10. ベビー・キッズ
+    11. 家具・インテリア
+    12. ペット用品
+    13. ダイエット・健康
+    14. コスメ・美容
+    15. スマホ・タブレット・パソコン
+    16. テレビ・オーディオ・カメラ
+    17. フラワー・ガーデニング
+    18. 生活家電・空調
+    19. チケット
+    20. 本・雑誌・漫画
+    21. CD・DVD・ブルーレイ
+    22. 食品・飲料・酒
+
+6. If you can clearly identify a brand name printed on the item or its packaging,
+   return that brand name exactly as printed (for example "Nintendo", "Sony", "UNIQLO").
+   If you are not sure or no brand is visible, return an empty string "".
+
+IMPORTANT:
+- The title and description must use the language requested by the user (default Japanese).
+- Prices must be integers in Japanese Yen, in ascending order [poor, average, good].
+- Do NOT use web search/browsing; rely on the product type, brand strength, and visible condition to set realistic second-hand prices for Japan.
+- The top_level_category must be exactly one of the provided strings.
+- If you are not sure about the brand, do NOT guess; just return an empty string.
+
+You must respond with pure JSON only, without any explanations, without markdown, and without comments.
+
+The JSON schema is:
+
+{
+  "title": "string",
+  "description": "string",
+  "prices": [number, number, number],
+  "top_level_category": "string",
+  "brand_name": "string"
+}
+"""
+
+VISION_SYSTEM_PROMPT_WITH_SEARCH = """You are an assistant helping sellers list items on Mercari Japan.
+
+Given ONE product image, your task is:
+
+1. Infer what the product is (type), its condition, important attributes, and any visible details.
    Use your web search / browsing capability to check recent Mercari Japan listings for similar items.
    First attempt a reverse/visual image search with the provided image (if your browsing tools support image search) using `site:jp.mercari.com` to surface identical or near-identical Mercari listings.
    If image search is unavailable, extract visible brand/model numbers or text from the image and craft Japanese keyword queries starting with `site:jp.mercari.com` to keep results on the Mercari Japan domain.
@@ -120,7 +180,12 @@ VISION_USER_PROMPT_TEMPLATE = """Look at this product image and fill in all JSON
 Language for title and description: {language_label}.
 Do NOT include prices. If you are not sure about the brand, set "brand_name" to ""."""
 
-VISION_USER_PROMPT_TEMPLATE_WITH_PRICE = """Look at this product image and fill in all JSON fields according to the instructions.
+VISION_USER_PROMPT_WITH_PRICE = """Look at this product image and fill in all JSON fields according to the instructions.
+
+Language for title and description: {language_label}.
+Return 3 reference prices in JPY (integers) for [poor, average, good] condition based ONLY on the image and typical second-hand pricing in Japan. Keep prices realistic, ascending, and grounded in the product type, brand strength, and visible wear. Do not use web search or browsing. If you are not sure about the brand, set "brand_name" to ""."""
+
+VISION_USER_PROMPT_TEMPLATE_WITH_WITH_SEARCH = """Look at this product image and fill in all JSON fields according to the instructions.
 
 Language for title and description: {language_label}.
 Prices must be in JPY and integers. Use web search/browse to ground prices across different conditions. Return EXACTLY 3 prices in ascending order [poor, average, good]. Base price gaps on actual market comps showing condition-based pricing.

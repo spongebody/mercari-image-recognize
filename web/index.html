@@ -253,7 +253,7 @@
       input[type="text"]:focus {
         outline: none;
         border-color: var(--accent);
-        background: white;
+        background-color: white;
         box-shadow: 0 0 0 3px rgba(47, 128, 237, 0.1);
       }
 
@@ -700,13 +700,21 @@
     <div class="page">
       <header>
         <div>
-          <h1>Mercari 商品图片识别测试</h1>
+          <h1 id="page-title">Mercari 商品图片识别测试</h1>
           <p class="status">
             <span class="dot" id="status-dot"></span>
             <span id="status-text">待命</span>
           </p>
         </div>
-        <span class="pill">批量测试版</span>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div>
+            <select id="ui-language" style="width: auto; padding: 8px 30px 8px 12px; border-radius: 999px;">
+              <option value="zh" selected>中文</option>
+              <option value="ja">日语</option>
+            </select>
+          </div>
+          <span class="pill" id="beta-pill">批量测试版</span>
+        </div>
       </header>
 
       <div class="main-layout">
@@ -715,33 +723,33 @@
           <div class="card grid">
             <!-- 批量文件上传 -->
             <div>
-              <label>商品图片（支持批量上传）</label>
+              <label id="upload-label">商品图片（支持批量上传）</label>
               <div class="upload-area" id="upload-area">
                 <div class="upload-icon">📸</div>
-                <div class="upload-text">点击或拖拽图片到此处</div>
-                <div class="upload-hint">支持多选，JPG、PNG、GIF 等格式</div>
+                <div class="upload-text" id="upload-text">点击或拖拽图片到此处</div>
+                <div class="upload-hint" id="upload-hint">支持多选，JPG、PNG、GIF 等格式</div>
                 <input type="file" id="image" accept="image/*" multiple />
               </div>
             </div>
 
             <!-- 批量预览 -->
             <div id="preview-container" style="display: none">
-              <label>已选择 <span id="file-count">0</span> 张图片</label>
+              <label id="preview-label">已选择 <span id="file-count">0</span> 张图片</label>
               <div class="preview-grid" id="preview-grid"></div>
             </div>
 
             <!-- 配置选项 -->
             <div class="controls-row">
               <div>
-                <label for="language">标题/描述语言</label>
+                <label for="language" id="output-language-label">标题/描述语言</label>
                 <select id="language">
-                  <option value="ja" selected>日语</option>
-                  <option value="en">英语</option>
-                  <option value="zh">简体中文</option>
+                  <option value="ja" selected id="lang-opt-ja">日语</option>
+                  <option value="en" id="lang-opt-en">英语</option>
+                  <option value="zh" id="lang-opt-zh">简体中文</option>
                 </select>
               </div>
               <div>
-                <label for="category-count">返回类别个数</label>
+                <label for="category-count" id="category-count-label">返回类别个数</label>
                 <select id="category-count">
                   <option value="1" selected>1</option>
                   <option value="2">2</option>
@@ -749,27 +757,28 @@
                 </select>
               </div>
               <div>
-                <label for="price-strategy">价格策略</label>
+                <label for="price-strategy" id="price-strategy-label">价格策略</label>
                 <select id="price-strategy">
-                  <option value="dedicated" selected>方式1：独立价格模型+搜索</option>
-                  <option value="vision_online">方式2：图片模型开启搜索</option>
+                  <option value="vision" selected id="price-strategy-default">默认(推理)</option>
+                  <option value="vision_online" id="price-strategy-online">搜索模式(速度较慢)</option>
+                  <option value="dedicated" id="price-strategy-dedicated">独立模型+搜索(优先精度)</option>
                 </select>
               </div>
             </div>
 
             <div class="models-row">
-              <div>
-                <label for="vision-model">视觉模型</label>
+              <!-- <div>
+                <label for="vision-model" id="vision-model-label">视觉模型</label>
                 <input type="text" id="vision-model" value="" placeholder="留空使用默认视觉模型" />
               </div>
               <div>
-                <label for="category-model">分类模型</label>
+                <label for="category-model" id="category-model-label">分类模型</label>
                 <input type="text" id="category-model" value="" placeholder="留空使用默认分类模型" />
               </div>
               <div id="price-model-row">
-                <label for="price-model">价格模型（仅方式1）</label>
+                <label for="price-model" id="price-model-label">价格模型（仅方式1）</label>
                 <input type="text" id="price-model" value="" placeholder="留空使用默认价格模型" />
-              </div>
+              </div> -->
             </div>
 
             <!-- 操作按钮 -->
@@ -782,7 +791,7 @@
 
             <!-- 进度显示 -->
             <div id="progress-section" style="display: none;">
-              <label>处理进度</label>
+              <label id="progress-label">处理进度</label>
               <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px;">
                 <span id="progress-text">0 / 0</span>
                 <span id="progress-percent">0%</span>
@@ -795,7 +804,7 @@
 
           <!-- 结果列表 -->
           <div class="results-section">
-            <h2 style="margin: 0 0 12px 0; font-size: 18px;">识别结果</h2>
+            <h2 id="results-title" style="margin: 0 0 12px 0; font-size: 18px;">识别结果</h2>
             <div id="results-list"></div>
           </div>
         </div>
@@ -804,32 +813,32 @@
         <div class="stats-panel">
           <div class="card">
             <div class="stats-header">
-              <h2>测试统计</h2>
+              <h2 id="stats-title">测试统计</h2>
               <button class="clear-btn" id="clear-stats-btn">清空</button>
             </div>
 
             <div class="stat-card">
-              <div class="stat-label">总测试次数</div>
+              <div class="stat-label" id="total-tests-label">总测试次数</div>
               <div class="stat-value" id="total-count">0</div>
             </div>
 
             <div class="stat-breakdown">
               <div class="stat-item accurate">
-                <span class="stat-item-label">✅ 准确</span>
+                <span class="stat-item-label" id="accurate-label">✅ 准确</span>
                 <div>
                   <span class="stat-item-value" id="accurate-count">0</span>
                   <span class="stat-item-percent" id="accurate-percent">0%</span>
                 </div>
               </div>
               <div class="stat-item moderate">
-                <span class="stat-item-label">⚠️ 一般</span>
+                <span class="stat-item-label" id="moderate-label">⚠️ 一般</span>
                 <div>
                   <span class="stat-item-value" id="moderate-count">0</span>
                   <span class="stat-item-percent" id="moderate-percent">0%</span>
                 </div>
               </div>
               <div class="stat-item inaccurate">
-                <span class="stat-item-label">❌ 错误</span>
+                <span class="stat-item-label" id="inaccurate-label">❌ 错误</span>
                 <div>
                   <span class="stat-item-value" id="inaccurate-count">0</span>
                   <span class="stat-item-percent" id="inaccurate-percent">0%</span>
@@ -838,14 +847,14 @@
             </div>
 
             <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
-              <div class="stat-label">准确率</div>
+              <div class="stat-label" id="accuracy-label">准确率</div>
               <div class="stat-value" style="font-size: 24px; color: var(--success);" id="accuracy-rate">--</div>
             </div>
           </div>
 
           <div class="card" style="margin-top: 12px;">
             <div class="stats-header">
-              <h2>接口地址</h2>
+              <h2 id="api-title">接口地址</h2>
             </div>
             <input
               type="text"
@@ -859,6 +868,192 @@
     </div>
 
     <script>
+      const translations = {
+        zh: {
+          documentTitle: "Mercari 商品图片识别测试",
+          pageTitle: "Mercari 商品图片识别测试",
+          betaPill: "批量测试版",
+          uiLanguageLabel: "界面语言",
+          uiLangZh: "中文",
+          uiLangJa: "日语",
+          statusIdle: "待命",
+          statusProcessing: "批量处理中...",
+          statusDone: "完成",
+          uploadLabel: "商品图片（支持批量上传）",
+          uploadText: "点击或拖拽图片到此处",
+          uploadHint: "支持多选，JPG、PNG、GIF 等格式",
+          previewLabel: "已选择 {count} 张图片",
+          outputLanguageLabel: "标题/描述语言",
+          outputLangJa: "日语",
+          outputLangEn: "英语",
+          outputLangZh: "简体中文",
+          categoryCountLabel: "返回类别个数",
+          priceStrategyLabel: "价格策略",
+          priceStrategyVision: "默认(推理)",
+          priceStrategyDedicated: "独立模型+搜索(优先精度)",
+          priceStrategyVisionOnline: "搜索模式(速度较慢)",
+          visionModelLabel: "视觉模型",
+          visionModelPlaceholder: "留空使用默认视觉模型",
+          categoryModelLabel: "分类模型",
+          categoryModelPlaceholder: "留空使用默认分类模型",
+          priceModelLabel: "价格模型",
+          priceModelPlaceholder: "留空使用默认价格模型",
+          startButton: "开始识别",
+          clearImages: "清空图片",
+          progressLabel: "处理进度",
+          resultsTitle: "识别结果",
+          statsTitle: "测试统计",
+          clearStats: "清空",
+          totalTestsLabel: "总测试次数",
+          statAccurate: "✅ 准确",
+          statModerate: "⚠️ 一般",
+          statInaccurate: "❌ 错误",
+          accuracyLabel: "准确率",
+          apiTitle: "接口地址",
+          apiPlaceholder: "请输入API地址，默认 /api/v1/mercari/image/analyze",
+          alertNoFiles: "请先选择图片",
+          alertNoEndpoint: "请填写接口地址",
+          processingButton: "处理中...",
+          statusBadgeProcessing: "处理中...",
+          badgeSuccess: "✓ 完成",
+          badgeFail: "✗ 失败",
+          badgeError: "✗ 错误",
+          statusProcessingText: "批量处理中...",
+          statusDoneText: "完成",
+          resultSuccess: "成功",
+          resultFail: "失败",
+          fieldTitle: "📝 标题",
+          fieldDescription: "📄 描述",
+          fieldCategory: "🏷️ 分类",
+          fieldCategoryCandidates: "🏷️ 分类候选",
+          unknownCategory: "未知分类",
+          fieldBrand: "🔖 品牌",
+          unknownBrand: "未知品牌",
+          fieldPriceSingle: "💰 建议价格",
+          fieldPriceList: "💰 价格预测",
+          priceCandidateLabel: "候选",
+          priceNone: "暂无价格",
+          priceFailed: "预测失败或无结果",
+          priceRefs: "🔗 价格搜索引用",
+          priceRefFallback: "参考",
+          fieldCondition: "📦 商品状态",
+          fieldShipping: "🚚 配送方式",
+          noStructuredData: "无结构化数据",
+          toggleShowJson: "查看原始 JSON",
+          toggleHideJson: "隐藏原始 JSON",
+          ratingLabel: "评价识别结果：",
+          ratingAccurate: "✅ 准确",
+          ratingModerate: "⚠️ 一般",
+          ratingInaccurate: "❌ 错误",
+          confirmClearStats: "确定要清空所有测试统计数据吗？",
+          warnDefaults: "无法获取默认模型",
+          jsonParseFailed: "JSON parse failed"
+        },
+        ja: {
+          documentTitle: "メルカリ商品画像識別テスター",
+          pageTitle: "メルカリ商品画像識別テスト",
+          betaPill: "バッチテスト版",
+          uiLanguageLabel: "UI言語",
+          uiLangZh: "中国語",
+          uiLangJa: "日本語",
+          statusIdle: "待機中",
+          statusProcessing: "一括処理中...",
+          statusDone: "完了",
+          uploadLabel: "商品画像（複数アップロード対応）",
+          uploadText: "ここをクリックまたはドラッグ＆ドロップ",
+          uploadHint: "複数選択可。JPG/PNG/GIF などに対応",
+          previewLabel: "選択中 {count} 枚",
+          outputLanguageLabel: "タイトル/説明の言語",
+          outputLangJa: "日本語",
+          outputLangEn: "英語",
+          outputLangZh: "中国語（簡体字）",
+          categoryCountLabel: "返却するカテゴリ数",
+          priceStrategyLabel: "価格モード",
+          priceStrategyVision: "デフォルト(推理)",
+          priceStrategyDedicated: "独立模型+検索(優先精度)",
+          priceStrategyVisionOnline: "検索モード(速度較遅)",
+          visionModelLabel: "ビジョンモデル",
+          visionModelPlaceholder: "空欄なら既定モデルを使用",
+          categoryModelLabel: "カテゴリモデル",
+          categoryModelPlaceholder: "空欄なら既定モデルを使用",
+          priceModelLabel: "価格モデル",
+          priceModelPlaceholder: "空欄なら既定モデルを使用",
+          startButton: "解析を開始",
+          clearImages: "画像をクリア",
+          progressLabel: "処理進捗",
+          resultsTitle: "解析結果",
+          statsTitle: "テスト統計",
+          clearStats: "リセット",
+          totalTestsLabel: "テスト合計回数",
+          statAccurate: "✅ 正確",
+          statModerate: "⚠️ 普通",
+          statInaccurate: "❌ 誤り",
+          accuracyLabel: "正確率",
+          apiTitle: "API エンドポイント",
+          apiPlaceholder: "API エンドポイントを入力（既定: /api/v1/mercari/image/analyze）",
+          alertNoFiles: "画像を選択してください",
+          alertNoEndpoint: "API エンドポイントを入力してください",
+          processingButton: "処理中...",
+          statusBadgeProcessing: "処理中...",
+          badgeSuccess: "✓ 完了",
+          badgeFail: "✗ 失敗",
+          badgeError: "✗ エラー",
+          statusProcessingText: "一括処理中...",
+          statusDoneText: "完了",
+          resultSuccess: "成功",
+          resultFail: "失敗",
+          fieldTitle: "📝 タイトル",
+          fieldDescription: "📄 説明",
+          fieldCategory: "🏷️ カテゴリ",
+          fieldCategoryCandidates: "🏷️ カテゴリ候補",
+          unknownCategory: "不明なカテゴリ",
+          fieldBrand: "🔖 ブランド",
+          unknownBrand: "不明ブランド",
+          fieldPriceSingle: "💰 推奨価格",
+          fieldPriceList: "💰 価格予測",
+          priceCandidateLabel: "候補",
+          priceNone: "価格なし",
+          priceFailed: "価格予測に失敗またはなし",
+          priceRefs: "🔗 価格検索の参照",
+          priceRefFallback: "参照",
+          fieldCondition: "📦 商品状態",
+          fieldShipping: "🚚 配送方法",
+          noStructuredData: "構造化データなし",
+          toggleShowJson: "元の JSON を表示",
+          toggleHideJson: "JSON を隠す",
+          ratingLabel: "解析結果を評価：",
+          ratingAccurate: "✅ 正確",
+          ratingModerate: "⚠️ 普通",
+          ratingInaccurate: "❌ 誤り",
+          confirmClearStats: "統計データをリセットしますか？",
+          warnDefaults: "デフォルトモデルを取得できません",
+          jsonParseFailed: "JSON のパースに失敗しました"
+        }
+      };
+
+      let uiLanguage = localStorage.getItem("mercari_ui_lang") || "zh";
+
+      function t(key, params) {
+        const pack = translations[uiLanguage] || translations.zh;
+        const fallback = translations.zh;
+        const template = pack[key] || fallback[key] || key;
+        if (!params) return template;
+        return template.replace(/\{(\w+)\}/g, (_, k) => (params[k] !== undefined ? params[k] : ""));
+      }
+
+      let statusState = "idle";
+
+      function setStatus(state) {
+        statusState = state;
+        const statusKey = state === "processing" ? "statusProcessing" : state === "done" ? "statusDone" : "statusIdle";
+        statusText.textContent = t(statusKey);
+        if (state === "processing") {
+          statusDot.classList.add("live");
+        } else {
+          statusDot.classList.remove("live");
+        }
+      }
+
       // 全局状态
       let selectedFiles = [];
       let testResults = [];
@@ -866,30 +1061,58 @@
       let resultRatings = {}; // 跟踪每个结果的评价状态 { resultId: 'accurate' | 'moderate' | 'inaccurate' | null }
 
       // DOM 元素
+      const pageTitleEl = document.getElementById("page-title");
+      const betaPill = document.getElementById("beta-pill");
+      const uiLanguageSelect = document.getElementById("ui-language");
       const imageInput = document.getElementById("image");
       const uploadArea = document.getElementById("upload-area");
       const previewContainer = document.getElementById("preview-container");
       const previewGrid = document.getElementById("preview-grid");
+      const uploadLabel = document.getElementById("upload-label");
+      const uploadText = document.getElementById("upload-text");
+      const uploadHint = document.getElementById("upload-hint");
+      const previewLabel = document.getElementById("preview-label");
       const fileCount = document.getElementById("file-count");
       const languageSelect = document.getElementById("language");
+      const langOptJa = document.getElementById("lang-opt-ja");
+      const langOptEn = document.getElementById("lang-opt-en");
+      const langOptZh = document.getElementById("lang-opt-zh");
+      const outputLanguageLabel = document.getElementById("output-language-label");
+      const categoryCountLabel = document.getElementById("category-count-label");
       const categoryCountSelect = document.getElementById("category-count");
+      const priceStrategyLabel = document.getElementById("price-strategy-label");
       const priceStrategySelect = document.getElementById("price-strategy");
-      const visionModelInput = document.getElementById("vision-model");
-      const categoryModelInput = document.getElementById("category-model");
-      const priceModelInput = document.getElementById("price-model");
-      const priceModelRow = document.getElementById("price-model-row");
+      const priceStrategyDefault = document.getElementById("price-strategy-default");
+      const priceStrategyOnline = document.getElementById("price-strategy-online");
+      const priceStrategyDedicated = document.getElementById("price-strategy-dedicated");
+      // const visionModelLabel = document.getElementById("vision-model-label");
+      // const categoryModelLabel = document.getElementById("category-model-label");
+      // const priceModelLabel = document.getElementById("price-model-label");
+      // const visionModelInput = document.getElementById("vision-model");
+      // const categoryModelInput = document.getElementById("category-model");
+      // const priceModelInput = document.getElementById("price-model");
+      // const priceModelRow = document.getElementById("price-model-row");
       const apiInput = document.getElementById("api-endpoint");
       const submitBtn = document.getElementById("submit-btn");
       const buttonText = document.getElementById("button-text");
       const clearFilesBtn = document.getElementById("clear-files-btn");
       const progressSection = document.getElementById("progress-section");
+      const progressLabel = document.getElementById("progress-label");
       const progressText = document.getElementById("progress-text");
       const progressPercent = document.getElementById("progress-percent");
       const progressFill = document.getElementById("progress-fill");
       const resultsList = document.getElementById("results-list");
+      const resultsTitle = document.getElementById("results-title");
       const statusText = document.getElementById("status-text");
       const statusDot = document.getElementById("status-dot");
       const clearStatsBtn = document.getElementById("clear-stats-btn");
+      const statsTitle = document.getElementById("stats-title");
+      const totalTestsLabel = document.getElementById("total-tests-label");
+      const accurateLabel = document.getElementById("accurate-label");
+      const moderateLabel = document.getElementById("moderate-label");
+      const inaccurateLabel = document.getElementById("inaccurate-label");
+      const accuracyLabel = document.getElementById("accuracy-label");
+      const apiTitle = document.getElementById("api-title");
 
       // 统计元素
       const totalCountEl = document.getElementById("total-count");
@@ -903,6 +1126,62 @@
 
       // LocalStorage 管理
       const STORAGE_KEY = "mercari_test_stats";
+
+      function updatePreviewLabel() {
+        previewLabel.innerHTML = t("previewLabel", { count: fileCount.textContent || "0" });
+      }
+
+      function applyTranslations() {
+        document.documentElement.lang = uiLanguage === "ja" ? "ja" : "zh";
+        document.title = t("documentTitle");
+        pageTitleEl.textContent = t("pageTitle");
+        betaPill.textContent = t("betaPill");
+        uiLanguageSelect.value = uiLanguage;
+        uiLanguageSelect.querySelector('option[value="zh"]').textContent = t("uiLangZh");
+        uiLanguageSelect.querySelector('option[value="ja"]').textContent = t("uiLangJa");
+
+        uploadLabel.textContent = t("uploadLabel");
+        uploadText.textContent = t("uploadText");
+        uploadHint.textContent = t("uploadHint");
+        updatePreviewLabel();
+
+        outputLanguageLabel.textContent = t("outputLanguageLabel");
+        langOptJa.textContent = t("outputLangJa");
+        langOptEn.textContent = t("outputLangEn");
+        langOptZh.textContent = t("outputLangZh");
+        categoryCountLabel.textContent = t("categoryCountLabel");
+        priceStrategyLabel.textContent = t("priceStrategyLabel");
+        priceStrategyDefault.textContent = t("priceStrategyVision");
+        priceStrategyOnline.textContent = t("priceStrategyVisionOnline");
+        priceStrategyDedicated.textContent = t("priceStrategyDedicated");
+        // visionModelLabel.textContent = t("visionModelLabel");
+        // visionModelInput.placeholder = t("visionModelPlaceholder");
+        // categoryModelLabel.textContent = t("categoryModelLabel");
+        // categoryModelInput.placeholder = t("categoryModelPlaceholder");
+        // priceModelLabel.textContent = t("priceModelLabel");
+        // priceModelInput.placeholder = t("priceModelPlaceholder");
+
+        buttonText.innerHTML = processing
+          ? `<span class="spinner"></span> ${t("processingButton")}`
+          : t("startButton");
+        clearFilesBtn.textContent = t("clearImages");
+        progressLabel.textContent = t("progressLabel");
+        resultsTitle.textContent = t("resultsTitle");
+
+        statsTitle.textContent = t("statsTitle");
+        clearStatsBtn.textContent = t("clearStats");
+        totalTestsLabel.textContent = t("totalTestsLabel");
+        accurateLabel.textContent = t("statAccurate");
+        moderateLabel.textContent = t("statModerate");
+        inaccurateLabel.textContent = t("statInaccurate");
+        accuracyLabel.textContent = t("accuracyLabel");
+
+        apiTitle.textContent = t("apiTitle");
+        apiInput.placeholder = t("apiPlaceholder");
+
+        setStatus(statusState);
+        renderResults();
+      }
 
       function loadStats() {
         const data = localStorage.getItem(STORAGE_KEY);
@@ -989,7 +1268,7 @@
         if (data.title) {
           html += `
             <div class="field-group">
-              <div class="field-label">📝 标题</div>
+              <div class="field-label">${t("fieldTitle")}</div>
               <div class="field-value large">${escapeHtml(data.title)}</div>
             </div>
           `;
@@ -999,7 +1278,7 @@
         if (data.description) {
           html += `
             <div class="field-group">
-              <div class="field-label">📄 描述</div>
+              <div class="field-label">${t("fieldDescription")}</div>
               <div class="field-value">${escapeHtml(data.description)}</div>
             </div>
           `;
@@ -1009,7 +1288,7 @@
         if (data.category_id || data.category_name) {
           html += `
             <div class="field-group">
-              <div class="field-label">🏷️ 分类</div>
+              <div class="field-label">${t("fieldCategory")}</div>
               <div class="tags-container">
                 ${data.category_name ? `<span class="tag primary">${escapeHtml(data.category_name)}</span>` : ''}
                 ${data.category_id ? `<span class="tag">ID: ${escapeHtml(String(data.category_id))}</span>` : ''}
@@ -1022,10 +1301,10 @@
         if (data.categories && Array.isArray(data.categories) && data.categories.length > 0) {
           html += `
             <div class="field-group">
-              <div class="field-label">🏷️ 分类候选 (${data.categories.length})</div>
+              <div class="field-label">${t("fieldCategoryCandidates")} (${data.categories.length})</div>
               <div class="tags-container">
                 ${data.categories.map((cat, index) => {
-                  const name = cat.name || cat.category_name || '未知分类';
+                  const name = cat.name || cat.category_name || t("unknownCategory");
                   const id = cat.id || cat.category_id || '';
                   const confidence = cat.confidence || cat.score;
                   const isPrimary = index === 0 ? 'primary' : '';
@@ -1046,12 +1325,12 @@
 
         // 品牌
         if (data.brand_id || data.brand_name) {
-          const brandName = data.brand_name ? escapeHtml(data.brand_name) : "未知品牌";
+          const brandName = data.brand_name ? escapeHtml(data.brand_name) : t("unknownBrand");
           const brandId = data.brand_id ? escapeHtml(String(data.brand_id)) : "";
           const brandLabel = brandId ? `${brandName} (ID: ${brandId})` : brandName;
           html += `
             <div class="field-group">
-              <div class="field-label">🔖 品牌</div>
+              <div class="field-label">${t("fieldBrand")}</div>
               <div class="tags-container">
                 <span class="tag primary">${brandLabel}</span>
               </div>
@@ -1063,7 +1342,7 @@
         if (data.price !== undefined && data.price !== null) {
           html += `
             <div class="field-group">
-              <div class="field-label">💰 建议价格</div>
+              <div class="field-label">${t("fieldPriceSingle")}</div>
               <div class="field-value">¥${escapeHtml(String(data.price))}</div>
             </div>
           `;
@@ -1074,24 +1353,24 @@
           const priceTags = data.prices
             .map((p, idx) => {
               if (p === null || p === undefined) return null;
-              return `<span class="tag ${idx === 0 ? 'primary' : ''}">候选${idx + 1}: ¥${escapeHtml(String(p))}</span>`;
+              return `<span class="tag ${idx === 0 ? 'primary' : ''}">${t("priceCandidateLabel")}${idx + 1}: ¥${escapeHtml(String(p))}</span>`;
             })
             .filter(Boolean)
             .join("");
 
           html += `
             <div class="field-group">
-              <div class="field-label">💰 价格预测（按可信度排序）</div>
+              <div class="field-label">${t("fieldPriceList")}</div>
               <div class="tags-container">
-                ${priceTags || '<span class="tag">暂无价格</span>'}
+                ${priceTags || `<span class="tag">${t("priceNone")}</span>`}
               </div>
             </div>
           `;
         } else {
           html += `
             <div class="field-group">
-              <div class="field-label">💰 价格预测</div>
-              <div class="field-value" style="color: var(--danger);">预测失败或无结果</div>
+              <div class="field-label">${t("fieldPriceList")}</div>
+              <div class="field-value" style="color: var(--danger);">${t("priceFailed")}</div>
             </div>
           `;
         }
@@ -1101,13 +1380,13 @@
           const links = data.price_citations
             .map((c, idx) => {
               const url = c.url || "";
-              const title = c.title || getHostname(url) || `参考${idx + 1}`;
+              const title = c.title || getHostname(url) || `${t("priceRefFallback")}${idx + 1}`;
               return `<li><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(title)}</a></li>`;
             })
             .join("");
           html += `
             <div class="field-group">
-              <div class="field-label">🔗 价格搜索引用</div>
+              <div class="field-label">${t("priceRefs")}</div>
               <ul style="padding-left: 18px; margin: 6px 0; color: var(--accent);">
                 ${links}
               </ul>
@@ -1119,7 +1398,7 @@
         if (data.item_condition_id || data.item_condition) {
           html += `
             <div class="field-group">
-              <div class="field-label">📦 商品状态</div>
+              <div class="field-label">${t("fieldCondition")}</div>
               <div class="tags-container">
                 ${data.item_condition ? `<span class="tag">${escapeHtml(String(data.item_condition))}</span>` : ''}
                 ${data.item_condition_id ? `<span class="tag">ID: ${escapeHtml(String(data.item_condition_id))}</span>` : ''}
@@ -1132,13 +1411,13 @@
         if (data.shipping_method) {
           html += `
             <div class="field-group">
-              <div class="field-label">🚚 配送方式</div>
+              <div class="field-label">${t("fieldShipping")}</div>
               <div class="field-value">${escapeHtml(String(data.shipping_method))}</div>
             </div>
           `;
         }
 
-        return html || '<div class="field-value">无结构化数据</div>';
+        return html || `<div class="field-value">${t("noStructuredData")}</div>`;
       }
       function escapeHtml(text) {
         const div = document.createElement('div');
@@ -1158,6 +1437,7 @@
       function updateFileList() {
         previewGrid.innerHTML = "";
         fileCount.textContent = selectedFiles.length;
+        updatePreviewLabel();
         
         if (selectedFiles.length === 0) {
           previewContainer.style.display = "none";
@@ -1238,37 +1518,43 @@
         updateFileList();
       });
 
-      // 切换价格模型输入可见性
-      function updatePriceModelVisibility() {
-        if (priceStrategySelect.value === "dedicated") {
-          priceModelRow.style.display = "block";
-        } else {
-          priceModelRow.style.display = "none";
-        }
-      }
-      priceStrategySelect.addEventListener("change", updatePriceModelVisibility);
-      updatePriceModelVisibility();
+      // // 切换价格模型输入可见性
+      // function updatePriceModelVisibility() {
+      //   if (priceStrategySelect.value === "dedicated") {
+      //     priceModelRow.style.display = "block";
+      //   } else {
+      //     priceModelRow.style.display = "none";
+      //   }
+      // }
+      // priceStrategySelect.addEventListener("change", updatePriceModelVisibility);
+      // updatePriceModelVisibility();
+      uiLanguageSelect.addEventListener("change", () => {
+        uiLanguage = uiLanguageSelect.value === "ja" ? "ja" : "zh";
+        localStorage.setItem("mercari_ui_lang", uiLanguage);
+        applyTranslations();
+      });
 
       // 批量处理
       async function processFiles() {
         if (selectedFiles.length === 0) {
-          alert("请先选择图片");
+          alert(t("alertNoFiles"));
           return;
         }
         
         const endpoint = apiInput.value.trim() || '/api/v1/mercari/image/analyze';
         if (!endpoint) {
-          alert("请填写接口地址");
+          alert(t("alertNoEndpoint"));
           return;
         }
         
+        testResults = [];
+        resultsList.innerHTML = "";
+        
         processing = true;
         submitBtn.disabled = true;
-        buttonText.innerHTML = '<span class="spinner"></span> 处理中...';
-        statusText.textContent = "批量处理中...";
-        statusDot.classList.add("live");
+        buttonText.innerHTML = `<span class="spinner"></span> ${t("processingButton")}`;
+        setStatus("processing");
         progressSection.style.display = "block";
-        resultsList.innerHTML = "";
         
         let completed = 0;
         const total = selectedFiles.length;
@@ -1281,7 +1567,7 @@
           previewItem.classList.add("processing");
           const statusBadge = document.createElement("div");
           statusBadge.className = "status-badge";
-          statusBadge.textContent = "处理中...";
+          statusBadge.textContent = t("statusBadgeProcessing");
           previewItem.appendChild(statusBadge);
           
           try {
@@ -1289,7 +1575,7 @@
             formData.append("image", fileObj.file);
             formData.append("language", languageSelect.value);
             formData.append("category_count", categoryCountSelect.value || "1");
-            formData.append("price_strategy", priceStrategySelect.value || "dedicated");
+            formData.append("price_strategy", priceStrategySelect.value || "vision");
             if (visionModelInput.value.trim()) formData.append("vision_model", visionModelInput.value.trim());
             if (categoryModelInput.value.trim()) formData.append("category_model", categoryModelInput.value.trim());
             if (priceModelInput.value.trim() && priceStrategySelect.value === "dedicated") {
@@ -1309,14 +1595,14 @@
             try {
               payload = JSON.parse(text);
             } catch (err) {
-              payload = { error: "JSON parse failed", raw: text };
+              payload = { error: t("jsonParseFailed"), raw: text };
             }
             
             // 更新预览状态
             previewItem.classList.remove("processing");
             if (resp.ok) {
               previewItem.classList.add("success");
-              statusBadge.textContent = "✓ 完成";
+              statusBadge.textContent = t("badgeSuccess");
               statusBadge.style.background = "#dcfce7";
               statusBadge.style.color = "#15803d";
               
@@ -1324,7 +1610,7 @@
               addResultCard(fileObj, payload, elapsedMs, true);
             } else {
               previewItem.classList.add("error");
-              statusBadge.textContent = "✗ 失败";
+              statusBadge.textContent = t("badgeFail");
               statusBadge.style.background = "#fee2e2";
               statusBadge.style.color = "#991b1b";
               
@@ -1333,7 +1619,7 @@
           } catch (err) {
             previewItem.classList.remove("processing");
             previewItem.classList.add("error");
-            statusBadge.textContent = "✗ 错误";
+            statusBadge.textContent = t("badgeError");
             statusBadge.style.background = "#fee2e2";
             statusBadge.style.color = "#991b1b";
             
@@ -1349,22 +1635,20 @@
         
         processing = false;
         submitBtn.disabled = false;
-        buttonText.textContent = "开始识别";
-        statusText.textContent = "完成";
-        statusDot.classList.remove("live");
+        buttonText.textContent = t("startButton");
+        setStatus("done");
       }
 
-      // 添加结果卡片
-      function addResultCard(fileObj, payload, elapsedMs, success) {
+      function buildResultCard(entry) {
+        const { fileObj, payload, elapsedMs, success, resultId } = entry;
         const card = document.createElement("div");
         card.className = "result-card";
-        
-        const resultId = 'result_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         card.dataset.resultId = resultId;
-        
+
         const structuredData = formatResultData(payload);
         const rawJson = JSON.stringify(payload, null, 2);
-        
+        const ratingValue = resultRatings[resultId];
+
         card.innerHTML = `
           <div class="result-header">
             <img src="${fileObj.url}" class="result-image" alt="result">
@@ -1372,7 +1656,7 @@
               <div class="result-filename">${escapeHtml(fileObj.file.name)}</div>
               <div class="result-stats">
                 <span>⏱️ ${(elapsedMs / 1000).toFixed(2)}s</span>
-                <span>${success ? '<span style="color: var(--success)">✓ 成功</span>' : '<span style="color: var(--danger)">✗ 失败</span>'}</span>
+                <span>${success ? `<span style="color: var(--success)">✓ ${t("resultSuccess")}</span>` : `<span style="color: var(--danger)">✗ ${t("resultFail")}</span>`}</span>
                 <span>📦 ${formatBytes(fileObj.file.size)}</span>
               </div>
             </div>
@@ -1382,40 +1666,55 @@
             ${structuredData}
           </div>
           
-          <button class="toggle-json" onclick="toggleJson('${resultId}')">
+          <button class="toggle-json" data-toggle-for="${resultId}" onclick="toggleJson('${resultId}', event)">
             <span>📋</span>
-            <span class="toggle-text">查看原始 JSON</span>
+            <span class="toggle-text">${t("toggleShowJson")}</span>
           </button>
           
           <pre class="raw-json" id="json-${resultId}">${escapeHtml(rawJson)}</pre>
           
           ${success ? `
             <div class="rating-section">
-              <label>评价识别结果：</label>
+              <label>${t("ratingLabel")}</label>
               <div class="rating-buttons">
-                <button class="rating-btn accurate" onclick="rateResult('${resultId}', 'accurate', this)">✅ 准确</button>
-                <button class="rating-btn moderate" onclick="rateResult('${resultId}', 'moderate', this)">⚠️ 一般</button>
-                <button class="rating-btn inaccurate" onclick="rateResult('${resultId}', 'inaccurate', this)">❌ 错误</button>
+                <button class="rating-btn accurate ${ratingValue === 'accurate' ? 'active' : ''}" onclick="rateResult('${resultId}', 'accurate', this)">${t("ratingAccurate")}</button>
+                <button class="rating-btn moderate ${ratingValue === 'moderate' ? 'active' : ''}" onclick="rateResult('${resultId}', 'moderate', this)">${t("ratingModerate")}</button>
+                <button class="rating-btn inaccurate ${ratingValue === 'inaccurate' ? 'active' : ''}" onclick="rateResult('${resultId}', 'inaccurate', this)">${t("ratingInaccurate")}</button>
               </div>
             </div>
           ` : ''}
         `;
-        
-        resultsList.insertBefore(card, resultsList.firstChild);
+
+        return card;
+      }
+
+      function renderResults() {
+        resultsList.innerHTML = "";
+        testResults.forEach((entry) => {
+          const card = buildResultCard(entry);
+          resultsList.appendChild(card);
+        });
+      }
+
+      // 添加结果卡片
+      function addResultCard(fileObj, payload, elapsedMs, success) {
+        const resultId = "result_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+        testResults.unshift({ fileObj, payload, elapsedMs, success, resultId });
+        renderResults();
       }
 
       // 切换 JSON 显示
-      window.toggleJson = function(resultId) {
+      window.toggleJson = function(resultId, ev) {
         const jsonEl = document.getElementById(`json-${resultId}`);
-        const toggleBtn = event.target.closest('.toggle-json');
+        const toggleBtn = (ev && ev.currentTarget) || document.querySelector(`[data-toggle-for="${resultId}"]`);
         const toggleText = toggleBtn.querySelector('.toggle-text');
         
         if (jsonEl.classList.contains('show')) {
           jsonEl.classList.remove('show');
-          toggleText.textContent = '查看原始 JSON';
+          toggleText.textContent = t("toggleShowJson");
         } else {
           jsonEl.classList.add('show');
-          toggleText.textContent = '隐藏原始 JSON';
+          toggleText.textContent = t("toggleHideJson");
         }
       };
 
@@ -1435,10 +1734,11 @@
 
       // 清空统计
       clearStatsBtn.addEventListener("click", () => {
-        if (confirm("确定要清空所有测试统计数据吗？")) {
+        if (confirm(t("confirmClearStats"))) {
           localStorage.removeItem(STORAGE_KEY);
           resultRatings = {};
           updateStatsDisplay();
+          renderResults();
         }
       });
 
@@ -1452,7 +1752,7 @@
           if (models.category_model) categoryModelInput.value = models.category_model;
           if (models.price_model) priceModelInput.value = models.price_model;
         } catch (e) {
-          console.warn("无法获取默认模型", e);
+          console.warn(t("warnDefaults"), e);
         }
       }
 
@@ -1460,6 +1760,8 @@
       submitBtn.addEventListener("click", processFiles);
 
       // 初始化
+      applyTranslations();
+      setStatus("idle");
       updateStatsDisplay();
       fetchDefaults();
     </script>

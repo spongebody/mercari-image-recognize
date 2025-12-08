@@ -64,7 +64,7 @@ async def analyze_image(
     language: str = Form(DEFAULT_LANGUAGE),
     debug: str = Form("false"),
     category_count: int = Form(1),
-    price_strategy: str = Form("dedicated"),
+    price_strategy: str = Form("vision"),
     vision_model: str = Form(None),
     category_model: str = Form(None),
     price_model: str = Form(None),
@@ -92,7 +92,7 @@ async def analyze_image(
 
     debug_enabled = settings.enable_debug_param and parse_bool_param(debug, False)
     category_count = max(1, min(category_count, 3))
-    price_strategy = price_strategy or "dedicated"
+    price_strategy = price_strategy or "vision"
 
     try:
         result = await run_in_threadpool(

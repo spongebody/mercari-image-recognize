@@ -17,8 +17,10 @@ from .llm.prompts import (
     PRICE_USER_PROMPT_TEMPLATE,
     VISION_SYSTEM_PROMPT,
     VISION_SYSTEM_PROMPT_WITH_PRICE,
+    VISION_SYSTEM_PROMPT_WITH_SEARCH,
     VISION_USER_PROMPT_TEMPLATE,
-    VISION_USER_PROMPT_TEMPLATE_WITH_PRICE,
+    VISION_USER_PROMPT_WITH_PRICE,
+    VISION_USER_PROMPT_TEMPLATE_WITH_WITH_SEARCH,
 )
 from .utils import (
     compress_whitespace,
@@ -115,7 +117,7 @@ class MercariAnalyzer:
         language: str,
         debug: bool = False,
         category_limit: int = 1,
-        price_strategy: str = "dedicated",
+        price_strategy: str = "vision",
         vision_model_override: Optional[str] = None,
         category_model_override: Optional[str] = None,
         price_model_override: Optional[str] = None,
@@ -123,18 +125,18 @@ class MercariAnalyzer:
         if language not in SUPPORTED_LANGUAGES:
             raise BadRequestError("Unsupported language.")
         category_limit = max(1, min(int(category_limit), 3))
-        price_strategy = price_strategy or "dedicated"
-        if price_strategy not in {"dedicated", "vision_online"}:
-            price_strategy = "dedicated"
+        price_strategy = price_strategy or "vision"
+        if price_strategy not in {"vision", "dedicated", "vision_online"}:
+            price_strategy = "vision"
 
         data_url = image_bytes_to_data_url(image_bytes, mime_type)
-        use_online = price_strategy == "vision_online"
+        price_mode = "search" if price_strategy == "vision_online" else ("inline" if price_strategy == "vision" else "none")
         ai_raw, ai_full = self._call_vision_llm(
             data_url,
             language,
-            force_online=use_online,
+            force_online=price_strategy == "vision_online",
             model_override=vision_model_override,
-            include_price=use_online,
+            price_mode=price_mode,
         )
 
         title = _clean_string(ai_raw.get("title", ""))
@@ -164,8 +166,8 @@ class MercariAnalyzer:
 
         price_raw = None
         price_error = None
-        price_source = "vision"
         price_citations = _extract_citations(ai_full)
+        price_source = "vision_online" if price_mode == "search" else ("vision" if price_mode == "inline" else "none")
         if price_strategy == "dedicated":
             try:
                 (
@@ -227,12 +229,20 @@ class MercariAnalyzer:
         language: str,
         force_online: bool = False,
         model_override: Optional[str] = None,
-        include_price: bool = False,
+        price_mode: str = "none",
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        user_prompt_template = (
-            VISION_USER_PROMPT_TEMPLATE_WITH_PRICE if include_price else VISION_USER_PROMPT_TEMPLATE
-        )
-        system_prompt = VISION_SYSTEM_PROMPT_WITH_PRICE if include_price else VISION_SYSTEM_PROMPT
+        price_mode = price_mode or "none"
+        if price_mode not in {"none", "inline", "search"}:
+            price_mode = "none"
+        if price_mode == "search":
+            user_prompt_template = VISION_USER_PROMPT_TEMPLATE_WITH_WITH_SEARCH
+            system_prompt = VISION_SYSTEM_PROMPT_WITH_SEARCH
+        elif price_mode == "inline":
+            user_prompt_template = VISION_USER_PROMPT_WITH_PRICE
+            system_prompt = VISION_SYSTEM_PROMPT_WITH_PRICE
+        else:
+            user_prompt_template = VISION_USER_PROMPT_TEMPLATE
+            system_prompt = VISION_SYSTEM_PROMPT
         user_prompt = user_prompt_template.format(language_label=_language_label(language))
         messages = [
             {"role": "system", "content": system_prompt},
