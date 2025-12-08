@@ -3,3 +3,8 @@
   to = "http://43.133.171.134:39008/api/v1/:splat"
   status = 200
   force = true
+[[redirects]]
+  from = "/health"
+  to = "http://43.133.171.134:39008/health"
+  status = 200
+  force = true
