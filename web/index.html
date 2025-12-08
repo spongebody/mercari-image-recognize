@@ -1088,9 +1088,9 @@
       // const visionModelLabel = document.getElementById("vision-model-label");
       // const categoryModelLabel = document.getElementById("category-model-label");
       // const priceModelLabel = document.getElementById("price-model-label");
-      // const visionModelInput = document.getElementById("vision-model");
-      // const categoryModelInput = document.getElementById("category-model");
-      // const priceModelInput = document.getElementById("price-model");
+      const visionModelInput = document.getElementById("vision-model");
+      const categoryModelInput = document.getElementById("category-model");
+      const priceModelInput = document.getElementById("price-model");
       // const priceModelRow = document.getElementById("price-model-row");
       const apiInput = document.getElementById("api-endpoint");
       const submitBtn = document.getElementById("submit-btn");
@@ -1576,9 +1576,9 @@
             formData.append("language", languageSelect.value);
             formData.append("category_count", categoryCountSelect.value || "1");
             formData.append("price_strategy", priceStrategySelect.value || "vision");
-            if (visionModelInput.value.trim()) formData.append("vision_model", visionModelInput.value.trim());
-            if (categoryModelInput.value.trim()) formData.append("category_model", categoryModelInput.value.trim());
-            if (priceModelInput.value.trim() && priceStrategySelect.value === "dedicated") {
+            if (visionModelInput?.value.trim()) formData.append("vision_model", visionModelInput.value.trim());
+            if (categoryModelInput?.value.trim()) formData.append("category_model", categoryModelInput.value.trim());
+            if (priceModelInput?.value.trim() && priceStrategySelect.value === "dedicated") {
               formData.append("price_model", priceModelInput.value.trim());
             }
             
