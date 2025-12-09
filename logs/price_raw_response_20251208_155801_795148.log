@@ -1,0 +1,116 @@
+{
+  "id": "gen-1765209478-3kjO6B2TcxHpfUqlSYm6",
+  "provider": "OpenAI",
+  "model": "openai/gpt-4.1",
+  "object": "chat.completion",
+  "created": 1765209478,
+  "choices": [
+    {
+      "logprobs": null,
+      "finish_reason": "stop",
+      "native_finish_reason": "completed",
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "画像には、ルイ・ヴィトンのモノグラム柄があしらわれた二つ折り財布が写っています。一般的なモノグラムのキャンバス素材で、外観には特段の損傷は見られず、全体的に使用感少なめ、美品に近い状態と判断できます。\n\nSTEP 2：画像から推定される検索クエリ：\n- site:jp.mercari.com ルイヴィトン 二つ折り財布 モノグラム\n- site:jp.mercari.com LOUIS VUITTON 二つ折り財布 モノグラム\n- site:jp.mercari.com ルイヴィトン 財布 モノグラム 二つ折り\n\nSTEP 3〜4：Mercari上の該当・類似する出品を確認。\n多数のモノグラム二つ折り財布の出品があり、状態と価格に幅があります。以下は主な例です：\n\n1) 「¥4,700☆ジャンク Louis Vuitton ... モノグラム 二つ折り財布」→ 傷や劣化あり、最も低価格帯 ([jp.mercari.com](https://jp.mercari.com/search?brand_id=1326&category_id=385&f237f516-b58a-4490-be9b-a96d62cd730b=694eea7b-4fd7-499c-a5f2-c9036a23ca01&page_token=v1%3A6&utm_source=openai))  \n2) 「¥6,900 外観美品✨ルイヴィトン モノグラム コンパクト ラウンドファスナー 二つ折り」→ 外観美品、やや傷あり / 目立った傷なし ([jp.mercari.com](https://jp.mercari.com/search?373da27a-f324-4275-892b-1609df9e498d=d0bf201d-f97a-4611-8b89-6f74d47ddf39&b6b9be89-648c-4af9-b3fe-1b77de4833d1=6906350e-4602-44f4-9668-57ba199f87fc&brand_id=1326&category_id=1772&utm_source=openai))  \n3) 「¥32,000 美品 ルイヴィトン モノグラム 二つ折り財布 ポルトフォイユ マルコ」→ 美品、高価格帯 ([jp.mercari.com](https://jp.mercari.com/search?373da27a-f324-4275-892b-1609df9e498d=d0bf201d-f97a-4611-8b89-6f74d47ddf39&b6b9be89-648c-4af9-b3fe-1b77de4833d1=6906350e-4602-44f4-9668-57ba199f87fc&brand_id=1326&category_id=1772&utm_source=openai))  \n\nその他の参考価格帯も多数存在：\n- ¥6,000（一般的モノグラム二つ折り） ([jp.mercari.com](https://jp.mercari.com/search?373da27a-f324-4275-892b-1609df9e498d=d0bf201d-f97a-4611-8b89-6f74d47ddf39&b6b9be89-648c-4af9-b3fe-1b77de4833d1=6906350e-4602-44f4-9668-57ba199f87fc&brand_id=1326&category_id=1772&utm_source=openai))  \n- ¥15,000（モノグラム上位モデル＆美品） ([jp.mercari.com](https://jp.mercari.com/search?brand_id=1326&category_id=1692&utm_source=openai))  \n\nSTEP 5：状態別に価格を整理：\n\nPoor（傷や汚れあり・ジャンク）：  \n→ 最低価格帯は「¥4,700☆ジャンク…」 ([jp.mercari.com](https://jp.mercari.com/search?brand_id=1326&category_id=385&f237f516-b58a-4490-be9b-a96d62cd730b=694eea7b-4fd7-499c-a5f2-c9036a23ca01&page_token=v1%3A6&utm_source=openai))\n\nAverage（やや傷や汚れあり／目立った傷や汚れなし）：  \n→ 中間価格帯として「¥6,900 外観美品…」 ([jp.mercari.com](https://jp.mercari.com/search?373da27a-f324-4275-892b-1609df9e498d=d0bf201d-f97a-4611-8b89-6f74d47ddf39&b6b9be89-648c-4af9-b3fe-1b77de4833d1=6906350e-4602-44f4-9668-57ba199f87fc&brand_id=1326&category_id=1772&utm_source=openai))\n\nGood（美品〜未使用に近い）：  \n→ 上位価格帯として「¥32,000 美品 ルイヴィトン…」 ([jp.mercari.com](https://jp.mercari.com/search?373da27a-f324-4275-892b-1609df9e498d=d0bf201d-f97a-4611-8b89-6f74d47ddf39&b6b9be89-648c-4af9-b3fe-1b77de4833d1=6906350e-4602-44f4-9668-57ba199f87fc&brand_id=1326&category_id=1772&utm_source=openai))\n\nJSON出力：\n\n{\n  \"prices\": [4700, 6900, 32000],\n  \"reason\": \"画像はルイ・ヴィトン モノグラムの二つ折り財布と判断しました。検索クエリとして「site:jp.mercari.com ルイヴィトン 二つ折り財布 モノグラム」などを使用し、Mercari上で少なくとも5〜10件の類似出品を確認しました。その中で、ジャンク状態の¥4,700、外観美品の¥6,900、美品の¥32,000を代表価格として選びました。poor-condition（傷あり）＝¥4,700（例：「ジャンク」）、average-condition（やや傷・美品）＝¥6,900（例：「外観美品」）、good-condition（美品に近い）＝¥32,000（例：「美品」）です。以下は参考リンク：\\n- ジャンク状態：Mercari 出品（¥4,700 ジャンク）\\n- 外観美品：Mercari 出品（¥6,900 外観美品）\\n- 美品：Mercari 出品（¥32,000 美品）\"\n}",
+        "refusal": null,
+        "reasoning": null,
+        "annotations": [
+          {
+            "type": "url_citation",
+            "url_citation": {
+              "url": "https://jp.mercari.com/search?brand_id=1326&category_id=385&f237f516-b58a-4490-be9b-a96d62cd730b=694eea7b-4fd7-499c-a5f2-c9036a23ca01&page_token=v1%3A6&utm_source=openai",
+              "start_index": 400,
+              "end_index": 589,
+              "title": "〖2025年最新〗LOUIS VUITTON 折り財布の人気アイテム - メルカリ"
+            }
+          },
+          {
+            "type": "url_citation",
+            "url_citation": {
+              "url": "https://jp.mercari.com/search?373da27a-f324-4275-892b-1609df9e498d=d0bf201d-f97a-4611-8b89-6f74d47ddf39&b6b9be89-648c-4af9-b3fe-1b77de4833d1=6906350e-4602-44f4-9668-57ba199f87fc&brand_id=1326&category_id=1772&utm_source=openai",
+              "start_index": 665,
+              "end_index": 911,
+              "title": "〖2025年最新〗LOUIS VUITTON 二つ折り財布の人気アイテム - メルカリ"
+            }
+          },
+          {
+            "type": "url_citation",
+            "url_citation": {
+              "url": "https://jp.mercari.com/search?373da27a-f324-4275-892b-1609df9e498d=d0bf201d-f97a-4611-8b89-6f74d47ddf39&b6b9be89-648c-4af9-b3fe-1b77de4833d1=6906350e-4602-44f4-9668-57ba199f87fc&brand_id=1326&category_id=1772&utm_source=openai",
+              "start_index": 971,
+              "end_index": 1217,
+              "title": "〖2025年最新〗LOUIS VUITTON 二つ折り財布の人気アイテム - メルカリ"
+            }
+          },
+          {
+            "type": "url_citation",
+            "url_citation": {
+              "url": "https://jp.mercari.com/search?373da27a-f324-4275-892b-1609df9e498d=d0bf201d-f97a-4611-8b89-6f74d47ddf39&b6b9be89-648c-4af9-b3fe-1b77de4833d1=6906350e-4602-44f4-9668-57ba199f87fc&brand_id=1326&category_id=1772&utm_source=openai",
+              "start_index": 1260,
+              "end_index": 1506,
+              "title": "〖2025年最新〗LOUIS VUITTON 二つ折り財布の人気アイテム - メルカリ"
+            }
+          },
+          {
+            "type": "url_citation",
+            "url_citation": {
+              "url": "https://jp.mercari.com/search?brand_id=1326&category_id=1692&utm_source=openai",
+              "start_index": 1534,
+              "end_index": 1632,
+              "title": "〖2025年最新〗LOUIS VUITTON 二つ折り財布の人気アイテム - メルカリ"
+            }
+          },
+          {
+            "type": "url_citation",
+            "url_citation": {
+              "url": "https://jp.mercari.com/search?brand_id=1326&category_id=385&f237f516-b58a-4490-be9b-a96d62cd730b=694eea7b-4fd7-499c-a5f2-c9036a23ca01&page_token=v1%3A6&utm_source=openai",
+              "start_index": 1699,
+              "end_index": 1888,
+              "title": "〖2025年最新〗LOUIS VUITTON 折り財布の人気アイテム - メルカリ"
+            }
+          },
+          {
+            "type": "url_citation",
+            "url_citation": {
+              "url": "https://jp.mercari.com/search?373da27a-f324-4275-892b-1609df9e498d=d0bf201d-f97a-4611-8b89-6f74d47ddf39&b6b9be89-648c-4af9-b3fe-1b77de4833d1=6906350e-4602-44f4-9668-57ba199f87fc&brand_id=1326&category_id=1772&utm_source=openai",
+              "start_index": 1947,
+              "end_index": 2193,
+              "title": "〖2025年最新〗LOUIS VUITTON 二つ折り財布の人気アイテム - メルカリ"
+            }
+          },
+          {
+            "type": "url_citation",
+            "url_citation": {
+              "url": "https://jp.mercari.com/search?373da27a-f324-4275-892b-1609df9e498d=d0bf201d-f97a-4611-8b89-6f74d47ddf39&b6b9be89-648c-4af9-b3fe-1b77de4833d1=6906350e-4602-44f4-9668-57ba199f87fc&brand_id=1326&category_id=1772&utm_source=openai",
+              "start_index": 2245,
+              "end_index": 2491,
+              "title": "〖2025年最新〗LOUIS VUITTON 二つ折り財布の人気アイテム - メルカリ"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 15674,
+    "completion_tokens": 939,
+    "total_tokens": 16613,
+    "cost": 0.04886,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": null,
+      "upstream_inference_prompt_cost": 0.031348,
+      "upstream_inference_completions_cost": 0.007512
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0
+    }
+  }
+}

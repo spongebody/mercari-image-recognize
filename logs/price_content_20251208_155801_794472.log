@@ -1,0 +1,35 @@
+画像には、ルイ・ヴィトンのモノグラム柄があしらわれた二つ折り財布が写っています。一般的なモノグラムのキャンバス素材で、外観には特段の損傷は見られず、全体的に使用感少なめ、美品に近い状態と判断できます。
+
+STEP 2：画像から推定される検索クエリ：
+- site:jp.mercari.com ルイヴィトン 二つ折り財布 モノグラム
+- site:jp.mercari.com LOUIS VUITTON 二つ折り財布 モノグラム
+- site:jp.mercari.com ルイヴィトン 財布 モノグラム 二つ折り
+
+STEP 3〜4：Mercari上の該当・類似する出品を確認。
+多数のモノグラム二つ折り財布の出品があり、状態と価格に幅があります。以下は主な例です：
+
+1) 「¥4,700☆ジャンク Louis Vuitton ... モノグラム 二つ折り財布」→ 傷や劣化あり、最も低価格帯 ([jp.mercari.com](https://jp.mercari.com/search?brand_id=1326&category_id=385&f237f516-b58a-4490-be9b-a96d62cd730b=694eea7b-4fd7-499c-a5f2-c9036a23ca01&page_token=v1%3A6&utm_source=openai))  
+2) 「¥6,900 外観美品✨ルイヴィトン モノグラム コンパクト ラウンドファスナー 二つ折り」→ 外観美品、やや傷あり / 目立った傷なし ([jp.mercari.com](https://jp.mercari.com/search?373da27a-f324-4275-892b-1609df9e498d=d0bf201d-f97a-4611-8b89-6f74d47ddf39&b6b9be89-648c-4af9-b3fe-1b77de4833d1=6906350e-4602-44f4-9668-57ba199f87fc&brand_id=1326&category_id=1772&utm_source=openai))  
+3) 「¥32,000 美品 ルイヴィトン モノグラム 二つ折り財布 ポルトフォイユ マルコ」→ 美品、高価格帯 ([jp.mercari.com](https://jp.mercari.com/search?373da27a-f324-4275-892b-1609df9e498d=d0bf201d-f97a-4611-8b89-6f74d47ddf39&b6b9be89-648c-4af9-b3fe-1b77de4833d1=6906350e-4602-44f4-9668-57ba199f87fc&brand_id=1326&category_id=1772&utm_source=openai))  
+
+その他の参考価格帯も多数存在：
+- ¥6,000（一般的モノグラム二つ折り） ([jp.mercari.com](https://jp.mercari.com/search?373da27a-f324-4275-892b-1609df9e498d=d0bf201d-f97a-4611-8b89-6f74d47ddf39&b6b9be89-648c-4af9-b3fe-1b77de4833d1=6906350e-4602-44f4-9668-57ba199f87fc&brand_id=1326&category_id=1772&utm_source=openai))  
+- ¥15,000（モノグラム上位モデル＆美品） ([jp.mercari.com](https://jp.mercari.com/search?brand_id=1326&category_id=1692&utm_source=openai))  
+
+STEP 5：状態別に価格を整理：
+
+Poor（傷や汚れあり・ジャンク）：  
+→ 最低価格帯は「¥4,700☆ジャンク…」 ([jp.mercari.com](https://jp.mercari.com/search?brand_id=1326&category_id=385&f237f516-b58a-4490-be9b-a96d62cd730b=694eea7b-4fd7-499c-a5f2-c9036a23ca01&page_token=v1%3A6&utm_source=openai))
+
+Average（やや傷や汚れあり／目立った傷や汚れなし）：  
+→ 中間価格帯として「¥6,900 外観美品…」 ([jp.mercari.com](https://jp.mercari.com/search?373da27a-f324-4275-892b-1609df9e498d=d0bf201d-f97a-4611-8b89-6f74d47ddf39&b6b9be89-648c-4af9-b3fe-1b77de4833d1=6906350e-4602-44f4-9668-57ba199f87fc&brand_id=1326&category_id=1772&utm_source=openai))
+
+Good（美品〜未使用に近い）：  
+→ 上位価格帯として「¥32,000 美品 ルイヴィトン…」 ([jp.mercari.com](https://jp.mercari.com/search?373da27a-f324-4275-892b-1609df9e498d=d0bf201d-f97a-4611-8b89-6f74d47ddf39&b6b9be89-648c-4af9-b3fe-1b77de4833d1=6906350e-4602-44f4-9668-57ba199f87fc&brand_id=1326&category_id=1772&utm_source=openai))
+
+JSON出力：
+
+{
+  "prices": [4700, 6900, 32000],
+  "reason": "画像はルイ・ヴィトン モノグラムの二つ折り財布と判断しました。検索クエリとして「site:jp.mercari.com ルイヴィトン 二つ折り財布 モノグラム」などを使用し、Mercari上で少なくとも5〜10件の類似出品を確認しました。その中で、ジャンク状態の¥4,700、外観美品の¥6,900、美品の¥32,000を代表価格として選びました。poor-condition（傷あり）＝¥4,700（例：「ジャンク」）、average-condition（やや傷・美品）＝¥6,900（例：「外観美品」）、good-condition（美品に近い）＝¥32,000（例：「美品」）です。以下は参考リンク：\n- ジャンク状態：Mercari 出品（¥4,700 ジャンク）\n- 外観美品：Mercari 出品（¥6,900 外観美品）\n- 美品：Mercari 出品（¥32,000 美品）"
+}

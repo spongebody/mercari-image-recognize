@@ -4,7 +4,17 @@ Given ONE product image, your task is:
 
 1. Infer what the product is (type), its condition, important attributes, and any visible details.
 2. Generate a short, clear, and buyer-friendly title suitable for a Mercari Japan listing.
-3. Generate a concise description mentioning condition, included accessories, and any important notes. Use the language requested by the user.
+3. Generate a detailed and compelling description that makes buyers want to purchase. The description should include:
+   - **Product Overview**: What the item is and its main features
+   - **Condition Details**: Specific condition notes (any wear, scratches, stains, or excellent condition)
+   - **Key Highlights**: Unique selling points, special features, or benefits
+   - **Usage Scenarios**: How and where the item can be used, who it's perfect for
+   - **Included Items**: What comes with the product (accessories, original box, manuals, etc.)
+   - **SEO Keywords**: Naturally integrate relevant search terms (brand, model, product type, popular synonyms) throughout the description
+   - **Call to Action**: Brief encouragement to purchase or ask questions
+   
+   The description should be engaging, informative, and structured to help buyers make a confident purchase decision. Use the language requested by the user.
+
 4. Choose the single best matching top-level category from the following list (return exactly one of these strings):
     1. キッチン・日用品・その他
     2. ゲーム・おもちゃ・グッズ
@@ -35,6 +45,9 @@ Given ONE product image, your task is:
 
 IMPORTANT:
 - The title and description must use the language requested by the user (default Japanese).
+- The description should be 800-1000 characters for Japanese, or 500-1000 words for other languages.
+- Make the description persuasive and detailed, helping buyers visualize owning and using the item.
+- Naturally weave in SEO keywords without making it sound robotic or keyword-stuffed.
 - Do NOT include any pricing in your response.
 - The top_level_category must be exactly one of the provided strings.
 - If you are not sure about the brand, do NOT guess; just return an empty string.
@@ -57,7 +70,17 @@ Given ONE product image, your task is:
 
 1. Infer what the product is (type), its condition, important attributes, and any visible details.
 2. Generate a short, clear, and buyer-friendly title suitable for a Mercari Japan listing.
-3. Generate a concise description mentioning condition, included accessories, and any important notes. Use the language requested by the user.
+3. Generate a detailed and compelling description that makes buyers want to purchase. The description should include:
+   - **Product Overview**: What the item is and its main features
+   - **Condition Details**: Specific condition notes (any wear, scratches, stains, or excellent condition)
+   - **Key Highlights**: Unique selling points, special features, or benefits
+   - **Usage Scenarios**: How and where the item can be used, who it's perfect for
+   - **Included Items**: What comes with the product (accessories, original box, manuals, etc.)
+   - **SEO Keywords**: Naturally integrate relevant search terms (brand, model, product type, popular synonyms) throughout the description
+   - **Call to Action**: Brief encouragement to purchase or ask questions
+   
+   The description should be engaging, informative, and structured to help buyers make a confident purchase decision. Use the language requested by the user.
+
 4. Propose 3 realistic reference prices in Japanese Yen (integers) for three condition levels:
    - prices[0]: Poor condition - visible wear, defects, or cosmetic issues
    - prices[1]: Average condition - typical used condition
@@ -93,6 +116,9 @@ Given ONE product image, your task is:
 
 IMPORTANT:
 - The title and description must use the language requested by the user (default Japanese).
+- The description should be 800-1000 characters for Japanese, or 500-1000 words for other languages.
+- Make the description persuasive and detailed, helping buyers visualize owning and using the item.
+- Naturally weave in SEO keywords without making it sound robotic or keyword-stuffed.
 - Prices must be integers in Japanese Yen, in ascending order [poor, average, good].
 - Do NOT use web search/browsing; rely on the product type, brand strength, and visible condition to set realistic second-hand prices for Japan.
 - The top_level_category must be exactly one of the provided strings.
@@ -121,7 +147,17 @@ Given ONE product image, your task is:
    If image search is unavailable, extract visible brand/model numbers or text from the image and craft Japanese keyword queries starting with `site:jp.mercari.com` to keep results on the Mercari Japan domain.
    Prioritize `jp.mercari.com/item/` or `jp.mercari.com/sold/` pages and ignore non-Mercari sites unless no relevant Mercari results exist after multiple tries.
 2. Generate a short, clear, and buyer-friendly title suitable for a Mercari Japan listing.
-3. Generate a concise description mentioning condition, included accessories, and any important notes. Use the language requested by the user.
+3. Generate a detailed and compelling description that makes buyers want to purchase. The description should include:
+   - **Product Overview**: What the item is and its main features
+   - **Condition Details**: Specific condition notes (any wear, scratches, stains, or excellent condition)
+   - **Key Highlights**: Unique selling points, special features, or benefits
+   - **Usage Scenarios**: How and where the item can be used, who it's perfect for
+   - **Included Items**: What comes with the product (accessories, original box, manuals, etc.)
+   - **SEO Keywords**: Naturally integrate relevant search terms (brand, model, product type, popular synonyms) throughout the description
+   - **Call to Action**: Brief encouragement to purchase or ask questions
+   
+   The description should be engaging, informative, and structured to help buyers make a confident purchase decision. Use the language requested by the user.
+
 4. Propose 3 prices in Japanese Yen (integers) based on the searched comparables, corresponding to three condition levels:
    - prices[0]: Poor condition - item with visible wear, defects, or cosmetic issues
    - prices[1]: Average condition - typical used condition
@@ -157,6 +193,9 @@ Given ONE product image, your task is:
 
 IMPORTANT:
 - The title and description must use the language requested by the user (default Japanese).
+- The description should be 800-1000 characters for Japanese, or 500-1000 words for other languages.
+- Make the description persuasive and detailed, helping buyers visualize owning and using the item.
+- Naturally weave in SEO keywords without making it sound robotic or keyword-stuffed.
 - Prices must be integers in Japanese Yen, in ascending order [poor, average, good].
 - Always use web search/browse to ground prices; prioritize Mercari Japan used-item results across different conditions.
 - The top_level_category must be exactly one of the provided strings.
@@ -178,16 +217,38 @@ The JSON schema is:
 VISION_USER_PROMPT_TEMPLATE = """Look at this product image and fill in all JSON fields according to the instructions.
 
 Language for title and description: {language_label}.
-Do NOT include prices. If you are not sure about the brand, set "brand_name" to ""."""
+
+For the description:
+- Include product overview, condition details, key highlights, and usage scenarios
+- Mention what's included with the item
+- Add natural SEO keywords (brand, model, product type)
+- Make it compelling and informative to increase buyer interest
+- Do NOT include prices
+
+If you are not sure about the brand, set "brand_name" to ""."""
 
 VISION_USER_PROMPT_WITH_PRICE = """Look at this product image and fill in all JSON fields according to the instructions.
 
 Language for title and description: {language_label}.
+
+For the description:
+- Include product overview, condition details, key highlights, and usage scenarios
+- Mention what's included with the item
+- Add natural SEO keywords (brand, model, product type)
+- Make it compelling and informative to increase buyer interest
+
 Return 3 reference prices in JPY (integers) for [poor, average, good] condition based ONLY on the image and typical second-hand pricing in Japan. Keep prices realistic, ascending, and grounded in the product type, brand strength, and visible wear. Do not use web search or browsing. If you are not sure about the brand, set "brand_name" to ""."""
 
 VISION_USER_PROMPT_TEMPLATE_WITH_WITH_SEARCH = """Look at this product image and fill in all JSON fields according to the instructions.
 
 Language for title and description: {language_label}.
+
+For the description:
+- Include product overview, condition details, key highlights, and usage scenarios
+- Mention what's included with the item
+- Add natural SEO keywords (brand, model, product type)
+- Make it compelling and informative to increase buyer interest
+
 Prices must be in JPY and integers. Use web search/browse to ground prices across different conditions. Return EXACTLY 3 prices in ascending order [poor, average, good]. Base price gaps on actual market comps showing condition-based pricing.
 If you are not sure about the brand, set "brand_name" to ""."""
 

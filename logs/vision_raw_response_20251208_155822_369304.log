@@ -1,0 +1,42 @@
+{
+  "id": "gen-1765209502-6iiTjmyEOlzKnYXWxcCt",
+  "provider": "Google",
+  "model": "google/gemini-2.5-flash",
+  "object": "chat.completion",
+  "created": 1765209502,
+  "choices": [
+    {
+      "logprobs": null,
+      "finish_reason": "stop",
+      "native_finish_reason": "STOP",
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "```json\n{\n  \"title\": \"ルイヴィトン モノグラム 二つ折り財布\",\n  \"description\": \"ルイヴィトンのモノグラム柄二つ折り財布です。使用感はありますが、目立った傷や汚れはありません。付属品はありません。\",\n  \"top_level_category\": \"ファッション\",\n  \"brand_name\": \"LOUIS VUITTON\"\n}\n```",
+        "refusal": null,
+        "reasoning": null
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 819,
+    "completion_tokens": 83,
+    "total_tokens": 902,
+    "cost": 0.0004532,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": null,
+      "upstream_inference_prompt_cost": 0.0002457,
+      "upstream_inference_completions_cost": 0.0002075
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0
+    }
+  }
+}

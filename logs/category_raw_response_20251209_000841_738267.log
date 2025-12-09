@@ -1,0 +1,42 @@
+{
+  "id": "gen-1765238922-pwLYrl9qsP51fzaF2dnw",
+  "provider": "Google",
+  "model": "google/gemini-2.5-flash",
+  "object": "chat.completion",
+  "created": 1765238922,
+  "choices": [
+    {
+      "logprobs": null,
+      "finish_reason": "stop",
+      "native_finish_reason": "STOP",
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "```json\n{\n  \"best_target_path\": \"ファッション > レディース > 小物 > 折り財布 > 二つ折り財布\",\n  \"confidence\": 1.0,\n  \"reason\": \"商品タイトルと説明から、ルイヴィトンのモノグラム柄の二つ折り財布であることが明確に示されています。性別を問わず使えるユニセックスデザインとありますが、レディースの小物カテゴリに二つ折り財布の選択肢が直接存在するため、こちらを最善と判断しました。\",\n  \"alternatives\": [\n    {\n      \"target_path\": \"ファッション > メンズ > 小物 > 折り財布 > 二つ折り財布\",\n      \"confidence\": 0.9,\n      \"reason\": \"商品が男女兼用（ユニセックス）と明記されており、メンズカテゴリにも二つ折り財布の選択肢があるため、代替として適切です。\"\n    },\n    {\n      \"target_path\": \"ファッション > レディース > 小物 > 長財布\",\n      \"confidence\": 0.6,\n      \"reason\": \"二つ折り財布ですが、財布という大カテゴリで見た場合、長財布も財布の一種であり、もし二つ折り財布のカテゴリが見つからない場合の次善の選択肢として考えられます。ただし、形状が異なるため、適合度は低いです。\"\n    }\n  ]\n}\n```",
+        "refusal": null,
+        "reasoning": null
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 10503,
+    "completion_tokens": 286,
+    "total_tokens": 10789,
+    "cost": 0.0038659,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": null,
+      "upstream_inference_prompt_cost": 0.0031509,
+      "upstream_inference_completions_cost": 0.000715
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0
+    }
+  }
+}
