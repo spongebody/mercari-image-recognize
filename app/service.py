@@ -140,7 +140,8 @@ class MercariAnalyzer:
         )
 
         title = _clean_string(ai_raw.get("title", ""))
-        description = _clean_string(ai_raw.get("description", ""))
+        # description = _clean_string(ai_raw.get("description", ""))
+        description = ai_raw.get("description", "")
         prices = normalize_price_list(ai_raw.get("prices", []))
         top_level_category = _clean_string(ai_raw.get("top_level_category", ""))
         brand_raw = _clean_string(ai_raw.get("brand_name", ""))

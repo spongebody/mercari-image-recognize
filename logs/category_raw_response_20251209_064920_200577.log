@@ -1,0 +1,42 @@
+{
+  "id": "gen-1765262957-4YX6CECzoo3ern4kxMvb",
+  "provider": "Google",
+  "model": "google/gemini-2.5-flash",
+  "object": "chat.completion",
+  "created": 1765262957,
+  "choices": [
+    {
+      "logprobs": null,
+      "finish_reason": "stop",
+      "native_finish_reason": "STOP",
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "```json\n{\n  \"best_target_path\": \"ファッション > レディース > バッグ > ショルダーバッグ > ショルダーバッグ\",\n  \"confidence\": 0.95,\n  \"reason\": \"製品名と説明から、ルイヴィトンのモノグラム柄のホーボー・ドーフィーヌ MM ショルダーバッグであることが明確に示されています。特に「ショルダーバッグ」というキーワードが直接的に合致しており、レディース向けであることも考慮すると、このカテゴリが最も適切です。\",\n  \"alternatives\": [\n    {\n      \"target_path\": \"ファッション > レディース > バッグ > ハンドバッグ\",\n      \"confidence\": 0.8,\n      \"reason\": \"説明文に「取り外し可能なショルダーストラップにより、ハンドバッグとしてもショルダーバッグとしてもお使いいただけます」とあり、ハンドバッグとしても使用できるため、代替カテゴリとして適切です。\"\n    },\n    {\n      \"target_path\": \"ファッション > レディース > バッグ > その他\",\n      \"confidence\": 0.7,\n      \"reason\": \"具体的なバッグの種類が特定できない場合や、複数の用途を持つバッグの場合に選択される汎用的なカテゴリです。今回の商品はショルダーバッグとハンドバッグの両方の要素を持つため、広義のバッグとして選択肢になり得ます。\"\n    }\n  ]\n}\n```",
+        "refusal": null,
+        "reasoning": null
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 10346,
+    "completion_tokens": 274,
+    "total_tokens": 10620,
+    "cost": 0.0037888,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": null,
+      "upstream_inference_prompt_cost": 0.0031038,
+      "upstream_inference_completions_cost": 0.000685
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0
+    }
+  }
+}

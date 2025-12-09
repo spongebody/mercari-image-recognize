@@ -1,0 +1,42 @@
+{
+  "id": "gen-1765267943-C1EuQQle6KcwAarPj3FK",
+  "provider": "Google",
+  "model": "google/gemini-2.5-flash",
+  "object": "chat.completion",
+  "created": 1765267943,
+  "choices": [
+    {
+      "logprobs": null,
+      "finish_reason": "stop",
+      "native_finish_reason": "STOP",
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "```json\n{\n  \"best_target_path\": \"ファッション > レディース > バッグ > ショルダーバッグ > ショルダーバッグ\",\n  \"confidence\": 0.95,\n  \"reason\": \"製品名と説明から、ルイヴィトンのモノグラム柄のショルダーバッグであることが明確に示されています。特に「ショルダーバッグ」というキーワードが直接的に合致しています。\",\n  \"alternatives\": [\n    {\n      \"target_path\": \"ファッション > レディース > バッグ > ハンドバッグ\",\n      \"confidence\": 0.8,\n      \"reason\": \"説明文に「取り外し可能なショルダーストラップにより、ハンドバッグとしてもショルダーバッグとしてもお使いいただけます」とあり、ハンドバッグとしても使用できるため、関連性の高いカテゴリです。\"\n    },\n    {\n      \"target_path\": \"ファッション > レディース > バッグ > その他\",\n      \"confidence\": 0.7,\n      \"reason\": \"ショルダーバッグやハンドバッグに分類されるものの、より広範な「バッグ」カテゴリとして選択肢になり得ます。ただし、より具体的なカテゴリが存在するため、優先度は低いです。\"\n    }\n  ]\n}\n```",
+        "refusal": null,
+        "reasoning": null
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 10347,
+    "completion_tokens": 245,
+    "total_tokens": 10592,
+    "cost": 0.0037166,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": null,
+      "upstream_inference_prompt_cost": 0.0031041,
+      "upstream_inference_completions_cost": 0.0006125
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0
+    }
+  }
+}

@@ -924,6 +924,11 @@
           resultFail: "失败",
           fieldTitle: "📝 标题",
           fieldDescription: "📄 描述",
+          descProductOverview: "产品概览",
+          descConditionDetails: "商品状况",
+          descKeyHighlights: "主要特点",
+          descUsageScenarios: "使用场景",
+          descSeoKeywords: "SEO 关键词",
           fieldCategory: "🏷️ 分类",
           fieldCategoryCandidates: "🏷️ 分类候选",
           unknownCategory: "未知分类",
@@ -1003,7 +1008,12 @@
           resultSuccess: "成功",
           resultFail: "失敗",
           fieldTitle: "📝 タイトル",
-          fieldDescription: "📄 説明",
+          fieldDescription: "📄 描述",
+          descProductOverview: "产品概览",
+          descConditionDetails: "商品状况",
+          descKeyHighlights: "主要特点",
+          descUsageScenarios: "使用场景",
+          descSeoKeywords: "SEO 关键词",
           fieldCategory: "🏷️ カテゴリ",
           fieldCategoryCandidates: "🏷️ カテゴリ候補",
           unknownCategory: "不明なカテゴリ",
@@ -1276,10 +1286,38 @@
 
         // 描述
         if (data.description) {
+          let descContent = '';
+          
+          // 检查是否为对象（包含多个字段）
+          if (typeof data.description === 'object' && !Array.isArray(data.description)) {
+            // 对象类型：分别展示5个部分
+            const descFields = [
+              { key: 'product_overview', label: 'descProductOverview' },
+              { key: 'condition_details', label: 'descConditionDetails' },
+              { key: 'key_highlights', label: 'descKeyHighlights' },
+              { key: 'usage_scenarios', label: 'descUsageScenarios' },
+              { key: 'seo_keywords', label: 'descSeoKeywords' }
+            ];
+            
+            descFields.forEach(field => {
+              if (data.description[field.key]) {
+                descContent += `
+                  <div style="margin-bottom: 12px;">
+                    <div style="font-weight: bold; margin-bottom: 4px;">${t(field.label)}</div>
+                    <div>${escapeHtml(data.description[field.key])}</div>
+                  </div>
+                `;
+              }
+            });
+          } else {
+            // 字符串类型：直接展示
+            descContent = escapeHtml(data.description);
+          }
+          
           html += `
             <div class="field-group">
               <div class="field-label">${t("fieldDescription")}</div>
-              <div class="field-value">${escapeHtml(data.description)}</div>
+              <div class="field-value">${descContent}</div>
             </div>
           `;
         }

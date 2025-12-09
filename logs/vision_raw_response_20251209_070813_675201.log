@@ -1,0 +1,42 @@
+{
+  "id": "gen-1765264089-1qhN1lAgf1D2my6qWTTq",
+  "provider": "Google",
+  "model": "google/gemini-2.5-flash",
+  "object": "chat.completion",
+  "created": 1765264089,
+  "choices": [
+    {
+      "logprobs": null,
+      "finish_reason": "stop",
+      "native_finish_reason": "STOP",
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "```json\n{\n  \"title\": \"ルイヴィトン モノグラム ホーボー・ドーフィーヌ PM ショルダーバッグ\",\n  \"description\": {\n    \"product_overview\": \"ルイヴィトンの象徴的なモノグラム・キャンバスを使用したホーボー・ドーフィーヌ PM ショルダーバッグです。コンパクトながらも収納力があり、日常使いから特別な日まで幅広く活躍します。洗練されたデザインと上質な素材が、持つ人のスタイルを格上げします。\",\n    \"condition_details\": \"写真の通り、全体的に非常に良好な状態を保っています。モノグラム・キャンバスに目立つ傷や汚れは見受けられず、ヌメ革部分もわずかな使用感がある程度で、綺麗な飴色に変化し始めています。金具部分も光沢があり、大きなダメージはありません。内側も清潔で、特筆すべきダメージはありません。\",\n    \"key_highlights\": \"ルイヴィトンならではのタイムレスなモノグラム・デザインが魅力です。取り外し可能なショルダーストラップにより、ハンドバッグとしてもショルダーバッグとしてもお使いいただけます。内側にはオープンポケットがあり、小物の整理にも便利です。どんな装いにも合わせやすい上品な逸品です。\",\n    \"usage_scenarios\": \"普段使いのカジュアルな装いから、デートや女子会、ちょっとしたお出かけまで、様々なシーンで活躍します。スマートフォン、ミニ財布、リップなどの必需品をスマートに収納でき、両手が空くのでショッピングや旅行にも最適です。上品なデザインは、年齢を問わず長くご愛用いただけます。\",\n    \"seo_keywords\": \"ルイヴィトン、モノグラム、ホーボー・ドーフィーヌ、PM、ショルダーバッグ、ハンドバッグ、ブランドバッグ、高級、ファッション、レディース、ヴィンテージ、中古、美品、LV、Louis Vuitton、M45194\"\n  },\n  \"prices\": [\n    180000,\n    220000,\n    280000\n  ],\n  \"top_level_category\": \"ファッション\",\n  \"brand_name\": \"Louis Vuitton\"\n}\n```",
+        "refusal": null,
+        "reasoning": null
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 1447,
+    "completion_tokens": 449,
+    "total_tokens": 1896,
+    "cost": 0.0015566,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": null,
+      "upstream_inference_prompt_cost": 0.0004341,
+      "upstream_inference_completions_cost": 0.0011225
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "id": "gen-1765264692-nkDQ7WFoKwEN04h6Z96Q",
+  "provider": "Google",
+  "model": "google/gemini-2.5-flash",
+  "object": "chat.completion",
+  "created": 1765264692,
+  "choices": [
+    {
+      "logprobs": null,
+      "finish_reason": "stop",
+      "native_finish_reason": "STOP",
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\n  \"title\": \"ルイヴィトン モノグラム ホーボー・ドーフィーヌ MM ショルダーバッグ\",\n  \"description\": {\n    \"product_overview\": \"ルイヴィトンの象徴的なモノグラム・キャンバスを使用したホーボー・ドーフィーヌ MM ショルダーバッグです。しなやかなフォルムと洗練されたデザインが特徴で、日常使いから特別な日まで幅広いシーンで活躍します。内側には必需品を収納できる十分なスペースがあり、機能性も兼ね備えています。エレガントなスタイルを演出する逸品です。\",\n    \"condition_details\": \"写真の通り、非常に良好なコンディションを保っています。目立つ傷や汚れ、角スレは見受けられず、モノグラム・キャンバスも美しい状態です。ヌメ革部分もわずかな使用感がある程度で、これからさらにエイジングを楽しんでいただけます。金具部分も輝きを保っており、全体的に使用感の少ない美品です。大切に保管されていたことが伺えます。\",\n    \"key_highlights\": \"ルイヴィトンならではのアイコニックなモノグラム・キャンバスが目を引くデザインです。ホーボーバッグのしなやかなシルエットと、ドーフィーヌの洗練されたディテールが融合したモダンなバッグ。取り外し可能なショルダーストラップにより、ハンドバッグとしてもショルダーバッグとしてもお使いいただけます。内ポケットも充実しており、収納力も抜群です。\",\n    \"usage_scenarios\": \"普段使いのカジュアルな装いから、オフィススタイル、そしてディナーやパーティーなどのフォーマルなシーンまで、あらゆる場面であなたのスタイルを格上げします。A4サイズも収納可能なので、通勤・通学バッグとしても最適です。大切な方へのプレゼントや、ご自身へのご褒美としてもおすすめです。流行に左右されないタイムレスなデザインです。\",\n    \"seo_keywords\": \"ルイヴィトン、モノグラム、ホーボー・ドーフィーヌ、ショルダーバッグ、ハンドバッグ、ブランドバッグ、高級バッグ、レディースバッグ、LV、ドーフィーヌ、MM、美品、中古、ファッション、かばん\"\n  },\n  \"prices\": [\n    180000,\n    220000,\n    280000\n  ],\n  \"top_level_category\": \"ファッション\",\n  \"brand_name\": \"Louis Vuitton\"\n}",
+        "refusal": null,
+        "reasoning": null
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 1447,
+    "completion_tokens": 496,
+    "total_tokens": 1943,
+    "cost": 0.0016741,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": null,
+      "upstream_inference_prompt_cost": 0.0004341,
+      "upstream_inference_completions_cost": 0.00124
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0
+    }
+  }
+}

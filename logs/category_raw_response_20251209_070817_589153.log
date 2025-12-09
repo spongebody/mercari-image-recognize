@@ -1,0 +1,42 @@
+{
+  "id": "gen-1765264094-jtZ9u1KAWigXdP0Q9vHy",
+  "provider": "Google",
+  "model": "google/gemini-2.5-flash",
+  "object": "chat.completion",
+  "created": 1765264094,
+  "choices": [
+    {
+      "logprobs": null,
+      "finish_reason": "stop",
+      "native_finish_reason": "STOP",
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "```json\n{\n  \"best_target_path\": \"ファッション > レディース > バッグ > ショルダーバッグ > ショルダーバッグ\",\n  \"confidence\": 0.95,\n  \"reason\": \"製品はルイヴィトンのモノグラム柄のホーボー・ドーフィーヌPMショルダーバッグであり、女性向けのバッグであること、特にショルダーバッグとして使用されることが明記されているため、このカテゴリが最も適切です。\",\n  \"alternatives\": [\n    {\n      \"target_path\": \"ファッション > レディース > バッグ > ハンドバッグ\",\n      \"confidence\": 0.85,\n      \"reason\": \"製品は取り外し可能なショルダーストラップによりハンドバッグとしても使用できると記載されており、ハンドバッグとしての機能も持つため、代替として適切です。\"\n    },\n    {\n      \"target_path\": \"ファッション > レディース > バッグ > その他\",\n      \"confidence\": 0.7,\n      \"reason\": \"具体的なショルダーバッグのカテゴリが見つからない場合や、複数の用途を持つバッグの場合に、より広範な「その他」のカテゴリも選択肢となり得ます。ただし、今回はより具体的なカテゴリが存在するため、優先度は低いです。\"\n    }\n  ]\n}\n```",
+        "refusal": null,
+        "reasoning": null
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 10324,
+    "completion_tokens": 259,
+    "total_tokens": 10583,
+    "cost": 0.0037447,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": null,
+      "upstream_inference_prompt_cost": 0.0030972,
+      "upstream_inference_completions_cost": 0.0006475
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0
+    }
+  }
+}
