@@ -110,6 +110,16 @@ class MercariAnalyzer:
         self.price_client = price_client
         self._logs_dir = Path(__file__).resolve().parent.parent / "logs"
 
+    def _start_log_session(self) -> Optional[Path]:
+        if not self.settings.log_llm_raw:
+            return None
+        try:
+            self._logs_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")
+            return self._logs_dir / f"llm_session_{timestamp}.log"
+        except Exception:
+            return None
+
     def analyze(
         self,
         image_bytes: bytes,
@@ -122,6 +132,7 @@ class MercariAnalyzer:
         category_model_override: Optional[str] = None,
         price_model_override: Optional[str] = None,
     ) -> Dict[str, Any]:
+        log_path = self._start_log_session()
         if language not in SUPPORTED_LANGUAGES:
             raise BadRequestError("Unsupported language.")
         category_limit = max(1, min(int(category_limit), 3))
@@ -131,12 +142,29 @@ class MercariAnalyzer:
 
         data_url = image_bytes_to_data_url(image_bytes, mime_type)
         price_mode = "search" if price_strategy == "vision_online" else ("inline" if price_strategy == "vision" else "none")
+        self._log_raw(
+            log_path,
+            "analyze_request",
+            {
+                "language": language,
+                "mime_type": mime_type,
+                "image_bytes_len": len(image_bytes),
+                "category_limit": category_limit,
+                "price_strategy": price_strategy,
+                "price_mode": price_mode,
+                "vision_model_override": vision_model_override,
+                "category_model_override": category_model_override,
+                "price_model_override": price_model_override,
+                "debug": debug,
+            },
+        )
         ai_raw, ai_full = self._call_vision_llm(
             data_url,
             language,
             force_online=price_strategy == "vision_online",
             model_override=vision_model_override,
             price_mode=price_mode,
+            log_path=log_path,
         )
 
         title = _clean_string(ai_raw.get("title", ""))
@@ -163,6 +191,7 @@ class MercariAnalyzer:
                 group_name=group_name,
                 category_limit=category_limit,
                 model_override=category_model_override,
+                log_path=log_path,
             )
 
         price_raw = None
@@ -185,6 +214,7 @@ class MercariAnalyzer:
                     language=language,
                     price_model_override=price_model_override,
                     image_data_url=data_url,
+                    log_path=log_path,
                 )
                 if price_citations_model:
                     price_citations = price_citations_model
@@ -196,7 +226,7 @@ class MercariAnalyzer:
                     price_source = "price_model"
             except Exception as exc:
                 price_error = str(exc)
-                self._log_raw("price_unhandled_error", {"error": price_error})
+                self._log_raw(log_path, "price_unhandled_error", {"error": price_error})
                 price_source = "price_model_failed"
                 prices = []
 
@@ -231,6 +261,7 @@ class MercariAnalyzer:
         force_online: bool = False,
         model_override: Optional[str] = None,
         price_mode: str = "none",
+        log_path: Optional[Path] = None,
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         price_mode = price_mode or "none"
         if price_mode not in {"none", "inline", "search"}:
@@ -260,18 +291,30 @@ class MercariAnalyzer:
             if force_online and self.settings.vision_model_online
             else self.settings.vision_model
         )
+        self._log_raw(
+            log_path,
+            "vision_request",
+            {
+                "model": model,
+                "messages": self._sanitize_messages(messages),
+                "temperature": 0.2,
+                "max_tokens": 12000,
+                "price_mode": price_mode,
+                "force_online": force_online,
+            },
+        )
         content, raw_response = self.vision_client.chat(
             model=model,
             messages=messages,
             temperature=0.2,
             max_tokens=12000,
         )
-        self._log_raw("vision_content", content)
-        self._log_raw("vision_raw_response", raw_response)
+        self._log_raw(log_path, "vision_content", content)
+        self._log_raw(log_path, "vision_raw_response", raw_response)
         try:
             parsed = safe_json_loads(content)
         except Exception as exc:
-            self._log_raw("vision_parse_error", {"error": str(exc), "content": content})
+            self._log_raw(log_path, "vision_parse_error", {"error": str(exc), "content": content})
             raise BadRequestError("Failed to parse vision LLM JSON.") from exc
         if not isinstance(parsed, dict):
             raise BadRequestError("Vision LLM did not return a JSON object.")
@@ -287,6 +330,7 @@ class MercariAnalyzer:
         language: str,
         price_model_override: Optional[str],
         image_data_url: Optional[str] = None,
+        log_path: Optional[Path] = None,
     ) -> Tuple[List[int], Optional[Dict[str, Any]], Optional[str], List[Dict[str, str]]]:
         if not self.settings.price_model:
             raise BadRequestError("PRICE_MODEL is not configured.")
@@ -324,6 +368,16 @@ class MercariAnalyzer:
         if not model_to_use:
             raise BadRequestError("PRICE_MODEL is not configured.")
 
+        self._log_raw(
+            log_path,
+            "price_request",
+            {
+                "model": model_to_use,
+                "messages": self._sanitize_messages(messages),
+                "temperature": 0.3,
+                "max_tokens": 12000,
+            },
+        )
         try:
             content, raw_response = self.price_client.chat(
                 model=model_to_use,
@@ -333,16 +387,16 @@ class MercariAnalyzer:
             )
         except Exception as exc:
             error = str(exc)
-            self._log_raw("price_call_error", {"error": error})
+            self._log_raw(log_path, "price_call_error", {"error": error})
         else:
-            self._log_raw("price_content", content)
-            self._log_raw("price_raw_response", raw_response)
+            self._log_raw(log_path, "price_content", content)
+            self._log_raw(log_path, "price_raw_response", raw_response)
             citations = _extract_citations(raw_response)
             try:
                 parsed = safe_json_loads(content or "")
             except Exception as exc:
                 error = str(exc)
-                self._log_raw("price_parse_error", {"error": error, "content": content})
+                self._log_raw(log_path, "price_parse_error", {"error": error, "content": content})
 
         if isinstance(parsed, dict):
             price_block = parsed.get("prices") or parsed
@@ -352,21 +406,39 @@ class MercariAnalyzer:
         normalized = normalize_price_list(price_block)
         return normalized, parsed, error, citations
 
-    def _log_raw(self, name: str, payload: Any) -> None:
-        if not self.settings.log_llm_raw:
+    def _log_raw(self, log_path: Optional[Path], name: str, payload: Any) -> None:
+        if not self.settings.log_llm_raw or log_path is None:
             return
         try:
-            self._logs_dir.mkdir(parents=True, exist_ok=True)
-            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")
-            path = self._logs_dir / f"{name}_{timestamp}.log"
-            with path.open("w", encoding="utf-8") as f:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(f"{name}\n")
                 if isinstance(payload, str):
                     f.write(payload)
                 else:
                     json.dump(payload, f, ensure_ascii=False, indent=2)
+                f.write("\n##########\n")
         except Exception:
             # Swallow logging errors to avoid breaking main flow.
             return
+
+    def _sanitize_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        sanitized: List[Dict[str, Any]] = []
+        for msg in messages:
+            msg_copy: Dict[str, Any] = {k: v for k, v in msg.items() if k != "content"}
+            content = msg.get("content")
+            if isinstance(content, list):
+                sanitized_content: List[Any] = []
+                for part in content:
+                    if isinstance(part, dict) and part.get("type") == "image_url":
+                        sanitized_content.append({"type": "image_url", "image_url": {"url": "<omitted image_data_url>"}})
+                    else:
+                        sanitized_content.append(part)
+                msg_copy["content"] = sanitized_content
+            else:
+                msg_copy["content"] = content
+            sanitized.append(msg_copy)
+        return sanitized
 
     def _choose_categories(
         self,
@@ -376,6 +448,7 @@ class MercariAnalyzer:
         group_name: str,
         category_limit: int,
         model_override: Optional[str] = None,
+        log_path: Optional[Path] = None,
     ) -> Tuple[List[Dict[str, str]], Optional[Dict[str, Any]]]:
         candidates = self.category_store.get_categories_by_group(group_name)
         if not candidates:
@@ -395,18 +468,28 @@ class MercariAnalyzer:
             {"role": "user", "content": user_prompt},
         ]
 
+        self._log_raw(
+            log_path,
+            "category_request",
+            {
+                "model": model_override or self.settings.category_model,
+                "messages": messages,
+                "temperature": 0.1,
+                "max_tokens": 12000,
+            },
+        )
         content, raw_response = self.category_client.chat(
             model=model_override or self.settings.category_model,
             messages=messages,
             temperature=0.1,
             max_tokens=12000,
         )
-        self._log_raw("category_content", content)
-        self._log_raw("category_raw_response", raw_response)
+        self._log_raw(log_path, "category_content", content)
+        self._log_raw(log_path, "category_raw_response", raw_response)
         try:
             parsed = safe_json_loads(content)
         except Exception as exc:
-            self._log_raw("category_parse_error", {"error": str(exc), "content": content})
+            self._log_raw(log_path, "category_parse_error", {"error": str(exc), "content": content})
             raise BadRequestError("Failed to parse category LLM JSON.") from exc
         if not isinstance(parsed, dict):
             raise BadRequestError("Category LLM did not return a JSON object.")
