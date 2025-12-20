@@ -68,7 +68,10 @@ def _clean_string(value: Any) -> str:
     return compress_whitespace(str(value))
 
 
-def _paths_from_categories(categories: List[Dict[str, str]]) -> Optional[Dict[str, Any]]:
+def _paths_from_categories(
+    categories: List[Dict[str, str]],
+    include_alternatives: bool = True,
+) -> Optional[Dict[str, Any]]:
     if not categories:
         return None
     ordered_paths: List[Tuple[str, str]] = []
@@ -81,14 +84,15 @@ def _paths_from_categories(categories: List[Dict[str, str]]) -> Optional[Dict[st
     if not ordered_paths:
         return None
     best_path, best_id = ordered_paths[0]
-    alternatives = [
-        {"target_path": path, "category_id": cat_id} for path, cat_id in ordered_paths[1:]
-    ]
-    return {
+    payload: Dict[str, Any] = {
         "best_target_path": best_path,
         "best_category_id": best_id,
-        "alternatives": alternatives,
     }
+    if include_alternatives:
+        payload["alternatives"] = [
+            {"target_path": path, "category_id": cat_id} for path, cat_id in ordered_paths[1:]
+        ]
+    return payload
 
 
 def _extract_citations(raw_response: Optional[Dict[str, Any]]) -> List[Dict[str, str]]:
@@ -234,7 +238,7 @@ class MercariAnalyzer:
             "brand_id": brand_id,
             "price_citations": price_citations,
         }
-        path_info = _paths_from_categories(categories)
+        path_info = _paths_from_categories(categories, include_alternatives=False)
         if path_info:
             result.update(path_info)
 
