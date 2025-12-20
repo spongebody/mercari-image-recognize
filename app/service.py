@@ -71,15 +71,24 @@ def _clean_string(value: Any) -> str:
 def _paths_from_categories(categories: List[Dict[str, str]]) -> Optional[Dict[str, Any]]:
     if not categories:
         return None
-    ordered_paths: List[str] = []
+    ordered_paths: List[Tuple[str, str]] = []
     for category in categories:
         path = category.get("name") or ""
+        cat_id = category.get("id") or ""
         path = compress_whitespace(path)
-        if path and path not in ordered_paths:
-            ordered_paths.append(path)
+        if path and (path, cat_id) not in ordered_paths:
+            ordered_paths.append((path, cat_id))
     if not ordered_paths:
         return None
-    return {"best_target_path": ordered_paths[0], "alternatives": ordered_paths[1:]}
+    best_path, best_id = ordered_paths[0]
+    alternatives = [
+        {"target_path": path, "category_id": cat_id} for path, cat_id in ordered_paths[1:]
+    ]
+    return {
+        "best_target_path": best_path,
+        "best_category_id": best_id,
+        "alternatives": alternatives,
+    }
 
 
 def _extract_citations(raw_response: Optional[Dict[str, Any]]) -> List[Dict[str, str]]:
@@ -225,6 +234,9 @@ class MercariAnalyzer:
             "brand_id": brand_id,
             "price_citations": price_citations,
         }
+        path_info = _paths_from_categories(categories)
+        if path_info:
+            result.update(path_info)
 
         if debug:
             result["_debug"] = {

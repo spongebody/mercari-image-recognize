@@ -1624,16 +1624,27 @@
           titleResult.innerHTML = `<div class="field-value" style="color: var(--danger);">${escapeHtml(String(message))}</div>`;
           return;
         }
-        const best = payload.best_target_path || "";
+        const bestPath = payload.best_target_path || "";
+        const bestId = payload.best_category_id || payload.best_categoryid || "";
         const alternatives = Array.isArray(payload.alternatives) ? payload.alternatives : [];
         const altHtml = alternatives.length
-          ? `<ul style="padding-left: 18px; margin: 6px 0;">${alternatives.map((a) => `<li>${escapeHtml(String(a))}</li>`).join("")}</ul>`
+          ? `<ul style="padding-left: 18px; margin: 6px 0;">${alternatives
+              .map((a) => {
+                const path = (a && (a.target_path || a.best_target_path || a.path)) || a || "";
+                const cid = (a && (a.category_id || a.id)) || "";
+                const label = cid ? `${escapeHtml(String(path))} (ID: ${escapeHtml(String(cid))})` : escapeHtml(String(path));
+                return `<li>${label}</li>`;
+              })
+              .join("")}</ul>`
           : `<div class="field-value">${t("titleNoAlternatives")}</div>`;
 
         titleResult.innerHTML = `
           <div class="field-group">
             <div class="field-label">${t("titleBestPath")}</div>
-            <div class="field-value large">${best ? escapeHtml(String(best)) : t("unknownCategory")}</div>
+            <div class="field-value large">
+              ${bestPath ? escapeHtml(String(bestPath)) : t("unknownCategory")}
+              ${bestId ? `<div style="font-size:12px;color:${'var(--muted)'};">ID: ${escapeHtml(String(bestId))}</div>` : ""}
+            </div>
           </div>
           <div class="field-group">
             <div class="field-label">${t("titleAlternatives")}</div>
