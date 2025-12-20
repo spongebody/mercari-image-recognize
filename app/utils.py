@@ -1,8 +1,13 @@
 import base64
+import imghdr
 import json
+import mimetypes
 import re
 import unicodedata
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
+from urllib.parse import urlparse
+
+import requests
 
 from .constants import DEFAULT_LANGUAGE, PRICE_MAX, PRICE_MIN
 
@@ -33,6 +38,73 @@ def parse_bool_param(raw: Optional[str], default: bool = False) -> bool:
 def image_bytes_to_data_url(data: bytes, mime_type: str) -> str:
     encoded = base64.b64encode(data).decode("ascii")
     return f"data:{mime_type};base64,{encoded}"
+
+
+def _detect_mime_type(data: bytes, image_url: str, content_type: str) -> Optional[str]:
+    if content_type:
+        mime = content_type.split(";", 1)[0].strip().lower()
+        if mime:
+            return mime
+    detected = imghdr.what(None, h=data)
+    if detected:
+        if detected == "jpeg":
+            return "image/jpeg"
+        return f"image/{detected}"
+    guessed = mimetypes.guess_type(image_url)[0]
+    if guessed:
+        return guessed.lower()
+    return None
+
+
+def fetch_image_from_url(
+    image_url: str,
+    timeout: int,
+    max_bytes: int,
+    allowed_mime_types: Iterable[str],
+) -> Tuple[bytes, str]:
+    if not image_url:
+        raise ValueError("image_url is required.")
+
+    parsed = urlparse(image_url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("image_url must be http or https.")
+
+    allowed = {item.lower() for item in allowed_mime_types}
+    data = bytearray()
+    content_type = ""
+    try:
+        with requests.get(image_url, stream=True, timeout=timeout) as response:
+            if response.status_code >= 400:
+                raise ValueError(f"image_url returned {response.status_code}.")
+
+            content_length = response.headers.get("Content-Length")
+            if content_length:
+                try:
+                    if int(content_length) > max_bytes:
+                        raise ValueError("Image is too large.")
+                except ValueError:
+                    pass
+
+            for chunk in response.iter_content(chunk_size=65536):
+                if not chunk:
+                    continue
+                data.extend(chunk)
+                if len(data) > max_bytes:
+                    raise ValueError("Image is too large.")
+            content_type = response.headers.get("Content-Type", "")
+    except requests.RequestException as exc:
+        raise ValueError(f"Failed to fetch image_url: {exc}") from exc
+
+    if not data:
+        raise ValueError("image_url returned empty content.")
+
+    mime_type = _detect_mime_type(bytes(data), image_url, content_type)
+    if not mime_type:
+        raise ValueError("Unable to determine image mime type.")
+    if mime_type.lower() not in allowed:
+        raise ValueError("Unsupported image type.")
+
+    return bytes(data), mime_type.lower()
 
 
 def safe_json_loads(raw: str) -> Any:

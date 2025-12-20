@@ -1,7 +1,10 @@
+from typing import Optional
+
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from app.config import load_settings
 from app.constants import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES
@@ -106,6 +109,35 @@ async def analyze_image(
             vision_model_override=vision_model,
             category_model_override=category_model,
             price_model_override=price_model,
+        )
+    except BadRequestError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except LLMRequestError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Internal server error.") from exc
+
+    return JSONResponse(result)
+
+
+class TitleCategoryRequest(BaseModel):
+    title: str
+    image_url: Optional[str] = None
+    language: Optional[str] = DEFAULT_LANGUAGE
+
+
+@app.post("/api/v1/mercari/title/analyze")
+async def analyze_title(request: TitleCategoryRequest):
+    language = request.language or DEFAULT_LANGUAGE
+    if language not in SUPPORTED_LANGUAGES:
+        raise HTTPException(status_code=400, detail="Invalid language.")
+
+    try:
+        result = await run_in_threadpool(
+            analyzer.analyze_title,
+            title=request.title,
+            image_url=request.image_url,
+            language=language,
         )
     except BadRequestError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

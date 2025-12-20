@@ -82,6 +82,39 @@
         box-shadow: var(--shadow);
       }
 
+      .tab-bar {
+        display: inline-flex;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      .tab-btn {
+        border: 1px solid var(--border);
+        background: white;
+        color: var(--muted);
+        padding: 10px 16px;
+        border-radius: 10px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+
+      .tab-btn.active {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: #eff6ff;
+        box-shadow: 0 8px 20px rgba(47, 128, 237, 0.15);
+      }
+
+      .tab-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
       .grid {
         display: grid;
         gap: 16px;
@@ -720,7 +753,12 @@
       <div class="main-layout">
         <!-- 左侧主要内容 -->
         <div class="grid">
-          <div class="card grid">
+          <div class="tab-bar">
+            <button class="tab-btn active" id="tab-image">图片识别</button>
+            <button class="tab-btn" id="tab-title">标题分类</button>
+          </div>
+
+          <div class="card grid" id="image-card">
             <!-- 批量文件上传 -->
             <div>
               <label id="upload-label">商品图片（支持批量上传）</label>
@@ -802,8 +840,58 @@
             </div>
           </div>
 
+          <div class="card grid hidden" id="title-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+              <h2 id="title-card-heading" style="margin: 0; font-size: 18px;">商品标题分类测试</h2>
+              <span class="pill" id="title-card-pill">NEW</span>
+            </div>
+
+            <div class="controls-row">
+              <div>
+                <label for="title-input" id="title-input-label">商品标题</label>
+                <input type="text" id="title-input" placeholder="タイトルを入力してください" />
+              </div>
+              <div>
+                <label for="title-language" id="title-language-label">标题语言</label>
+                <select id="title-language">
+                  <option value="ja" selected id="title-lang-ja">日语</option>
+                  <option value="en" id="title-lang-en">英语</option>
+                  <option value="zh" id="title-lang-zh">中文</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="controls-row">
+              <div>
+                <label for="image-url" id="image-url-label">图片 URL（可选，用于兜底）</label>
+                <input type="text" id="image-url" placeholder="https://example.com/item.jpg" />
+              </div>
+              <div>
+                <label for="title-api-endpoint" id="title-api-label">接口地址</label>
+                <input
+                  type="text"
+                  id="title-api-endpoint"
+                  value=""
+                  placeholder="默认 /api/v1/mercari/title/analyze"
+                />
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <button id="title-submit-btn">
+                <span id="title-button-text">发送请求</span>
+              </button>
+              <button class="secondary" id="title-clear-btn">重置</button>
+            </div>
+
+            <div class="results-section" style="margin-top: 10px;">
+              <h3 id="title-result-heading" style="margin: 0 0 8px 0;">分类结果</h3>
+              <div id="title-result"></div>
+            </div>
+          </div>
+
           <!-- 结果列表 -->
-          <div class="results-section">
+          <div class="results-section" id="image-results-section">
             <h2 id="results-title" style="margin: 0 0 12px 0; font-size: 18px;">识别结果</h2>
             <div id="results-list"></div>
           </div>
@@ -941,13 +1029,33 @@
           noStructuredData: "无结构化数据",
           toggleShowJson: "查看原始 JSON",
           toggleHideJson: "隐藏原始 JSON",
+          tabImage: "图片识别",
+          tabTitle: "标题分类",
           ratingLabel: "评价识别结果：",
           ratingAccurate: "✅ 准确",
           ratingModerate: "⚠️ 一般",
           ratingInaccurate: "❌ 错误",
           confirmClearStats: "确定要清空所有测试统计数据吗？",
           warnDefaults: "无法获取默认模型",
-          jsonParseFailed: "JSON parse failed"
+          jsonParseFailed: "JSON parse failed",
+          titleCardHeading: "商品标题分类测试",
+          titleCardPill: "标题→分类",
+          titleInputLabel: "商品标题",
+          titleInputPlaceholder: "请输入商品标题",
+          titleLanguageLabel: "标题语言",
+          titleImageUrlLabel: "图片 URL（可选，用于兜底）",
+          titleImageUrlPlaceholder: "https://example.com/item.jpg",
+          titleApiLabel: "接口地址",
+          titleApiPlaceholder: "默认 /api/v1/mercari/title/analyze",
+          titleSubmitButton: "发送请求",
+          titleProcessingButton: "请求中...",
+          titleClearButton: "重置",
+          titleResultHeading: "分类结果",
+          titleBestPath: "🏷️ 最佳分类路径",
+          titleAlternatives: "候选分类路径",
+          titleNoAlternatives: "暂无候选",
+          alertNoTitle: "请填写商品标题",
+          titleError: "请求失败"
         },
         ja: {
           documentTitle: "メルカリ商品画像識別テスター",
@@ -1021,13 +1129,33 @@
           noStructuredData: "構造化データなし",
           toggleShowJson: "元の JSON を表示",
           toggleHideJson: "JSON を隠す",
+          tabImage: "画像解析",
+          tabTitle: "タイトル分類",
           ratingLabel: "解析結果を評価：",
           ratingAccurate: "✅ 正確",
           ratingModerate: "⚠️ 普通",
           ratingInaccurate: "❌ 誤り",
           confirmClearStats: "統計データをリセットしますか？",
           warnDefaults: "デフォルトモデルを取得できません",
-          jsonParseFailed: "JSON のパースに失敗しました"
+          jsonParseFailed: "JSON のパースに失敗しました",
+          titleCardHeading: "商品タイトル分類テスト",
+          titleCardPill: "タイトル→分類",
+          titleInputLabel: "商品タイトル",
+          titleInputPlaceholder: "商品タイトルを入力してください",
+          titleLanguageLabel: "タイトルの言語",
+          titleImageUrlLabel: "画像URL（任意、フォールバック用）",
+          titleImageUrlPlaceholder: "https://example.com/item.jpg",
+          titleApiLabel: "API エンドポイント",
+          titleApiPlaceholder: "既定 /api/v1/mercari/title/analyze",
+          titleSubmitButton: "リクエスト送信",
+          titleProcessingButton: "送信中...",
+          titleClearButton: "リセット",
+          titleResultHeading: "分類結果",
+          titleBestPath: "🏷️ 最適なカテゴリ",
+          titleAlternatives: "代替カテゴリ",
+          titleNoAlternatives: "代替カテゴリなし",
+          alertNoTitle: "商品タイトルを入力してください",
+          titleError: "リクエストに失敗しました"
         }
       };
 
@@ -1059,6 +1187,8 @@
       let testResults = [];
       let processing = false;
       let resultRatings = {}; // 跟踪每个结果的评价状态 { resultId: 'accurate' | 'moderate' | 'inaccurate' | null }
+      let titleProcessing = false;
+      let activeTab = "image";
 
       // DOM 元素
       const pageTitleEl = document.getElementById("page-title");
@@ -1112,6 +1242,11 @@
       const moderateLabel = document.getElementById("moderate-label");
       const inaccurateLabel = document.getElementById("inaccurate-label");
       const accuracyLabel = document.getElementById("accuracy-label");
+      const tabImageBtn = document.getElementById("tab-image");
+      const tabTitleBtn = document.getElementById("tab-title");
+      const imageCard = document.getElementById("image-card");
+      const titleCard = document.getElementById("title-card");
+      const imageResultsSection = document.getElementById("image-results-section");
       const apiTitle = document.getElementById("api-title");
 
       // 统计元素
@@ -1123,6 +1258,24 @@
       const inaccurateCountEl = document.getElementById("inaccurate-count");
       const inaccuratePercentEl = document.getElementById("inaccurate-percent");
       const accuracyRateEl = document.getElementById("accuracy-rate");
+      const titleCardHeading = document.getElementById("title-card-heading");
+      const titleCardPill = document.getElementById("title-card-pill");
+      const titleInputLabel = document.getElementById("title-input-label");
+      const titleInput = document.getElementById("title-input");
+      const titleLanguageLabel = document.getElementById("title-language-label");
+      const titleLanguageSelect = document.getElementById("title-language");
+      const titleLangJa = document.getElementById("title-lang-ja");
+      const titleLangEn = document.getElementById("title-lang-en");
+      const titleLangZh = document.getElementById("title-lang-zh");
+      const titleImageUrlLabel = document.getElementById("image-url-label");
+      const titleImageUrlInput = document.getElementById("image-url");
+      const titleApiLabel = document.getElementById("title-api-label");
+      const titleApiInput = document.getElementById("title-api-endpoint");
+      const titleSubmitBtn = document.getElementById("title-submit-btn");
+      const titleButtonText = document.getElementById("title-button-text");
+      const titleClearBtn = document.getElementById("title-clear-btn");
+      const titleResultHeading = document.getElementById("title-result-heading");
+      const titleResult = document.getElementById("title-result");
 
       // LocalStorage 管理
       const STORAGE_KEY = "mercari_test_stats";
@@ -1178,8 +1331,27 @@
 
         apiTitle.textContent = t("apiTitle");
         apiInput.placeholder = t("apiPlaceholder");
+        tabImageBtn.textContent = t("tabImage");
+        tabTitleBtn.textContent = t("tabTitle");
+
+        titleCardHeading.textContent = t("titleCardHeading");
+        titleCardPill.textContent = t("titleCardPill");
+        titleInputLabel.textContent = t("titleInputLabel");
+        titleInput.placeholder = t("titleInputPlaceholder");
+        titleLanguageLabel.textContent = t("titleLanguageLabel");
+        titleLangJa.textContent = t("outputLangJa");
+        titleLangEn.textContent = t("outputLangEn");
+        titleLangZh.textContent = t("outputLangZh");
+        titleImageUrlLabel.textContent = t("titleImageUrlLabel");
+        titleImageUrlInput.placeholder = t("titleImageUrlPlaceholder");
+        titleApiLabel.textContent = t("titleApiLabel");
+        titleApiInput.placeholder = t("titleApiPlaceholder");
+        titleButtonText.textContent = titleProcessing ? t("titleProcessingButton") : t("titleSubmitButton");
+        titleClearBtn.textContent = t("titleClearButton");
+        titleResultHeading.textContent = t("titleResultHeading");
 
         setStatus(statusState);
+        setActiveTab(activeTab);
         renderResults();
       }
 
@@ -1433,6 +1605,43 @@
         }
       }
 
+      function setActiveTab(tab) {
+        activeTab = tab === "title" ? "title" : "image";
+        tabImageBtn.classList.toggle("active", activeTab === "image");
+        tabTitleBtn.classList.toggle("active", activeTab === "title");
+        imageCard.classList.toggle("hidden", activeTab !== "image");
+        imageResultsSection.classList.toggle("hidden", activeTab !== "image");
+        titleCard.classList.toggle("hidden", activeTab !== "title");
+      }
+
+      function renderTitleResult(payload, success) {
+        if (!payload) {
+          titleResult.innerHTML = "";
+          return;
+        }
+        if (!success) {
+          const message = payload.error || payload.detail || t("titleError");
+          titleResult.innerHTML = `<div class="field-value" style="color: var(--danger);">${escapeHtml(String(message))}</div>`;
+          return;
+        }
+        const best = payload.best_target_path || "";
+        const alternatives = Array.isArray(payload.alternatives) ? payload.alternatives : [];
+        const altHtml = alternatives.length
+          ? `<ul style="padding-left: 18px; margin: 6px 0;">${alternatives.map((a) => `<li>${escapeHtml(String(a))}</li>`).join("")}</ul>`
+          : `<div class="field-value">${t("titleNoAlternatives")}</div>`;
+
+        titleResult.innerHTML = `
+          <div class="field-group">
+            <div class="field-label">${t("titleBestPath")}</div>
+            <div class="field-value large">${best ? escapeHtml(String(best)) : t("unknownCategory")}</div>
+          </div>
+          <div class="field-group">
+            <div class="field-label">${t("titleAlternatives")}</div>
+            ${altHtml}
+          </div>
+        `;
+      }
+
       // 更新文件列表
       function updateFileList() {
         previewGrid.innerHTML = "";
@@ -1639,6 +1848,56 @@
         setStatus("done");
       }
 
+      async function submitTitleRequest() {
+        const endpoint = titleApiInput.value.trim() || "/api/v1/mercari/title/analyze";
+        const titleValue = titleInput.value.trim();
+        const languageValue = titleLanguageSelect.value || "ja";
+        const imageUrlValue = titleImageUrlInput.value.trim();
+
+        if (!titleValue) {
+          alert(t("alertNoTitle"));
+          return;
+        }
+
+        titleProcessing = true;
+        titleSubmitBtn.disabled = true;
+        titleButtonText.innerHTML = `<span class="spinner"></span> ${t("titleProcessingButton")}`;
+
+        const payload = {
+          title: titleValue,
+          language: languageValue,
+        };
+        if (imageUrlValue) payload.image_url = imageUrlValue;
+
+        try {
+          const resp = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const text = await resp.text();
+          let data;
+          try {
+            data = JSON.parse(text);
+          } catch (err) {
+            data = { error: t("jsonParseFailed"), raw: text };
+          }
+
+          if (resp.ok) {
+            renderTitleResult(data, true);
+          } else {
+            const message = data.detail || data.error || text || t("titleError");
+            renderTitleResult({ error: message }, false);
+          }
+        } catch (err) {
+          renderTitleResult({ error: String(err) }, false);
+        } finally {
+          titleProcessing = false;
+          titleSubmitBtn.disabled = false;
+          titleButtonText.textContent = t("titleSubmitButton");
+        }
+      }
+
       function buildResultCard(entry) {
         const { fileObj, payload, elapsedMs, success, resultId } = entry;
         const card = document.createElement("div");
@@ -1758,12 +2017,21 @@
 
       // 提交处理
       submitBtn.addEventListener("click", processFiles);
+      titleSubmitBtn.addEventListener("click", submitTitleRequest);
+      titleClearBtn.addEventListener("click", () => {
+        titleInput.value = "";
+        titleImageUrlInput.value = "";
+        renderTitleResult(null, true);
+      });
+      tabImageBtn.addEventListener("click", () => setActiveTab("image"));
+      tabTitleBtn.addEventListener("click", () => setActiveTab("title"));
 
       // 初始化
       applyTranslations();
       setStatus("idle");
       updateStatsDisplay();
       fetchDefaults();
+      renderTitleResult(null, true);
     </script>
   </body>
 </html>

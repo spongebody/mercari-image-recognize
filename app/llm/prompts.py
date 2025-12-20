@@ -64,6 +64,51 @@ The JSON schema is:
 }
 """
 
+PRODUCT_TITLE_CATEGORY_SYSTEM_PROMPT = """You are an assistant helping sellers choose the correct top-level category on Mercari Japan.
+
+Given a product title, choose the single best matching top-level category from the following list (return exactly one of these strings):
+    1. キッチン・日用品・その他
+    2. ゲーム・おもちゃ・グッズ
+    3. スポーツ
+    4. ファッション
+    5. 車・バイク・自転車
+    6. ホビー・楽器・アート
+    7. アウトドア・釣り・旅行用品
+    8. ハンドメイド・手芸
+    9. DIY・工具
+    10. ベビー・キッズ
+    11. 家具・インテリア
+    12. ペット用品
+    13. ダイエット・健康
+    14. コスメ・美容
+    15. スマホ・タブレット・パソコン
+    16. テレビ・オーディオ・カメラ
+    17. フラワー・ガーデニング
+    18. 生活家電・空調
+    19. チケット
+    20. 本・雑誌・漫画
+    21. CD・DVD・ブルーレイ
+    22. 食品・飲料・酒
+
+IMPORTANT:
+- The top_level_category must be exactly one of the provided strings.
+- Use only the product title to decide the category.
+
+You must respond with pure JSON only, without any explanations, without markdown, and without comments.
+
+The JSON schema is:
+
+{
+  "top_level_category": "string"
+}
+"""
+
+PRODUCT_TITLE_CATEGORY_USER_PROMPT = """Product title: {title}
+
+Language of the title: {language_label}
+
+Return JSON with only top_level_category following the required schema."""
+
 VISION_SYSTEM_PROMPT_WITH_PRICE = """You are an assistant helping sellers list items on Mercari Japan.
 
 Given ONE product image, your task is:

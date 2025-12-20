@@ -8,13 +8,15 @@ from .config import Settings
 from .constants import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, TOP_LEVEL_CATEGORIES
 from .data.brands import BrandStore
 from .data.categories import CategoryStore
-from .errors import BadRequestError
+from .errors import BadRequestError, LLMRequestError
 from .llm.client import OpenRouterClient
 from .llm.prompts import (
     CATEGORY_SYSTEM_PROMPT,
     CATEGORY_USER_PROMPT_TEMPLATE,
     PRICE_SYSTEM_PROMPT,
     PRICE_USER_PROMPT_TEMPLATE,
+    PRODUCT_TITLE_CATEGORY_SYSTEM_PROMPT,
+    PRODUCT_TITLE_CATEGORY_USER_PROMPT,
     VISION_SYSTEM_PROMPT,
     VISION_SYSTEM_PROMPT_WITH_PRICE,
     VISION_SYSTEM_PROMPT_WITH_SEARCH,
@@ -24,6 +26,7 @@ from .llm.prompts import (
 )
 from .utils import (
     compress_whitespace,
+    fetch_image_from_url,
     image_bytes_to_data_url,
     normalize_category_label,
     normalize_price_list,
@@ -63,6 +66,20 @@ def _clean_string(value: Any) -> str:
     if value is None:
         return ""
     return compress_whitespace(str(value))
+
+
+def _paths_from_categories(categories: List[Dict[str, str]]) -> Optional[Dict[str, Any]]:
+    if not categories:
+        return None
+    ordered_paths: List[str] = []
+    for category in categories:
+        path = category.get("name") or ""
+        path = compress_whitespace(path)
+        if path and path not in ordered_paths:
+            ordered_paths.append(path)
+    if not ordered_paths:
+        return None
+    return {"best_target_path": ordered_paths[0], "alternatives": ordered_paths[1:]}
 
 
 def _extract_citations(raw_response: Optional[Dict[str, Any]]) -> List[Dict[str, str]]:
@@ -223,6 +240,84 @@ class MercariAnalyzer:
 
         return result
 
+    def analyze_title(
+        self,
+        title: str,
+        image_url: Optional[str],
+        language: str,
+        category_limit: int = 3,
+        category_model_override: Optional[str] = None,
+        vision_model_override: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        if language not in SUPPORTED_LANGUAGES:
+            raise BadRequestError("Unsupported language.")
+
+        title_clean = _clean_string(title)
+        if not title_clean:
+            raise BadRequestError("Title is required.")
+
+        category_limit = max(1, min(int(category_limit), 3))
+        categories: List[Dict[str, str]] = []
+        title_error: Optional[Exception] = None
+
+        try:
+            title_payload = self._call_title_category_llm(
+                title=title_clean,
+                language=language,
+                model_override=category_model_override,
+            )
+            top_level_category = _clean_string(title_payload.get("top_level_category", ""))
+            group_name = _map_top_level_category(top_level_category)
+            if group_name:
+                categories, _ = self._choose_categories(
+                    title=title_clean,
+                    description="",
+                    brand_for_prompt="",
+                    group_name=group_name,
+                    category_limit=category_limit,
+                    model_override=category_model_override,
+                )
+        except (BadRequestError, LLMRequestError) as exc:
+            title_error = exc
+
+        paths_result = _paths_from_categories(categories)
+        if paths_result:
+            return paths_result
+
+        if not image_url:
+            if title_error:
+                if isinstance(title_error, LLMRequestError):
+                    raise LLMRequestError(
+                        f"{title_error} (image_url is required for fallback)"
+                    ) from title_error
+                raise BadRequestError(
+                    f"Title classification failed; image_url is required for fallback. ({title_error})"
+                ) from title_error
+            raise BadRequestError("Title classification failed; image_url is required for fallback.")
+
+        try:
+            image_bytes, mime_type = fetch_image_from_url(
+                image_url=image_url,
+                timeout=self.settings.request_timeout,
+                max_bytes=self.settings.max_image_bytes,
+                allowed_mime_types=self.settings.allowed_mime_types,
+            )
+        except ValueError as exc:
+            raise BadRequestError(str(exc)) from exc
+
+        fallback_result = self._classify_image_to_paths(
+            image_bytes=image_bytes,
+            mime_type=mime_type,
+            language=language,
+            category_limit=category_limit,
+            vision_model_override=vision_model_override,
+            category_model_override=category_model_override,
+        )
+        if fallback_result:
+            return fallback_result
+
+        raise BadRequestError("Image recognition failed to return a category path.")
+
     def _call_vision_llm(
         self,
         image_data_url: str,
@@ -275,6 +370,37 @@ class MercariAnalyzer:
         if not isinstance(parsed, dict):
             raise BadRequestError("Vision LLM did not return a JSON object.")
         return parsed, raw_response
+
+    def _call_title_category_llm(
+        self,
+        title: str,
+        language: str,
+        model_override: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        user_prompt = PRODUCT_TITLE_CATEGORY_USER_PROMPT.format(
+            title=title,
+            language_label=_language_label(language),
+        )
+        messages = [
+            {"role": "system", "content": PRODUCT_TITLE_CATEGORY_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ]
+        content, raw_response = self.category_client.chat(
+            model=model_override or self.settings.category_model,
+            messages=messages,
+            temperature=0.3,
+            max_tokens=1024,
+        )
+        self._log_raw("title_category_content", content)
+        self._log_raw("title_category_raw_response", raw_response)
+        try:
+            parsed = safe_json_loads(content)
+        except Exception as exc:
+            self._log_raw("title_category_parse_error", {"error": str(exc), "content": content})
+            raise BadRequestError("Failed to parse title category LLM JSON.") from exc
+        if not isinstance(parsed, dict):
+            raise BadRequestError("Title category LLM did not return a JSON object.")
+        return parsed
 
     def _predict_price_with_model(
         self,
@@ -440,3 +566,40 @@ class MercariAnalyzer:
                 break
 
         return results, parsed
+
+    def _classify_image_to_paths(
+        self,
+        image_bytes: bytes,
+        mime_type: str,
+        language: str,
+        category_limit: int = 3,
+        vision_model_override: Optional[str] = None,
+        category_model_override: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        data_url = image_bytes_to_data_url(image_bytes, mime_type)
+        ai_raw, _ = self._call_vision_llm(
+            data_url,
+            language,
+            model_override=vision_model_override,
+            price_mode="none",
+        )
+
+        title = _clean_string(ai_raw.get("title", ""))
+        description = _clean_string(ai_raw.get("description", ""))
+        top_level_category = _clean_string(ai_raw.get("top_level_category", ""))
+        brand_raw = _clean_string(ai_raw.get("brand_name", ""))
+
+        group_name = _map_top_level_category(top_level_category)
+        if not group_name:
+            return None
+
+        categories, _ = self._choose_categories(
+            title=title or ai_raw.get("title", ""),
+            description=description or ai_raw.get("description", ""),
+            brand_for_prompt=brand_raw,
+            group_name=group_name,
+            category_limit=category_limit,
+            model_override=category_model_override,
+        )
+
+        return _paths_from_categories(categories)
