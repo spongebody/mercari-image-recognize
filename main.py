@@ -1,6 +1,7 @@
+import time
 from typing import Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
@@ -12,6 +13,7 @@ from app.data.brands import BrandStore
 from app.data.categories import CategoryStore
 from app.errors import BadRequestError, LLMRequestError
 from app.llm.client import OpenRouterClient
+from app.request_logging import build_request_log, write_request_log
 from app.service import MercariAnalyzer
 from app.utils import parse_bool_param
 
@@ -59,6 +61,30 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    if not settings.log_requests:
+        return await call_next(request)
+    start = time.monotonic()
+    response = None
+    error_message = ""
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    except Exception as exc:
+        error_message = str(exc)
+        raise
+    finally:
+        duration_ms = (time.monotonic() - start) * 1000
+        try:
+            entry = await build_request_log(request)
+            write_request_log(entry, status_code=status_code, duration_ms=duration_ms, error=error_message)
+        except Exception:
+            pass
 
 
 @app.post("/api/v1/mercari/image/analyze")

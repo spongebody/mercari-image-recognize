@@ -49,6 +49,7 @@ class Settings:
     max_image_bytes: int = _env_int("MAX_IMAGE_BYTES", 5 * 1024 * 1024)
     allowed_mime_types: Set[str] = field(default_factory=lambda: set(ALLOWED_MIME_TYPES))
     log_llm_raw: bool = _env_bool("LOG_LLM_RAW", False)
+    log_requests: bool = _env_bool("LOG_REQUESTS", True)
 
     def __post_init__(self) -> None:
         if not self.vision_model_online and self.vision_model:
