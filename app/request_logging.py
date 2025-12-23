@@ -47,7 +47,16 @@ def _serialize_form(form: FormData) -> Dict[str, Any]:
     return payload
 
 
-async def build_request_log(request: Request) -> Dict[str, Any]:
+async def _parse_form_from_body(request: Request, body: bytes) -> Dict[str, Any]:
+    async def receive() -> Dict[str, Any]:
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    temp_request = Request(request.scope, receive)
+    form = await temp_request.form()
+    return _serialize_form(form)
+
+
+async def build_request_log(request: Request, body: Optional[bytes] = None) -> Dict[str, Any]:
     entry: Dict[str, Any] = {
         "timestamp_utc": datetime.utcnow().isoformat() + "Z",
         "method": request.method,
@@ -69,15 +78,16 @@ async def build_request_log(request: Request) -> Dict[str, Any]:
     if request.method in {"POST", "PUT", "PATCH"}:
         try:
             if "application/json" in content_type:
-                raw = await request.body()
+                raw = body or b""
                 if raw:
                     try:
                         body_payload = {"json": json.loads(raw)}
                     except json.JSONDecodeError:
                         body_payload = {"raw": raw.decode("utf-8", errors="replace")}
             elif "application/x-www-form-urlencoded" in content_type or "multipart/form-data" in content_type:
-                form = await request.form()
-                body_payload = {"form": _serialize_form(form)}
+                raw = body or b""
+                if raw:
+                    body_payload = {"form": await _parse_form_from_body(request, raw)}
         except Exception as exc:
             body_payload = {"parse_error": str(exc)}
 

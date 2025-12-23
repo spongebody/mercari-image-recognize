@@ -71,7 +71,15 @@ async def log_requests(request: Request, call_next):
     response = None
     error_message = ""
     status_code = 500
+    body = b""
     try:
+        if request.method in {"POST", "PUT", "PATCH"}:
+            body = await request.body()
+
+            async def receive() -> dict:
+                return {"type": "http.request", "body": body, "more_body": False}
+
+            request = Request(request.scope, receive)
         response = await call_next(request)
         status_code = response.status_code
         return response
@@ -81,7 +89,7 @@ async def log_requests(request: Request, call_next):
     finally:
         duration_ms = (time.monotonic() - start) * 1000
         try:
-            entry = await build_request_log(request)
+            entry = await build_request_log(request, body=body)
             write_request_log(entry, status_code=status_code, duration_ms=duration_ms, error=error_message)
         except Exception:
             pass
