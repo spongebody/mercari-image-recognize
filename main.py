@@ -90,7 +90,14 @@ async def log_requests(request: Request, call_next):
         duration_ms = (time.monotonic() - start) * 1000
         try:
             entry = await build_request_log(request, body=body)
-            write_request_log(entry, status_code=status_code, duration_ms=duration_ms, error=error_message)
+            write_request_log(
+                entry,
+                status_code=status_code,
+                duration_ms=duration_ms,
+                error=error_message,
+                retention_days=settings.log_requests_retention_days,
+                max_files=settings.log_requests_max_files,
+            )
         except Exception:
             pass
 

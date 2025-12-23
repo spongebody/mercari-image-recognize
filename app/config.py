@@ -50,6 +50,8 @@ class Settings:
     allowed_mime_types: Set[str] = field(default_factory=lambda: set(ALLOWED_MIME_TYPES))
     log_llm_raw: bool = _env_bool("LOG_LLM_RAW", False)
     log_requests: bool = _env_bool("LOG_REQUESTS", True)
+    log_requests_retention_days: int = _env_int("LOG_REQUESTS_RETENTION_DAYS", 7)
+    log_requests_max_files: int = _env_int("LOG_REQUESTS_MAX_FILES", 1000)
 
     def __post_init__(self) -> None:
         if not self.vision_model_online and self.vision_model:
