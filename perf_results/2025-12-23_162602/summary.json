@@ -1,0 +1,37 @@
+{
+  "started_at_utc": "2025-12-23 16:26:50",
+  "base_url": "http://127.0.0.1:8000",
+  "concurrency": 4,
+  "image_requests": 6,
+  "title_requests": 10,
+  "scenarios": [
+    {
+      "name": "image_analyze",
+      "total_requests": 6,
+      "success_requests": 6,
+      "error_requests": 0,
+      "duration_sec": 34.35,
+      "qps": 0.175,
+      "latency_ms_avg": 17959.37,
+      "latency_ms_min": 9384.62,
+      "latency_ms_max": 30186.77,
+      "latency_ms_p50": 16917.14,
+      "latency_ms_p90": 27069.04,
+      "latency_ms_p99": 29875.0
+    },
+    {
+      "name": "title_analyze",
+      "total_requests": 10,
+      "success_requests": 10,
+      "error_requests": 0,
+      "duration_sec": 14.23,
+      "qps": 0.703,
+      "latency_ms_avg": 4976.84,
+      "latency_ms_min": 4245.57,
+      "latency_ms_max": 7571.56,
+      "latency_ms_p50": 4675.78,
+      "latency_ms_p90": 5547.74,
+      "latency_ms_p99": 7369.18
+    }
+  ]
+}

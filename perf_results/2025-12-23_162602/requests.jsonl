@@ -1,0 +1,16 @@
+{"status_code": 200, "latency_ms": 9384.62, "ok": true, "error": "", "response_bytes": 3296, "scenario": "image_analyze"}
+{"status_code": 200, "latency_ms": 10399.21, "ok": true, "error": "", "response_bytes": 2937, "scenario": "image_analyze"}
+{"status_code": 200, "latency_ms": 11946.86, "ok": true, "error": "", "response_bytes": 3462, "scenario": "image_analyze"}
+{"status_code": 200, "latency_ms": 21887.42, "ok": true, "error": "", "response_bytes": 3239, "scenario": "image_analyze"}
+{"status_code": 200, "latency_ms": 30186.77, "ok": true, "error": "", "response_bytes": 3246, "scenario": "image_analyze"}
+{"status_code": 200, "latency_ms": 23951.32, "ok": true, "error": "", "response_bytes": 3427, "scenario": "image_analyze"}
+{"status_code": 200, "latency_ms": 4245.57, "ok": true, "error": "", "response_bytes": 196, "scenario": "title_analyze"}
+{"status_code": 200, "latency_ms": 5115.41, "ok": true, "error": "", "response_bytes": 449, "scenario": "title_analyze"}
+{"status_code": 200, "latency_ms": 5322.87, "ok": true, "error": "", "response_bytes": 299, "scenario": "title_analyze"}
+{"status_code": 200, "latency_ms": 7571.56, "ok": true, "error": "", "response_bytes": 314, "scenario": "title_analyze"}
+{"status_code": 200, "latency_ms": 4881.06, "ok": true, "error": "", "response_bytes": 449, "scenario": "title_analyze"}
+{"status_code": 200, "latency_ms": 4388.44, "ok": true, "error": "", "response_bytes": 491, "scenario": "title_analyze"}
+{"status_code": 200, "latency_ms": 4436.45, "ok": true, "error": "", "response_bytes": 467, "scenario": "title_analyze"}
+{"status_code": 200, "latency_ms": 4626.88, "ok": true, "error": "", "response_bytes": 552, "scenario": "title_analyze"}
+{"status_code": 200, "latency_ms": 4455.44, "ok": true, "error": "", "response_bytes": 437, "scenario": "title_analyze"}
+{"status_code": 200, "latency_ms": 4724.68, "ok": true, "error": "", "response_bytes": 486, "scenario": "title_analyze"}
