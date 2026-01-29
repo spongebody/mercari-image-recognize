@@ -1,5 +1,6 @@
 import difflib
 import json
+import re
 import time
 from datetime import datetime
 from pathlib import Path
@@ -36,6 +37,54 @@ from .utils import (
 
 
 LANGUAGE_LABELS = {"ja": "Japanese", "en": "English", "zh": "Chinese"}
+DESCRIPTION_DETAIL_FIELDS = (
+    "brand",
+    "product_name",
+    "model_number",
+    "target",
+    "color",
+    "size",
+    "weight",
+    "condition",
+)
+DESCRIPTION_DETAIL_LEGACY_MAP = {
+    "brand": ("ブランド",),
+    "product_name": ("商品名",),
+    "model_number": ("型番",),
+    "target": ("対象",),
+    "color": ("カラー",),
+    "size": ("サイズ",),
+    "weight": ("重量",),
+    "condition": ("程度",),
+}
+DESCRIPTION_SECTION_KEYS = {
+    "details": ("product_details", "details", "商品详情", "商品詳細"),
+    "intro": (
+        "product_intro",
+        "product_introduction",
+        "introduction",
+        "overview",
+        "商品介绍 / 型号说明",
+        "商品紹介 / 型号説明",
+        "商品紹介 / 型号说明",
+        "商品介绍/型号说明",
+        "商品紹介/型号説明",
+    ),
+    "recommendation": (
+        "recommendation",
+        "recommendations",
+        "selling_points",
+        "推荐语",
+        "おすすめポイント",
+    ),
+    "keywords": (
+        "search_keywords",
+        "keywords",
+        "seo_keywords",
+        "搜索关键词",
+        "検索用キーワード",
+    ),
+}
 
 
 def _language_label(language: str) -> str:
@@ -67,6 +116,148 @@ def _clean_string(value: Any) -> str:
     if value is None:
         return ""
     return compress_whitespace(str(value))
+
+
+def _stringify_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, (list, tuple)):
+        parts = [str(item).strip() for item in value if str(item).strip()]
+        return " ".join(parts)
+    return str(value).strip()
+
+
+def _normalize_keywords(value: Any) -> List[str]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        items = []
+        for item in value:
+            text = _stringify_value(item)
+            if text:
+                items.append(text)
+        return items
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return []
+        parts = re.split(r"[#\s,，、;；|/]+", raw)
+        return [item for item in (p.strip() for p in parts) if item]
+    text = _stringify_value(value)
+    return [text] if text else []
+
+
+def _format_product_details(details_raw: Any) -> Dict[str, str]:
+    details_map = {field: "" for field in DESCRIPTION_DETAIL_FIELDS}
+    if isinstance(details_raw, dict):
+        for field in DESCRIPTION_DETAIL_FIELDS:
+            keys = [field, f"◆{field}"]
+            for legacy in DESCRIPTION_DETAIL_LEGACY_MAP.get(field, ()):
+                keys.extend([legacy, f"◆{legacy}"])
+            for key in keys:
+                if key in details_raw and details_raw[key] is not None:
+                    details_map[field] = _stringify_value(details_raw[key])
+                    break
+    elif isinstance(details_raw, str):
+        text = details_raw.strip()
+        if text:
+            for line in text.splitlines():
+                cleaned = line.strip()
+                if not cleaned:
+                    continue
+                for field in DESCRIPTION_DETAIL_FIELDS:
+                    labels = [f"◆{field}", field]
+                    for legacy in DESCRIPTION_DETAIL_LEGACY_MAP.get(field, ()):
+                        labels.extend([f"◆{legacy}", legacy])
+                    for label in labels:
+                        if cleaned.startswith(label):
+                            remainder = cleaned[len(label):].lstrip()
+                            if remainder.startswith("：") or remainder.startswith(":"):
+                                remainder = remainder[1:].lstrip()
+                            details_map[field] = remainder.strip()
+                            break
+                    if details_map[field]:
+                        break
+            if not any(details_map.values()):
+                return details_map
+    return details_map
+
+
+def _normalize_description(value: Any) -> Dict[str, Any]:
+    def pick(source: Dict[str, Any], keys: Tuple[str, ...]) -> Any:
+        for key in keys:
+            if key in source:
+                return source[key]
+        return None
+
+    if value is None:
+        return {
+            "product_details": _format_product_details(None),
+            "product_intro": "",
+            "recommendation": "",
+            "search_keywords": [],
+        }
+
+    if isinstance(value, str):
+        raw = value.strip()
+        if raw.startswith("{") and raw.endswith("}"):
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, dict):
+                    return _normalize_description(parsed)
+            except json.JSONDecodeError:
+                pass
+        return {
+            "product_details": _format_product_details(None),
+            "product_intro": raw,
+            "recommendation": "",
+            "search_keywords": [],
+        }
+
+    if isinstance(value, dict):
+        details_raw = pick(value, DESCRIPTION_SECTION_KEYS["details"])
+        intro_raw = pick(value, DESCRIPTION_SECTION_KEYS["intro"])
+        recommendation_raw = pick(value, DESCRIPTION_SECTION_KEYS["recommendation"])
+        keywords_raw = pick(value, DESCRIPTION_SECTION_KEYS["keywords"])
+        return {
+            "product_details": _format_product_details(details_raw),
+            "product_intro": _stringify_value(intro_raw),
+            "recommendation": _stringify_value(recommendation_raw),
+            "search_keywords": _normalize_keywords(keywords_raw),
+        }
+
+    return {
+        "product_details": _format_product_details(None),
+        "product_intro": _stringify_value(value),
+        "recommendation": "",
+        "search_keywords": [],
+    }
+
+
+def _description_to_text(description: Any) -> str:
+    if isinstance(description, str):
+        return compress_whitespace(description)
+    if isinstance(description, dict):
+        parts: List[str] = []
+        for key in ("product_details", "product_intro", "recommendation", "search_keywords"):
+            value = description.get(key)
+            if isinstance(value, dict):
+                lines = []
+                for field in DESCRIPTION_DETAIL_FIELDS:
+                    field_value = _stringify_value(value.get(field))
+                    if field_value:
+                        lines.append(f"{field}: {field_value}")
+                text = "\n".join(lines)
+            elif isinstance(value, list):
+                text = " ".join(_stringify_value(item) for item in value if _stringify_value(item))
+            else:
+                text = _stringify_value(value)
+            if text:
+                parts.append(text)
+        return compress_whitespace("\n".join(parts))
+    return compress_whitespace(_stringify_value(description))
 
 
 def _paths_from_categories(
@@ -171,7 +362,8 @@ class MercariAnalyzer:
         )
 
         title = _clean_string(ai_raw.get("title", ""))
-        description = _clean_string(ai_raw.get("description", ""))
+        description_struct = _normalize_description(ai_raw.get("description"))
+        description_text = _description_to_text(description_struct)
         prices = normalize_price_list(ai_raw.get("prices", []))
         top_level_category = _clean_string(ai_raw.get("top_level_category", ""))
         brand_raw = _clean_string(ai_raw.get("brand_name", ""))
@@ -188,7 +380,7 @@ class MercariAnalyzer:
         if group_name:
             categories, llm_category_raw = self._choose_categories(
                 title=title or ai_raw.get("title", ""),
-                description=description or ai_raw.get("description", ""),
+                description=description_text or _description_to_text(ai_raw.get("description", "")),
                 brand_for_prompt=brand_raw or brand_name,
                 group_name=group_name,
                 category_limit=category_limit,
@@ -208,7 +400,7 @@ class MercariAnalyzer:
                     price_citations_model,
                 ) = self._predict_price_with_model(
                     title=title,
-                    description=description,
+                    description=description_text,
                     brand=brand_raw or brand_name,
                     group_name=group_name or "",
                     category_candidates=categories,
@@ -232,7 +424,7 @@ class MercariAnalyzer:
 
         result: Dict[str, Any] = {
             "title": title,
-            "description": description,
+            "description": description_struct,
             "prices": prices,
             "categories": categories,
             "brand_name": brand_name,
@@ -641,7 +833,8 @@ class MercariAnalyzer:
         )
 
         title = _clean_string(ai_raw.get("title", ""))
-        description = _clean_string(ai_raw.get("description", ""))
+        description_struct = _normalize_description(ai_raw.get("description"))
+        description_text = _description_to_text(description_struct)
         top_level_category = _clean_string(ai_raw.get("top_level_category", ""))
         brand_raw = _clean_string(ai_raw.get("brand_name", ""))
 
@@ -651,7 +844,7 @@ class MercariAnalyzer:
 
         categories, _ = self._choose_categories(
             title=title or ai_raw.get("title", ""),
-            description=description or ai_raw.get("description", ""),
+            description=description_text or _description_to_text(ai_raw.get("description", "")),
             brand_for_prompt=brand_raw,
             group_name=group_name,
             category_limit=category_limit,

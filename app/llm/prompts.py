@@ -4,16 +4,21 @@ Given ONE product image, your task is:
 
 1. Infer what the product is (type), its condition, important attributes, and any visible details.
 2. Generate a short, clear, and buyer-friendly title suitable for a Mercari Japan listing.
-3. Generate a detailed and compelling description that makes buyers want to purchase. The description should include:
-   - **Product Overview**: What the item is and its main features
-   - **Condition Details**: Specific condition notes (any wear, scratches, stains, or excellent condition)
-   - **Key Highlights**: Unique selling points, special features, or benefits
-   - **Usage Scenarios**: How and where the item can be used, who it's perfect for
-   - **Included Items**: What comes with the product (accessories, original box, manuals, etc.)
-   - **SEO Keywords**: Naturally integrate relevant search terms (brand, model, product type, popular synonyms) throughout the description
-   - **Call to Action**: Brief encouragement to purchase or ask questions
-   
-   The description should be engaging, informative, and structured to help buyers make a confident purchase decision. Use the language requested by the user.
+3. Generate a structured description object in JSON format with ENGLISH field names only. The description must have 4 sections:
+   - **product_details**: A JSON object with the required fields below. If a field is unknown, return an empty string value but keep the field.
+     - brand
+     - product_name
+     - model_number
+     - target
+     - color
+     - size
+     - weight
+     - condition
+   - **product_intro**: A professional product introduction based on brand/model/type. Include functions, features, advantages, usage scenarios, and included items.
+   - **recommendation**: Short, persuasive lines summarizing the key selling points.
+   - **search_keywords**: An array of relevant search keywords (brand, model, product type, synonyms).
+
+   Use the requested language for all text content. Include newline characters (\n) inside section strings where appropriate.
 
 4. Choose the single best matching top-level category from the following list (return exactly one of these strings):
     1. キッチン・日用品・その他
@@ -45,7 +50,7 @@ Given ONE product image, your task is:
 
 IMPORTANT:
 - The title and description must use the language requested by the user (default Japanese).
-- The description should be 800-1000 characters for Japanese, or 500-1000 words for other languages.
+- The total description text (all sections combined) should be 800-1000 characters for Japanese, or 500-1000 words for other languages.
 - Make the description persuasive and detailed, helping buyers visualize owning and using the item.
 - Naturally weave in SEO keywords without making it sound robotic or keyword-stuffed.
 - Do NOT include any pricing in your response.
@@ -58,7 +63,21 @@ The JSON schema is:
 
 {
   "title": "string",
-  "description": "string",
+  "description": {
+    "product_details": {
+      "brand": "string",
+      "product_name": "string",
+      "model_number": "string",
+      "target": "string",
+      "color": "string",
+      "size": "string",
+      "weight": "string",
+      "condition": "string"
+    },
+    "product_intro": "string",
+    "recommendation": "string",
+    "search_keywords": ["string"]
+  },
   "top_level_category": "string",
   "brand_name": "string"
 }
@@ -115,16 +134,21 @@ Given ONE product image, your task is:
 
 1. Infer what the product is (type), its condition, important attributes, and any visible details.
 2. Generate a short, clear, and buyer-friendly title suitable for a Mercari Japan listing.
-3. Generate a detailed and compelling description that makes buyers want to purchase. The description should include:
-   - **Product Overview**: What the item is and its main features
-   - **Condition Details**: Specific condition notes (any wear, scratches, stains, or excellent condition)
-   - **Key Highlights**: Unique selling points, special features, or benefits
-   - **Usage Scenarios**: How and where the item can be used, who it's perfect for
-   - **Included Items**: What comes with the product (accessories, original box, manuals, etc.)
-   - **SEO Keywords**: Naturally integrate relevant search terms (brand, model, product type, popular synonyms) throughout the description
-   - **Call to Action**: Brief encouragement to purchase or ask questions
-   
-   The description should be engaging, informative, and structured to help buyers make a confident purchase decision. Use the language requested by the user.
+3. Generate a structured description object in JSON format with ENGLISH field names only. The description must have 4 sections:
+   - **product_details**: A JSON object with the required fields below. If a field is unknown, return an empty string value but keep the field.
+     - brand
+     - product_name
+     - model_number
+     - target
+     - color
+     - size
+     - weight
+     - condition
+   - **product_intro**: A professional product introduction based on brand/model/type. Include functions, features, advantages, usage scenarios, and included items.
+   - **recommendation**: Short, persuasive lines summarizing the key selling points.
+   - **search_keywords**: An array of relevant search keywords (brand, model, product type, synonyms).
+
+   Use the requested language for all text content. Include newline characters (\n) inside section strings where appropriate.
 
 4. Propose 3 realistic reference prices in Japanese Yen (integers) for three condition levels:
    - prices[0]: Poor condition - visible wear, defects, or cosmetic issues
@@ -161,7 +185,7 @@ Given ONE product image, your task is:
 
 IMPORTANT:
 - The title and description must use the language requested by the user (default Japanese).
-- The description should be 800-1000 characters for Japanese, or 500-1000 words for other languages.
+- The total description text (all sections combined) should be 800-1000 characters for Japanese, or 500-1000 words for other languages.
 - Make the description persuasive and detailed, helping buyers visualize owning and using the item.
 - Naturally weave in SEO keywords without making it sound robotic or keyword-stuffed.
 - Prices must be integers in Japanese Yen, in ascending order [poor, average, good].
@@ -175,7 +199,21 @@ The JSON schema is:
 
 {
   "title": "string",
-  "description": "string",
+  "description": {
+    "product_details": {
+      "brand": "string",
+      "product_name": "string",
+      "model_number": "string",
+      "target": "string",
+      "color": "string",
+      "size": "string",
+      "weight": "string",
+      "condition": "string"
+    },
+    "product_intro": "string",
+    "recommendation": "string",
+    "search_keywords": ["string"]
+  },
   "prices": [number, number, number],
   "top_level_category": "string",
   "brand_name": "string"
@@ -192,16 +230,21 @@ Given ONE product image, your task is:
    If image search is unavailable, extract visible brand/model numbers or text from the image and craft Japanese keyword queries starting with `site:jp.mercari.com` to keep results on the Mercari Japan domain.
    Prioritize `jp.mercari.com/item/` or `jp.mercari.com/sold/` pages and ignore non-Mercari sites unless no relevant Mercari results exist after multiple tries.
 2. Generate a short, clear, and buyer-friendly title suitable for a Mercari Japan listing.
-3. Generate a detailed and compelling description that makes buyers want to purchase. The description should include:
-   - **Product Overview**: What the item is and its main features
-   - **Condition Details**: Specific condition notes (any wear, scratches, stains, or excellent condition)
-   - **Key Highlights**: Unique selling points, special features, or benefits
-   - **Usage Scenarios**: How and where the item can be used, who it's perfect for
-   - **Included Items**: What comes with the product (accessories, original box, manuals, etc.)
-   - **SEO Keywords**: Naturally integrate relevant search terms (brand, model, product type, popular synonyms) throughout the description
-   - **Call to Action**: Brief encouragement to purchase or ask questions
-   
-   The description should be engaging, informative, and structured to help buyers make a confident purchase decision. Use the language requested by the user.
+3. Generate a structured description object in JSON format with ENGLISH field names only. The description must have 4 sections:
+   - **product_details**: A JSON object with the required fields below. If a field is unknown, return an empty string value but keep the field.
+     - brand
+     - product_name
+     - model_number
+     - target
+     - color
+     - size
+     - weight
+     - condition
+   - **product_intro**: A professional product introduction based on brand/model/type. Include functions, features, advantages, usage scenarios, and included items.
+   - **recommendation**: Short, persuasive lines summarizing the key selling points.
+   - **search_keywords**: An array of relevant search keywords (brand, model, product type, synonyms).
+
+   Use the requested language for all text content. Include newline characters (\n) inside section strings where appropriate.
 
 4. Propose 3 prices in Japanese Yen (integers) based on the searched comparables, corresponding to three condition levels:
    - prices[0]: Poor condition - item with visible wear, defects, or cosmetic issues
@@ -238,7 +281,7 @@ Given ONE product image, your task is:
 
 IMPORTANT:
 - The title and description must use the language requested by the user (default Japanese).
-- The description should be 800-1000 characters for Japanese, or 500-1000 words for other languages.
+- The total description text (all sections combined) should be 800-1000 characters for Japanese, or 500-1000 words for other languages.
 - Make the description persuasive and detailed, helping buyers visualize owning and using the item.
 - Naturally weave in SEO keywords without making it sound robotic or keyword-stuffed.
 - Prices must be integers in Japanese Yen, in ascending order [poor, average, good].
@@ -252,7 +295,21 @@ The JSON schema is:
 
 {
   "title": "string",
-  "description": "string",
+  "description": {
+    "product_details": {
+      "brand": "string",
+      "product_name": "string",
+      "model_number": "string",
+      "target": "string",
+      "color": "string",
+      "size": "string",
+      "weight": "string",
+      "condition": "string"
+    },
+    "product_intro": "string",
+    "recommendation": "string",
+    "search_keywords": ["string"]
+  },
   "prices": [number, number, number],
   "top_level_category": "string",
   "brand_name": "string"
@@ -264,10 +321,12 @@ VISION_USER_PROMPT_TEMPLATE = """Look at this product image and fill in all JSON
 Language for title and description: {language_label}.
 
 For the description:
-- Include product overview, condition details, key highlights, and usage scenarios
-- Mention what's included with the item
-- Add natural SEO keywords (brand, model, product type)
-- Make it compelling and informative to increase buyer interest
+- Return a JSON object with 4 sections: product_details, product_intro, recommendation, search_keywords
+- product_details must be a JSON object with fields (brand/product_name/model_number/target/color/size/weight/condition). Leave values blank if unknown.
+- product_intro should cover features, advantages, usage scenarios, and included items
+- recommendation should be short and persuasive
+- search_keywords should be an array of relevant keywords
+- Use \\n for line breaks inside strings
 - Do NOT include prices
 
 If you are not sure about the brand, set "brand_name" to ""."""
@@ -277,10 +336,12 @@ VISION_USER_PROMPT_WITH_PRICE = """Look at this product image and fill in all JS
 Language for title and description: {language_label}.
 
 For the description:
-- Include product overview, condition details, key highlights, and usage scenarios
-- Mention what's included with the item
-- Add natural SEO keywords (brand, model, product type)
-- Make it compelling and informative to increase buyer interest
+- Return a JSON object with 4 sections: product_details, product_intro, recommendation, search_keywords
+- product_details must be a JSON object with fields (brand/product_name/model_number/target/color/size/weight/condition). Leave values blank if unknown.
+- product_intro should cover features, advantages, usage scenarios, and included items
+- recommendation should be short and persuasive
+- search_keywords should be an array of relevant keywords
+- Use \\n for line breaks inside strings
 
 Return 3 reference prices in JPY (integers) for [poor, average, good] condition based ONLY on the image and typical second-hand pricing in Japan. Keep prices realistic, ascending, and grounded in the product type, brand strength, and visible wear. Do not use web search or browsing. If you are not sure about the brand, set "brand_name" to ""."""
 
@@ -289,10 +350,12 @@ VISION_USER_PROMPT_TEMPLATE_WITH_WITH_SEARCH = """Look at this product image and
 Language for title and description: {language_label}.
 
 For the description:
-- Include product overview, condition details, key highlights, and usage scenarios
-- Mention what's included with the item
-- Add natural SEO keywords (brand, model, product type)
-- Make it compelling and informative to increase buyer interest
+- Return a JSON object with 4 sections: product_details, product_intro, recommendation, search_keywords
+- product_details must be a JSON object with fields (brand/product_name/model_number/target/color/size/weight/condition). Leave values blank if unknown.
+- product_intro should cover features, advantages, usage scenarios, and included items
+- recommendation should be short and persuasive
+- search_keywords should be an array of relevant keywords
+- Use \\n for line breaks inside strings
 
 Prices must be in JPY and integers. Use web search/browse to ground prices across different conditions. Return EXACTLY 3 prices in ascending order [poor, average, good]. Base price gaps on actual market comps showing condition-based pricing.
 If you are not sure about the brand, set "brand_name" to ""."""

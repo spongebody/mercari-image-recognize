@@ -532,6 +532,28 @@
         font-weight: 600;
       }
 
+      .field-value.multiline {
+        white-space: pre-wrap;
+      }
+
+      .description-sections {
+        display: grid;
+        gap: 10px;
+      }
+
+      .description-section {
+        display: grid;
+        gap: 6px;
+      }
+
+      .description-section .section-title {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
       .tags-container {
         display: flex;
         flex-wrap: wrap;
@@ -1012,6 +1034,19 @@
           resultFail: "失败",
           fieldTitle: "📝 标题",
           fieldDescription: "📄 描述",
+          descSectionDetails: "商品详情",
+          descSectionIntro: "商品介绍 / 型号说明",
+          descSectionRecommendation: "推荐语",
+          descSectionKeywords: "搜索关键词",
+          descDetailBrand: "品牌",
+          descDetailProductName: "商品名",
+          descDetailModelNumber: "型号",
+          descDetailTarget: "适用对象",
+          descDetailColor: "颜色",
+          descDetailSize: "尺寸",
+          descDetailWeight: "重量",
+          descDetailCondition: "成色",
+          descEmpty: "—",
           fieldCategory: "🏷️ 分类",
           fieldCategoryCandidates: "🏷️ 分类候选",
           unknownCategory: "未知分类",
@@ -1112,6 +1147,19 @@
           resultFail: "失敗",
           fieldTitle: "📝 タイトル",
           fieldDescription: "📄 説明",
+          descSectionDetails: "商品詳細",
+          descSectionIntro: "商品紹介 / 型号説明",
+          descSectionRecommendation: "おすすめポイント",
+          descSectionKeywords: "検索キーワード",
+          descDetailBrand: "ブランド",
+          descDetailProductName: "商品名",
+          descDetailModelNumber: "型番",
+          descDetailTarget: "対象",
+          descDetailColor: "カラー",
+          descDetailSize: "サイズ",
+          descDetailWeight: "重量",
+          descDetailCondition: "程度",
+          descEmpty: "—",
           fieldCategory: "🏷️ カテゴリ",
           fieldCategoryCandidates: "🏷️ カテゴリ候補",
           unknownCategory: "不明なカテゴリ",
@@ -1448,12 +1496,50 @@
 
         // 描述
         if (data.description) {
-          html += `
-            <div class="field-group">
-              <div class="field-label">${t("fieldDescription")}</div>
-              <div class="field-value">${escapeHtml(data.description)}</div>
-            </div>
-          `;
+          if (typeof data.description === 'object' && !Array.isArray(data.description)) {
+            const details = normalizeDescriptionSection(data.description, ["product_details", "details", "商品详情", "商品詳細"]);
+            const intro = normalizeDescriptionSection(
+              data.description,
+              [
+                "product_intro",
+                "product_introduction",
+                "introduction",
+                "overview",
+                "商品介绍 / 型号说明",
+                "商品紹介 / 型号説明",
+                "商品紹介 / 型号说明",
+                "商品介绍/型号说明",
+                "商品紹介/型号説明",
+              ]
+            );
+            const recommendation = normalizeDescriptionSection(
+              data.description,
+              ["recommendation", "recommendations", "selling_points", "推荐语", "おすすめポイント"]
+            );
+            const keywords = normalizeDescriptionSection(
+              data.description,
+              ["search_keywords", "keywords", "seo_keywords", "搜索关键词", "検索用キーワード", "検索キーワード"]
+            );
+            const detailText = formatDescriptionDetails(details);
+            html += `
+              <div class="field-group">
+                <div class="field-label">${t("fieldDescription")}</div>
+                <div class="description-sections">
+                  ${renderDescriptionSection(t("descSectionDetails"), detailText)}
+                  ${renderDescriptionSection(t("descSectionIntro"), intro)}
+                  ${renderDescriptionSection(t("descSectionRecommendation"), recommendation)}
+                  ${renderDescriptionSection(t("descSectionKeywords"), keywords)}
+                </div>
+              </div>
+            `;
+          } else {
+            html += `
+              <div class="field-group">
+                <div class="field-label">${t("fieldDescription")}</div>
+                <div class="field-value multiline">${formatMultiline(data.description)}</div>
+              </div>
+            `;
+          }
         }
 
         // 分类（单个）
@@ -1591,6 +1677,75 @@
 
         return html || `<div class="field-value">${t("noStructuredData")}</div>`;
       }
+      function formatMultiline(text) {
+        return escapeHtml(text ? String(text) : "").replace(/\n/g, "<br>");
+      }
+
+      function normalizeDescriptionSection(description, keys) {
+        for (const key of keys) {
+          if (Object.prototype.hasOwnProperty.call(description, key)) {
+            return description[key];
+          }
+        }
+        return "";
+      }
+
+      function formatDescriptionDetails(details) {
+        if (!details) return "";
+        if (typeof details === "string") return details;
+        if (typeof details === "object") {
+          const fields = [
+            { key: "brand", label: "descDetailBrand", legacy: ["ブランド"] },
+            { key: "product_name", label: "descDetailProductName", legacy: ["商品名"] },
+            { key: "model_number", label: "descDetailModelNumber", legacy: ["型番"] },
+            { key: "target", label: "descDetailTarget", legacy: ["対象"] },
+            { key: "color", label: "descDetailColor", legacy: ["カラー"] },
+            { key: "size", label: "descDetailSize", legacy: ["サイズ"] },
+            { key: "weight", label: "descDetailWeight", legacy: ["重量"] },
+            { key: "condition", label: "descDetailCondition", legacy: ["程度"] }
+          ];
+          return fields
+            .map((field) => {
+              let value = details[field.key];
+              if (!value && field.legacy) {
+                for (const legacyKey of field.legacy) {
+                  if (details[legacyKey]) {
+                    value = details[legacyKey];
+                    break;
+                  }
+                  const alt = details[`◆${legacyKey}`];
+                  if (alt) {
+                    value = alt;
+                    break;
+                  }
+                }
+              }
+              const suffix = value ? ` ${value}` : "";
+              return `◆${t(field.label)}：${suffix}`;
+            })
+            .join("\n");
+        }
+        return String(details);
+      }
+
+      function normalizeSectionValue(value) {
+        if (Array.isArray(value)) {
+          return value.map((item) => String(item)).join(" ");
+        }
+        return value;
+      }
+
+      function renderDescriptionSection(label, value) {
+        const normalized = normalizeSectionValue(value);
+        const text = normalized && String(normalized).trim() ? formatMultiline(normalized) : `<span>${t("descEmpty")}</span>`;
+        return `
+          <div class="description-section">
+            <div class="section-title">${escapeHtml(label)}</div>
+            <div class="field-value multiline">${text}</div>
+          </div>
+        `;
+      }
+
       function escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
