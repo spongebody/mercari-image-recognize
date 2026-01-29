@@ -52,6 +52,8 @@ class Settings:
     log_requests: bool = _env_bool("LOG_REQUESTS", True)
     log_requests_retention_days: int = _env_int("LOG_REQUESTS_RETENTION_DAYS", 7)
     log_requests_max_files: int = _env_int("LOG_REQUESTS_MAX_FILES", 1000)
+    category_llm_retry_enabled: bool = _env_bool("CATEGORY_LLM_RETRY_ENABLED", False)
+    category_llm_max_retries: int = _env_int("CATEGORY_LLM_MAX_RETRIES", 1)
 
     def __post_init__(self) -> None:
         if not self.vision_model_online and self.vision_model:

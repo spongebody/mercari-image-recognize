@@ -1,5 +1,6 @@
 import difflib
 import json
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -374,7 +375,7 @@ class MercariAnalyzer:
             model=model,
             messages=messages,
             temperature=0.2,
-            max_tokens=12000,
+            max_tokens=16000,
         )
         self._log_raw("vision_content", content)
         self._log_raw("vision_raw_response", raw_response)
@@ -405,7 +406,7 @@ class MercariAnalyzer:
             model=model_override or self.settings.category_model,
             messages=messages,
             temperature=0.3,
-            max_tokens=1024,
+            max_tokens=16000,
         )
         self._log_raw("title_category_content", content)
         self._log_raw("title_category_raw_response", raw_response)
@@ -470,7 +471,7 @@ class MercariAnalyzer:
                 model=model_to_use,
                 messages=messages,
                 temperature=0.3,
-                max_tokens=12000,
+                max_tokens=16000,
             )
         except Exception as exc:
             error = str(exc)
@@ -536,20 +537,59 @@ class MercariAnalyzer:
             {"role": "user", "content": user_prompt},
         ]
 
-        content, raw_response = self.category_client.chat(
-            model=model_override or self.settings.category_model,
-            messages=messages,
-            temperature=0.1,
-            max_tokens=12000,
-        )
-        self._log_raw("category_content", content)
-        self._log_raw("category_raw_response", raw_response)
-        try:
-            parsed = safe_json_loads(content)
-        except Exception as exc:
-            self._log_raw("category_parse_error", {"error": str(exc), "content": content})
-            raise BadRequestError("Failed to parse category LLM JSON.") from exc
-        if not isinstance(parsed, dict):
+        max_retries = max(0, int(self.settings.category_llm_max_retries))
+        attempts = 1 + max_retries if self.settings.category_llm_retry_enabled else 1
+        parsed: Optional[Dict[str, Any]] = None
+
+        base_delay_s = 0.2
+
+        for attempt in range(1, attempts + 1):
+            try:
+                content, raw_response = self.category_client.chat(
+                    model=model_override or self.settings.category_model,
+                    messages=messages,
+                    temperature=0.1,
+                    max_tokens=16000,
+                )
+            except LLMRequestError as exc:
+                self._log_raw(
+                    "category_call_error",
+                    {"error": str(exc), "attempt": attempt, "max_attempts": attempts},
+                )
+                if attempt < attempts:
+                    time.sleep(min(1.5, base_delay_s * (2 ** (attempt - 1))))
+                    continue
+                raise
+            self._log_raw("category_content", content)
+            self._log_raw("category_raw_response", raw_response)
+            try:
+                parsed = safe_json_loads(content)
+            except Exception as exc:
+                self._log_raw(
+                    "category_parse_error",
+                    {"error": str(exc), "attempt": attempt, "max_attempts": attempts},
+                )
+                if attempt < attempts:
+                    time.sleep(min(1.5, base_delay_s * (2 ** (attempt - 1))))
+                    continue
+                raise BadRequestError("Failed to parse category LLM JSON.") from exc
+            if not isinstance(parsed, dict):
+                self._log_raw(
+                    "category_parse_error",
+                    {
+                        "error": "Category LLM did not return a JSON object.",
+                        "attempt": attempt,
+                        "max_attempts": attempts,
+                    },
+                )
+                if attempt < attempts:
+                    parsed = None
+                    time.sleep(min(1.5, base_delay_s * (2 ** (attempt - 1))))
+                    continue
+                raise BadRequestError("Category LLM did not return a JSON object.")
+            break
+
+        if parsed is None:
             raise BadRequestError("Category LLM did not return a JSON object.")
 
         ordered_paths: List[str] = []

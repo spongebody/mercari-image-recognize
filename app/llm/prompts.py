@@ -376,59 +376,42 @@ CATEGORY_SYSTEM_PROMPT = """You are an e-commerce taxonomy specialist for the Ja
 Task:
 - You are given information about ONE product (title, description, brand, and its top-level category).
 - You are also given a list of candidate Mercari category paths under that top-level category.
-- Your job is to choose the single best target category path, and also 2 alternative candidate paths (top 3 in total, if available).
+- Your job is to choose the single best target category path, and up to 2 alternative paths (top 3 in total, if available).
 
 Instructions:
 - Carefully understand what the product is, how it is used, who it is for, and any important attributes.
 - Carefully read all candidate category paths.
-- Choose only from the given candidate category paths. Do NOT invent new categories.
-- Assign a confidence score in [0,1] to each chosen path.
-- Confidence should reflect how likely it is that the product belongs to that category.
+- Choose only from the given candidate category paths. Do NOT invent or modify categories.
 - If there are not enough good candidates, you may choose fewer than 3 paths.
+- If nothing fits, return an empty string for best_target_path and an empty alternatives list.
 
 Output format:
 - Respond with pure JSON only, with no explanations, no markdown, and no comments.
+- Use double quotes for all strings. No trailing commas. No extra keys.
 - The JSON schema is:
 
 {
   "best_target_path": "string",
-  "confidence": 0.0,
-  "reason": "string",
   "alternatives": [
     {
-      "target_path": "string",
-      "confidence": 0.0,
-      "reason": "string"
+      "target_path": "string"
     }
   ]
 }
 
 Notes:
-- "best_target_path" must be exactly one of the candidate category paths.
+- "best_target_path" must be exactly one of the candidate category paths (unless empty).
 - Each "target_path" in "alternatives" must also be exactly one of the candidate paths.
 - You MUST NOT return any path that is not in the candidate list.
-- The "reason" fields can be in Japanese or English.
-- If you cannot find any reasonable category, you may return an empty alternatives list and set confidence to a low value.
 """
 
-CATEGORY_USER_PROMPT_TEMPLATE = """Product information:
-
+CATEGORY_USER_PROMPT_TEMPLATE = """Product:
 - Title: {title}
 - Description: {description}
 - Brand (may be empty): {brand}
 - Top-level category (group_name): {group_name}
 
-Here is the list of candidate Mercari category paths under this top-level category.
-Each line is one candidate path:
-
+Candidate category paths (one per line):
 {candidate_paths}
 
-Please choose:
-- 1 best matching category path ("best_target_path"),
-- and up to 2 alternative category paths ("alternatives"),
-following the required JSON schema.
-
-Important:
-- Only use category paths from the candidate list.
-- Do NOT invent new or modified category paths.
-"""
+Return JSON only with best_target_path and alternatives (up to 2)."""
