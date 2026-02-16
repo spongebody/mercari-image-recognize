@@ -1,8 +1,9 @@
 VISION_SYSTEM_PROMPT = """You are an assistant helping sellers list items on Mercari Japan.
 
-Given ONE product image, your task is:
+Given one or more images of the same product, your task is:
 
-1. Infer what the product is (type), its condition, important attributes, and any visible details.
+1. Infer what the product is (type), its condition, important attributes, and any visible details across all images.
+   Use front/back photos, labels, tags, packaging, and close-ups to extract precise model numbers, brand, color, size, weight, and condition.
 2. Generate a short, clear, and buyer-friendly title suitable for a Mercari Japan listing.
 3. Generate a structured description object in JSON format with ENGLISH field names only. The description must have 4 sections:
    - **product_details**: A JSON object with the required fields below. If a field is unknown, return an empty string value but keep the field.
@@ -130,9 +131,10 @@ Return JSON with only top_level_category following the required schema."""
 
 VISION_SYSTEM_PROMPT_WITH_PRICE = """You are an assistant helping sellers list items on Mercari Japan.
 
-Given ONE product image, your task is:
+Given one or more images of the same product, your task is:
 
-1. Infer what the product is (type), its condition, important attributes, and any visible details.
+1. Infer what the product is (type), its condition, important attributes, and any visible details across all images.
+   Use front/back photos, labels, tags, packaging, and close-ups to extract precise model numbers, brand, color, size, weight, and condition.
 2. Generate a short, clear, and buyer-friendly title suitable for a Mercari Japan listing.
 3. Generate a structured description object in JSON format with ENGLISH field names only. The description must have 4 sections:
    - **product_details**: A JSON object with the required fields below. If a field is unknown, return an empty string value but keep the field.
@@ -222,12 +224,12 @@ The JSON schema is:
 
 VISION_SYSTEM_PROMPT_WITH_SEARCH = """You are an assistant helping sellers list items on Mercari Japan.
 
-Given ONE product image, your task is:
+Given one or more images of the same product, your task is:
 
-1. Infer what the product is (type), its condition, important attributes, and any visible details.
+1. Infer what the product is (type), its condition, important attributes, and any visible details across all images.
    Use your web search / browsing capability to check recent Mercari Japan listings for similar items.
-   First attempt a reverse/visual image search with the provided image (if your browsing tools support image search) using `site:jp.mercari.com` to surface identical or near-identical Mercari listings.
-   If image search is unavailable, extract visible brand/model numbers or text from the image and craft Japanese keyword queries starting with `site:jp.mercari.com` to keep results on the Mercari Japan domain.
+   First attempt a reverse/visual image search with the most informative image (front view, label, or packaging) using `site:jp.mercari.com` to surface identical or near-identical Mercari listings.
+   If image search is unavailable, extract visible brand/model numbers or text from the images and craft Japanese keyword queries starting with `site:jp.mercari.com` to keep results on the Mercari Japan domain.
    Prioritize `jp.mercari.com/item/` or `jp.mercari.com/sold/` pages and ignore non-Mercari sites unless no relevant Mercari results exist after multiple tries.
 2. Generate a short, clear, and buyer-friendly title suitable for a Mercari Japan listing.
 3. Generate a structured description object in JSON format with ENGLISH field names only. The description must have 4 sections:
@@ -316,7 +318,7 @@ The JSON schema is:
 }
 """
 
-VISION_USER_PROMPT_TEMPLATE = """Look at this product image and fill in all JSON fields according to the instructions.
+VISION_USER_PROMPT_TEMPLATE = """Look at these product images and fill in all JSON fields according to the instructions.
 
 Language for title and description: {language_label}.
 
@@ -331,7 +333,7 @@ For the description:
 
 If you are not sure about the brand, set "brand_name" to ""."""
 
-VISION_USER_PROMPT_WITH_PRICE = """Look at this product image and fill in all JSON fields according to the instructions.
+VISION_USER_PROMPT_WITH_PRICE = """Look at these product images and fill in all JSON fields according to the instructions.
 
 Language for title and description: {language_label}.
 
@@ -343,9 +345,9 @@ For the description:
 - search_keywords should be an array of relevant keywords
 - Use \\n for line breaks inside strings
 
-Return 3 reference prices in JPY (integers) for [poor, average, good] condition based ONLY on the image and typical second-hand pricing in Japan. Keep prices realistic, ascending, and grounded in the product type, brand strength, and visible wear. Do not use web search or browsing. If you are not sure about the brand, set "brand_name" to ""."""
+Return 3 reference prices in JPY (integers) for [poor, average, good] condition based ONLY on the images and typical second-hand pricing in Japan. Keep prices realistic, ascending, and grounded in the product type, brand strength, and visible wear. Do not use web search or browsing. If you are not sure about the brand, set "brand_name" to ""."""
 
-VISION_USER_PROMPT_TEMPLATE_WITH_WITH_SEARCH = """Look at this product image and fill in all JSON fields according to the instructions.
+VISION_USER_PROMPT_TEMPLATE_WITH_WITH_SEARCH = """Look at these product images and fill in all JSON fields according to the instructions.
 
 Language for title and description: {language_label}.
 
@@ -366,11 +368,11 @@ Your task is to determine 3 prices for a product based on ACTUAL Mercari Japan l
 
 **STEP-BY-STEP WORKFLOW:**
 
-1. **ANALYZE THE IMAGE FIRST** (DO NOT use any provided text hints yet)
-   - Examine the product image carefully
+1. **ANALYZE THE IMAGES FIRST** (DO NOT use any provided text hints yet)
+   - Examine all product images carefully (front/back, labels, packaging, close-ups)
    - Identify: brand, model/series, product type, color, visible condition
-   - Note any text, logos, model numbers visible in the image
-   - Assess visible condition from the photo (scratches, wear, box condition, etc.)
+   - Note any text, logos, model numbers visible across the images
+   - Assess visible condition from the photos (scratches, wear, box condition, etc.)
 
 2. **BUILD SEARCH QUERIES** from your image analysis
    - Create 3-5 Japanese search queries combining:
@@ -392,8 +394,8 @@ Your task is to determine 3 prices for a product based on ACTUAL Mercari Japan l
      * Stated condition (新品未使用/未使用に近い/目立った傷や汚れなし/やや傷や汚れあり/傷や汚れあり/全体的に状態が悪い)
      * URL
 
-4. **COMPARE IMAGE TO LISTINGS**
-   - Compare your product image to the found listings
+4. **COMPARE IMAGES TO LISTINGS**
+   - Compare your product images to the found listings
    - Match based on: exact model, similar design, same series
    - Prioritize listings that look most similar to your product
 
@@ -417,13 +419,13 @@ Your task is to determine 3 prices for a product based on ACTUAL Mercari Japan l
 - Prices must be integers in JPY, ascending order [poor, average, good]
 - Your "reason" should mention: your search queries, how many Mercari results found, and the price patterns observed"""
 
-PRICE_USER_PROMPT_TEMPLATE = """**ATTACHED: Product Image**
+PRICE_USER_PROMPT_TEMPLATE = """**ATTACHED: Product Images**
 
 Follow the step-by-step workflow in the system prompt:
-1. Analyze the image to identify the product
+1. Analyze the images to identify the product
 2. Build Japanese search queries with site:jp.mercari.com
 3. Search and collect Mercari Japan listings
-4. Compare listings to your image
+4. Compare listings to your images
 5. Determine 3 prices for different conditions
 
 Language preference for your reason: {language_label}

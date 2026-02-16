@@ -1910,6 +1910,18 @@
       });
 
       // 批量处理
+      function buildBatchFileObj(files) {
+        const first = files[0];
+        const totalBytes = files.reduce((sum, item) => sum + (item.file?.size || 0), 0);
+        const firstName = first?.file?.name || "image";
+        const name = files.length === 1 ? firstName : `${files.length} images (e.g. ${firstName})`;
+        return {
+          file: { name, size: totalBytes },
+          url: first?.url || "",
+          _files: files
+        };
+      }
+
       async function processFiles() {
         if (selectedFiles.length === 0) {
           alert(t("alertNoFiles"));
@@ -1933,80 +1945,99 @@
         
         let completed = 0;
         const total = selectedFiles.length;
-        
+        progressText.textContent = `${completed} / ${total}`;
+        progressPercent.textContent = "0%";
+        progressFill.style.width = "0%";
+
         for (let i = 0; i < selectedFiles.length; i++) {
-          const fileObj = selectedFiles[i];
           const previewItem = previewGrid.children[i];
-          
-          // 更新状态
+          if (!previewItem) continue;
+          previewItem.classList.remove("success", "error");
           previewItem.classList.add("processing");
+          const existingBadge = previewItem.querySelector(".status-badge");
+          if (existingBadge) existingBadge.remove();
           const statusBadge = document.createElement("div");
           statusBadge.className = "status-badge";
           statusBadge.textContent = t("statusBadgeProcessing");
           previewItem.appendChild(statusBadge);
-          
+        }
+
+        try {
+          const formData = new FormData();
+          selectedFiles.forEach((fileObj) => {
+            formData.append("image_list", fileObj.file);
+          });
+          formData.append("language", languageSelect.value);
+          formData.append("category_count", categoryCountSelect.value || "1");
+          formData.append("price_strategy", priceStrategySelect.value || "vision");
+          if (visionModelInput?.value.trim()) formData.append("vision_model", visionModelInput.value.trim());
+          if (categoryModelInput?.value.trim()) formData.append("category_model", categoryModelInput.value.trim());
+          if (priceModelInput?.value.trim() && priceStrategySelect.value === "dedicated") {
+            formData.append("price_model", priceModelInput.value.trim());
+          }
+
+          const start = performance.now();
+          const resp = await fetch(endpoint, {
+            method: "POST",
+            body: formData,
+          });
+
+          const elapsedMs = performance.now() - start;
+          const text = await resp.text();
+          let payload = {};
+
           try {
-            const formData = new FormData();
-            formData.append("image", fileObj.file);
-            formData.append("language", languageSelect.value);
-            formData.append("category_count", categoryCountSelect.value || "1");
-            formData.append("price_strategy", priceStrategySelect.value || "vision");
-            if (visionModelInput?.value.trim()) formData.append("vision_model", visionModelInput.value.trim());
-            if (categoryModelInput?.value.trim()) formData.append("category_model", categoryModelInput.value.trim());
-            if (priceModelInput?.value.trim() && priceStrategySelect.value === "dedicated") {
-              formData.append("price_model", priceModelInput.value.trim());
-            }
-            
-            const start = performance.now();
-            const resp = await fetch(endpoint, {
-              method: "POST",
-              body: formData,
-            });
-            
-            const elapsedMs = performance.now() - start;
-            const text = await resp.text();
-            let payload = {};
-            
-            try {
-              payload = JSON.parse(text);
-            } catch (err) {
-              payload = { error: t("jsonParseFailed"), raw: text };
-            }
-            
-            // 更新预览状态
+            payload = JSON.parse(text);
+          } catch (err) {
+            payload = { error: t("jsonParseFailed"), raw: text };
+          }
+
+          const batchFileObj = buildBatchFileObj(selectedFiles);
+          for (let i = 0; i < selectedFiles.length; i++) {
+            const previewItem = previewGrid.children[i];
+            if (!previewItem) continue;
+            const statusBadge = previewItem.querySelector(".status-badge");
             previewItem.classList.remove("processing");
             if (resp.ok) {
               previewItem.classList.add("success");
-              statusBadge.textContent = t("badgeSuccess");
-              statusBadge.style.background = "#dcfce7";
-              statusBadge.style.color = "#15803d";
-              
-              // 添加结果卡片
-              addResultCard(fileObj, payload, elapsedMs, true);
+              if (statusBadge) {
+                statusBadge.textContent = t("badgeSuccess");
+                statusBadge.style.background = "#dcfce7";
+                statusBadge.style.color = "#15803d";
+              }
             } else {
               previewItem.classList.add("error");
-              statusBadge.textContent = t("badgeFail");
-              statusBadge.style.background = "#fee2e2";
-              statusBadge.style.color = "#991b1b";
-              
-              addResultCard(fileObj, payload, elapsedMs, false);
+              if (statusBadge) {
+                statusBadge.textContent = t("badgeFail");
+                statusBadge.style.background = "#fee2e2";
+                statusBadge.style.color = "#991b1b";
+              }
             }
-          } catch (err) {
+          }
+
+          addResultCard(batchFileObj, payload, elapsedMs, resp.ok);
+          completed = total;
+        } catch (err) {
+          const batchFileObj = buildBatchFileObj(selectedFiles);
+          for (let i = 0; i < selectedFiles.length; i++) {
+            const previewItem = previewGrid.children[i];
+            if (!previewItem) continue;
+            const statusBadge = previewItem.querySelector(".status-badge");
             previewItem.classList.remove("processing");
             previewItem.classList.add("error");
-            statusBadge.textContent = t("badgeError");
-            statusBadge.style.background = "#fee2e2";
-            statusBadge.style.color = "#991b1b";
-            
-            addResultCard(fileObj, { error: String(err) }, 0, false);
+            if (statusBadge) {
+              statusBadge.textContent = t("badgeError");
+              statusBadge.style.background = "#fee2e2";
+              statusBadge.style.color = "#991b1b";
+            }
           }
-          
-          completed++;
-          progressText.textContent = `${completed} / ${total}`;
-          const percent = (completed / total) * 100;
-          progressPercent.textContent = `${percent.toFixed(0)}%`;
-          progressFill.style.width = `${percent}%`;
+          addResultCard(batchFileObj, { error: String(err) }, 0, false);
+          completed = total;
         }
+
+        progressText.textContent = `${completed} / ${total}`;
+        progressPercent.textContent = "100%";
+        progressFill.style.width = "100%";
         
         processing = false;
         submitBtn.disabled = false;

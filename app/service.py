@@ -334,8 +334,7 @@ class MercariAnalyzer:
 
     def analyze(
         self,
-        image_bytes: bytes,
-        mime_type: str,
+        images: List[Tuple[bytes, str]],
         language: str,
         debug: bool = False,
         category_limit: int = 1,
@@ -346,15 +345,20 @@ class MercariAnalyzer:
     ) -> Dict[str, Any]:
         if language not in SUPPORTED_LANGUAGES:
             raise BadRequestError("Unsupported language.")
+        if not images:
+            raise BadRequestError("Image list is required.")
         category_limit = max(1, min(int(category_limit), 3))
         price_strategy = price_strategy or "vision"
         if price_strategy not in {"vision", "dedicated", "vision_online"}:
             price_strategy = "vision"
 
-        data_url = image_bytes_to_data_url(image_bytes, mime_type)
+        data_urls = [
+            image_bytes_to_data_url(image_bytes, mime_type)
+            for image_bytes, mime_type in images
+        ]
         price_mode = "search" if price_strategy == "vision_online" else ("inline" if price_strategy == "vision" else "none")
         ai_raw, ai_full = self._call_vision_llm(
-            data_url,
+            data_urls,
             language,
             force_online=price_strategy == "vision_online",
             model_override=vision_model_override,
@@ -406,7 +410,7 @@ class MercariAnalyzer:
                     category_candidates=categories,
                     language=language,
                     price_model_override=price_model_override,
-                    image_data_url=data_url,
+                    image_data_urls=data_urls,
                 )
                 if price_citations_model:
                     price_citations = price_citations_model
@@ -529,12 +533,14 @@ class MercariAnalyzer:
 
     def _call_vision_llm(
         self,
-        image_data_url: str,
+        image_data_urls: List[str],
         language: str,
         force_online: bool = False,
         model_override: Optional[str] = None,
         price_mode: str = "none",
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        if not image_data_urls:
+            raise BadRequestError("Image list is empty.")
         price_mode = price_mode or "none"
         if price_mode not in {"none", "inline", "search"}:
             price_mode = "none"
@@ -548,14 +554,14 @@ class MercariAnalyzer:
             user_prompt_template = VISION_USER_PROMPT_TEMPLATE
             system_prompt = VISION_SYSTEM_PROMPT
         user_prompt = user_prompt_template.format(language_label=_language_label(language))
+        image_payloads = [
+            {"type": "image_url", "image_url": {"url": url}} for url in image_data_urls
+        ]
         messages = [
             {"role": "system", "content": system_prompt},
             {
                 "role": "user",
-                "content": [
-                    {"type": "text", "text": user_prompt},
-                    {"type": "image_url", "image_url": {"url": image_data_url}},
-                ],
+                "content": [{"type": "text", "text": user_prompt}] + image_payloads,
             },
         ]
         model = model_override or (
@@ -620,7 +626,7 @@ class MercariAnalyzer:
         category_candidates: List[Dict[str, str]],
         language: str,
         price_model_override: Optional[str],
-        image_data_url: Optional[str] = None,
+        image_data_urls: Optional[List[str]] = None,
     ) -> Tuple[List[int], Optional[Dict[str, Any]], Optional[str], List[Dict[str, str]]]:
         if not self.settings.price_model:
             raise BadRequestError("PRICE_MODEL is not configured.")
@@ -635,11 +641,11 @@ class MercariAnalyzer:
             language_label=_language_label(language),
         )
         user_content: Any
-        if image_data_url:
-            user_content = [
-                {"type": "text", "text": user_prompt},
-                {"type": "image_url", "image_url": {"url": image_data_url}},
+        if image_data_urls:
+            image_payloads = [
+                {"type": "image_url", "image_url": {"url": url}} for url in image_data_urls
             ]
+            user_content = [{"type": "text", "text": user_prompt}] + image_payloads
         else:
             user_content = user_prompt
 
@@ -826,7 +832,7 @@ class MercariAnalyzer:
     ) -> Optional[Dict[str, Any]]:
         data_url = image_bytes_to_data_url(image_bytes, mime_type)
         ai_raw, _ = self._call_vision_llm(
-            data_url,
+            [data_url],
             language,
             model_override=vision_model_override,
             price_mode="none",

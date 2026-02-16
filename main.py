@@ -1,5 +1,5 @@
 import time
-from typing import Optional
+from typing import List, Optional, Tuple
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -104,7 +104,7 @@ async def log_requests(request: Request, call_next):
 
 @app.post("/api/v1/mercari/image/analyze")
 async def analyze_image(
-    image: UploadFile = File(...),
+    image_list: List[UploadFile] = File(...),
     language: str = Form(DEFAULT_LANGUAGE),
     debug: str = Form("false"),
     category_count: int = Form(1),
@@ -113,22 +113,40 @@ async def analyze_image(
     category_model: str = Form(None),
     price_model: str = Form(None),
 ):
-    if not image:
-        raise HTTPException(status_code=400, detail="Image file is required.")
+    if not image_list:
+        raise HTTPException(status_code=400, detail="Image files are required.")
 
-    if image.content_type not in settings.allowed_mime_types:
-        raise HTTPException(status_code=400, detail="Unsupported image type.")
+    image_list = image_list
+    image_payloads: List[Tuple[bytes, str]] = []
+    for index, image in enumerate(image_list, start=1):
+        if not image:
+            raise HTTPException(
+                status_code=400, detail=f"Image file is required (index {index})."
+            )
 
-    try:
-        data = await image.read()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Failed to read uploaded file.")
+        if image.content_type not in settings.allowed_mime_types:
+            raise HTTPException(
+                status_code=400, detail=f"Unsupported image type (index {index})."
+            )
 
-    if not data:
-        raise HTTPException(status_code=400, detail="Uploaded image is empty.")
+        try:
+            data = await image.read()
+        except Exception:
+            raise HTTPException(
+                status_code=400, detail=f"Failed to read uploaded file (index {index})."
+            )
 
-    if len(data) > settings.max_image_bytes:
-        raise HTTPException(status_code=400, detail="Image is too large.")
+        if not data:
+            raise HTTPException(
+                status_code=400, detail=f"Uploaded image is empty (index {index})."
+            )
+
+        if len(data) > settings.max_image_bytes:
+            raise HTTPException(
+                status_code=400, detail=f"Image is too large (index {index})."
+            )
+
+        image_payloads.append((data, image.content_type or "application/octet-stream"))
 
     language = language or DEFAULT_LANGUAGE
     if language not in SUPPORTED_LANGUAGES:
@@ -141,8 +159,7 @@ async def analyze_image(
     try:
         result = await run_in_threadpool(
             analyzer.analyze,
-            image_bytes=data,
-            mime_type=image.content_type or "application/octet-stream",
+            images=image_payloads,
             language=language,
             debug=debug_enabled,
             category_limit=category_count,
