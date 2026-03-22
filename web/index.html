@@ -1048,8 +1048,13 @@
           descDetailCondition: "成色",
           descEmpty: "—",
           fieldCategory: "🏷️ 分类",
+          fieldBestCategory: "🏷️ 最佳分类路径",
           fieldCategoryCandidates: "🏷️ 分类候选",
           unknownCategory: "未知分类",
+          idRakuten: "Rakuten ID",
+          idMercari: "Mercari ID",
+          idRakuma: "Rakuma ID",
+          idZenplus: "ZenPlus ID",
           fieldBrand: "🔖 品牌",
           unknownBrand: "未知品牌",
           fieldPriceSingle: "💰 建议价格",
@@ -1161,8 +1166,13 @@
           descDetailCondition: "程度",
           descEmpty: "—",
           fieldCategory: "🏷️ カテゴリ",
+          fieldBestCategory: "🏷️ 最適カテゴリパス",
           fieldCategoryCandidates: "🏷️ カテゴリ候補",
           unknownCategory: "不明なカテゴリ",
+          idRakuten: "Rakuten ID",
+          idMercari: "Mercari ID",
+          idRakuma: "Rakuma ID",
+          idZenplus: "ZenPlus ID",
           fieldBrand: "🔖 ブランド",
           unknownBrand: "不明ブランド",
           fieldPriceSingle: "💰 推奨価格",
@@ -1544,13 +1554,25 @@
 
         // 分类（单个）
         if (data.category_id || data.category_name) {
+          const categoryMeta = renderCategoryMetaTags(data);
           html += `
             <div class="field-group">
               <div class="field-label">${t("fieldCategory")}</div>
               <div class="tags-container">
                 ${data.category_name ? `<span class="tag primary">${escapeHtml(data.category_name)}</span>` : ''}
-                ${data.category_id ? `<span class="tag">ID: ${escapeHtml(String(data.category_id))}</span>` : ''}
+                ${categoryMeta}
               </div>
+            </div>
+          `;
+        }
+
+        if (data.best_target_path || data.best_category_id || data.meru_id || data.rakuma_id || data.zenplus_id) {
+          const bestMeta = renderCategoryMetaTags(data);
+          html += `
+            <div class="field-group">
+              <div class="field-label">${t("fieldBestCategory")}</div>
+              <div class="field-value">${data.best_target_path ? escapeHtml(String(data.best_target_path)) : t("unknownCategory")}</div>
+              ${bestMeta ? `<div class="tags-container" style="margin-top: 8px;">${bestMeta}</div>` : ""}
             </div>
           `;
         }
@@ -1563,12 +1585,14 @@
               <div class="tags-container">
                 ${data.categories.map((cat, index) => {
                   const name = cat.name || cat.category_name || t("unknownCategory");
-                  const id = cat.id || cat.category_id || '';
                   const confidence = cat.confidence || cat.score;
                   const isPrimary = index === 0 ? 'primary' : '';
+                  const meta = getCategoryMeta(cat)
+                    .map(([label, value]) => `${escapeHtml(label)}: ${escapeHtml(String(value))}`)
+                    .join(" | ");
                   
                   let label = escapeHtml(name);
-                  if (id) label += ` (ID: ${escapeHtml(String(id))})`;
+                  if (meta) label += ` (${meta})`;
                   if (confidence !== undefined) {
                     const confidencePercent = (confidence * 100).toFixed(1);
                     label += ` - ${confidencePercent}%`;
@@ -1746,6 +1770,28 @@
         `;
       }
 
+      function getCategoryMeta(data) {
+        if (!data || typeof data !== "object") return [];
+        const rakutenId = data.best_category_id || data.best_categoryid || data.category_id || data.id || "";
+        const meruId = data.meru_id || "";
+        const rakumaId = data.rakuma_id || "";
+        const zenplusId = data.zenplus_id || "";
+        return [
+          [t("idRakuten"), rakutenId],
+          [t("idMercari"), meruId],
+          [t("idRakuma"), rakumaId],
+          [t("idZenplus"), zenplusId]
+        ].filter(([, value]) => value);
+      }
+
+      function renderCategoryMetaTags(data) {
+        const items = getCategoryMeta(data);
+        if (!items.length) return "";
+        return items
+          .map(([label, value]) => `<span class="tag">${escapeHtml(label)}: ${escapeHtml(String(value))}</span>`)
+          .join("");
+      }
+
       function escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
@@ -1780,15 +1826,14 @@
           return;
         }
         const bestPath = payload.best_target_path || "";
-        const bestId = payload.best_category_id || payload.best_categoryid || "";
+        const bestMeta = renderCategoryMetaTags(payload);
         const alternatives = Array.isArray(payload.alternatives) ? payload.alternatives : [];
         const altHtml = alternatives.length
           ? `<ul style="padding-left: 18px; margin: 6px 0;">${alternatives
               .map((a) => {
                 const path = (a && (a.target_path || a.best_target_path || a.path)) || a || "";
-                const cid = (a && (a.category_id || a.id)) || "";
-                const label = cid ? `${escapeHtml(String(path))} (ID: ${escapeHtml(String(cid))})` : escapeHtml(String(path));
-                return `<li>${label}</li>`;
+                const meta = renderCategoryMetaTags(a);
+                return `<li>${escapeHtml(String(path))}${meta ? `<div class="tags-container" style="margin-top: 6px;">${meta}</div>` : ""}</li>`;
               })
               .join("")}</ul>`
           : `<div class="field-value">${t("titleNoAlternatives")}</div>`;
@@ -1798,8 +1843,8 @@
             <div class="field-label">${t("titleBestPath")}</div>
             <div class="field-value large">
               ${bestPath ? escapeHtml(String(bestPath)) : t("unknownCategory")}
-              ${bestId ? `<div style="font-size:12px;color:${'var(--muted)'};">ID: ${escapeHtml(String(bestId))}</div>` : ""}
             </div>
+            ${bestMeta ? `<div class="tags-container" style="margin-top: 8px;">${bestMeta}</div>` : ""}
           </div>
           <div class="field-group">
             <div class="field-label">${t("titleAlternatives")}</div>

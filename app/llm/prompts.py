@@ -1,10 +1,17 @@
-VISION_SYSTEM_PROMPT = """You are an assistant helping sellers list items on Mercari Japan.
+from ..constants import TOP_LEVEL_CATEGORIES
+
+
+TOP_LEVEL_CATEGORY_OPTIONS = "\n".join(
+    f"    {index}. {name}" for index, name in enumerate(TOP_LEVEL_CATEGORIES, start=1)
+)
+
+VISION_SYSTEM_PROMPT = """You are an assistant helping sellers list items for a Japanese marketplace.
 
 Given one or more images of the same product, your task is:
 
 1. Infer what the product is (type), its condition, important attributes, and any visible details across all images.
    Use front/back photos, labels, tags, packaging, and close-ups to extract precise model numbers, brand, color, size, weight, and condition.
-2. Generate a short, clear, and buyer-friendly title suitable for a Mercari Japan listing.
+2. Generate a short, clear, and buyer-friendly title suitable for a Japanese marketplace listing.
 3. Generate a structured description object in JSON format with ENGLISH field names only. The description must have 4 sections:
    - **product_details**: A JSON object with the required fields below. If a field is unknown, return an empty string value but keep the field.
      - brand
@@ -21,29 +28,8 @@ Given one or more images of the same product, your task is:
 
    Use the requested language for all text content. Include newline characters (\n) inside section strings where appropriate.
 
-4. Choose the single best matching top-level category from the following list (return exactly one of these strings):
-    1. キッチン・日用品・その他
-    2. ゲーム・おもちゃ・グッズ
-    3. スポーツ
-    4. ファッション
-    5. 車・バイク・自転車
-    6. ホビー・楽器・アート
-    7. アウトドア・釣り・旅行用品
-    8. ハンドメイド・手芸
-    9. DIY・工具
-    10. ベビー・キッズ
-    11. 家具・インテリア
-    12. ペット用品
-    13. ダイエット・健康
-    14. コスメ・美容
-    15. スマホ・タブレット・パソコン
-    16. テレビ・オーディオ・カメラ
-    17. フラワー・ガーデニング
-    18. 生活家電・空調
-    19. チケット
-    20. 本・雑誌・漫画
-    21. CD・DVD・ブルーレイ
-    22. 食品・飲料・酒
+4. Choose the single best matching top-level category from the following Rakuten-style taxonomy list (return exactly one of these strings):
+""" + TOP_LEVEL_CATEGORY_OPTIONS + """
 
 5. If you can clearly identify a brand name printed on the item or its packaging,
    return that brand name exactly as printed (for example "Nintendo", "Sony", "UNIQLO").
@@ -84,31 +70,10 @@ The JSON schema is:
 }
 """
 
-PRODUCT_TITLE_CATEGORY_SYSTEM_PROMPT = """You are an assistant helping sellers choose the correct top-level category on Mercari Japan.
+PRODUCT_TITLE_CATEGORY_SYSTEM_PROMPT = """You are an assistant helping sellers choose the correct top-level category in a Japanese e-commerce taxonomy based on Rakuten categories.
 
 Given a product title, choose the single best matching top-level category from the following list (return exactly one of these strings):
-    1. キッチン・日用品・その他
-    2. ゲーム・おもちゃ・グッズ
-    3. スポーツ
-    4. ファッション
-    5. 車・バイク・自転車
-    6. ホビー・楽器・アート
-    7. アウトドア・釣り・旅行用品
-    8. ハンドメイド・手芸
-    9. DIY・工具
-    10. ベビー・キッズ
-    11. 家具・インテリア
-    12. ペット用品
-    13. ダイエット・健康
-    14. コスメ・美容
-    15. スマホ・タブレット・パソコン
-    16. テレビ・オーディオ・カメラ
-    17. フラワー・ガーデニング
-    18. 生活家電・空調
-    19. チケット
-    20. 本・雑誌・漫画
-    21. CD・DVD・ブルーレイ
-    22. 食品・飲料・酒
+""" + TOP_LEVEL_CATEGORY_OPTIONS + """
 
 IMPORTANT:
 - The top_level_category must be exactly one of the provided strings.
@@ -129,13 +94,13 @@ Language of the title: {language_label}
 
 Return JSON with only top_level_category following the required schema."""
 
-VISION_SYSTEM_PROMPT_WITH_PRICE = """You are an assistant helping sellers list items on Mercari Japan.
+VISION_SYSTEM_PROMPT_WITH_PRICE = """You are an assistant helping sellers list items for a Japanese marketplace.
 
 Given one or more images of the same product, your task is:
 
 1. Infer what the product is (type), its condition, important attributes, and any visible details across all images.
    Use front/back photos, labels, tags, packaging, and close-ups to extract precise model numbers, brand, color, size, weight, and condition.
-2. Generate a short, clear, and buyer-friendly title suitable for a Mercari Japan listing.
+2. Generate a short, clear, and buyer-friendly title suitable for a Japanese marketplace listing.
 3. Generate a structured description object in JSON format with ENGLISH field names only. The description must have 4 sections:
    - **product_details**: A JSON object with the required fields below. If a field is unknown, return an empty string value but keep the field.
      - brand
@@ -157,29 +122,8 @@ Given one or more images of the same product, your task is:
    - prices[1]: Average condition - typical used condition
    - prices[2]: Good condition - well-maintained, minimal wear or near-new
    Prices must be in ascending order. Use your understanding of the product type, brand, and visible condition cues to anchor the prices to typical second-hand markets in Japan. Do NOT use web search or browsing tools.
-5. Choose the single best matching top-level category from the following list (return exactly one of these strings):
-    1. キッチン・日用品・その他
-    2. ゲーム・おもちゃ・グッズ
-    3. スポーツ
-    4. ファッション
-    5. 車・バイク・自転車
-    6. ホビー・楽器・アート
-    7. アウトドア・釣り・旅行用品
-    8. ハンドメイド・手芸
-    9. DIY・工具
-    10. ベビー・キッズ
-    11. 家具・インテリア
-    12. ペット用品
-    13. ダイエット・健康
-    14. コスメ・美容
-    15. スマホ・タブレット・パソコン
-    16. テレビ・オーディオ・カメラ
-    17. フラワー・ガーデニング
-    18. 生活家電・空調
-    19. チケット
-    20. 本・雑誌・漫画
-    21. CD・DVD・ブルーレイ
-    22. 食品・飲料・酒
+5. Choose the single best matching top-level category from the following Rakuten-style taxonomy list (return exactly one of these strings):
+""" + TOP_LEVEL_CATEGORY_OPTIONS + """
 
 6. If you can clearly identify a brand name printed on the item or its packaging,
    return that brand name exactly as printed (for example "Nintendo", "Sony", "UNIQLO").
@@ -222,7 +166,7 @@ The JSON schema is:
 }
 """
 
-VISION_SYSTEM_PROMPT_WITH_SEARCH = """You are an assistant helping sellers list items on Mercari Japan.
+VISION_SYSTEM_PROMPT_WITH_SEARCH = """You are an assistant helping sellers list items for a Japanese marketplace.
 
 Given one or more images of the same product, your task is:
 
@@ -231,7 +175,7 @@ Given one or more images of the same product, your task is:
    First attempt a reverse/visual image search with the most informative image (front view, label, or packaging) using `site:jp.mercari.com` to surface identical or near-identical Mercari listings.
    If image search is unavailable, extract visible brand/model numbers or text from the images and craft Japanese keyword queries starting with `site:jp.mercari.com` to keep results on the Mercari Japan domain.
    Prioritize `jp.mercari.com/item/` or `jp.mercari.com/sold/` pages and ignore non-Mercari sites unless no relevant Mercari results exist after multiple tries.
-2. Generate a short, clear, and buyer-friendly title suitable for a Mercari Japan listing.
+2. Generate a short, clear, and buyer-friendly title suitable for a Japanese marketplace listing.
 3. Generate a structured description object in JSON format with ENGLISH field names only. The description must have 4 sections:
    - **product_details**: A JSON object with the required fields below. If a field is unknown, return an empty string value but keep the field.
      - brand
@@ -253,29 +197,8 @@ Given one or more images of the same product, your task is:
    - prices[1]: Average condition - typical used condition
    - prices[2]: Good condition - well-maintained, minimal wear
    Prices must be in ascending order and reflect realistic market differences between conditions.
-5. Choose the single best matching top-level category from the following list (return exactly one of these strings):
-   1. キッチン・日用品・その他
-   2. ゲーム・おもちゃ・グッズ
-   3. スポーツ
-   4. ファッション
-   5. 車・バイク・自転車
-   6. ホビー・楽器・アート
-   7. アウトドア・釣り・旅行用品
-   8. ハンドメイド・手芸
-   9. DIY・工具
-   10. ベビー・キッズ
-   11. 家具・インテリア
-   12. ペット用品
-   13. ダイエット・健康
-   14. コスメ・美容
-   15. スマホ・タブレット・パソコン
-   16. テレビ・オーディオ・カメラ
-   17. フラワー・ガーデニング
-   18. 生活家電・空調
-   19. チケット
-   20. 本・雑誌・漫画
-   21. CD・DVD・ブルーレイ
-   22. 食品・飲料・酒
+5. Choose the single best matching top-level category from the following Rakuten-style taxonomy list (return exactly one of these strings):
+""" + TOP_LEVEL_CATEGORY_OPTIONS + """
 
 6. If you can clearly identify a brand name printed on the item or its packaging,
    return that brand name exactly as printed (for example "Nintendo", "Sony", "UNIQLO").
@@ -436,11 +359,11 @@ Return JSON with:
 - prices[2]: Good condition price from Mercari comps
 - reason: Your analysis process with Mercari links"""
 
-CATEGORY_SYSTEM_PROMPT = """You are an e-commerce taxonomy specialist for the Japanese marketplace Mercari.
+CATEGORY_SYSTEM_PROMPT = """You are an e-commerce taxonomy specialist working with a Japanese marketplace taxonomy based on Rakuten categories.
 
 Task:
 - You are given information about ONE product (title, description, brand, and its top-level category).
-- You are also given a list of candidate Mercari category paths under that top-level category.
+- You are also given a list of candidate category paths under that top-level category.
 - Your job is to choose the single best target category path, and up to 2 alternative paths (top 3 in total, if available).
 
 Instructions:

@@ -13,7 +13,7 @@ class CategoryStore:
         self._load()
 
     def _load(self) -> None:
-        with open(self.path, newline="", encoding="utf-8") as f:
+        with open(self.path, newline="", encoding="utf-8-sig") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 category_id = compress_whitespace(row.get("category_id", ""))
@@ -22,7 +22,14 @@ class CategoryStore:
                 group = compress_whitespace(row.get("group_name", ""))
                 if not category_id or not name or not group:
                     continue
-                entry = {"id": category_id, "name": name, "group_name": group}
+                entry = {
+                    "id": category_id,
+                    "name": name,
+                    "group_name": group,
+                    "meru_id": compress_whitespace(row.get("meru_id", "")),
+                    "rakuma_id": compress_whitespace(row.get("rakuma_id", "")),
+                    "zenplus_id": compress_whitespace(row.get("zenplus_id", "")),
+                }
                 self.by_group[group].append(entry)
                 key = (normalize_category_label(group), normalize_category_label(name))
                 self._lookup[key] = entry

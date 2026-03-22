@@ -98,6 +98,9 @@ def run_case(
 
     if best_id:
         result["best_category_id"] = best_id
+    for key in ("meru_id", "rakuma_id", "zenplus_id"):
+        if data.get(key):
+            result[key] = data.get(key)
 
     # Attach alternatives summary (if any)
     alts: Iterable[Any] = data.get("alternatives") or []
@@ -109,6 +112,9 @@ def run_case(
                     {
                         "target_path": alt.get("target_path"),
                         "category_id": alt.get("category_id"),
+                        "meru_id": alt.get("meru_id"),
+                        "rakuma_id": alt.get("rakuma_id"),
+                        "zenplus_id": alt.get("zenplus_id"),
                     }
                 )
             else:

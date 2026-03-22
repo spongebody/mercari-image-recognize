@@ -106,7 +106,13 @@ files.forEach((file) => {
   },
   "prices": [1000, 2000, 3000],
   "categories": [
-    {"id": "123", "name": "カテゴリ/パス"}
+    {
+      "id": "123",
+      "name": "カテゴリ/パス",
+      "meru_id": "...",
+      "rakuma_id": "...",
+      "zenplus_id": "..."
+    }
   ],
   "brand_name": "...",
   "brand_id": "...",
@@ -115,8 +121,17 @@ files.forEach((file) => {
   ],
   "best_target_path": "...",
   "best_category_id": "...",
+  "meru_id": "...",
+  "rakuma_id": "...",
+  "zenplus_id": "...",
   "alternatives": [
-    {"target_path": "...", "category_id": "..."}
+    {
+      "target_path": "...",
+      "category_id": "...",
+      "meru_id": "...",
+      "rakuma_id": "...",
+      "zenplus_id": "..."
+    }
   ],
   "_debug": {
     "ai_raw": {"...": "..."},
@@ -165,8 +180,17 @@ files.forEach((file) => {
 {
   "best_target_path": "...",
   "best_category_id": "...",
+  "meru_id": "...",
+  "rakuma_id": "...",
+  "zenplus_id": "...",
   "alternatives": [
-    {"target_path": "...", "category_id": "..."}
+    {
+      "target_path": "...",
+      "category_id": "...",
+      "meru_id": "...",
+      "rakuma_id": "...",
+      "zenplus_id": "..."
+    }
   ]
 }
 ```

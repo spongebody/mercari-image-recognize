@@ -266,23 +266,37 @@ def _paths_from_categories(
 ) -> Optional[Dict[str, Any]]:
     if not categories:
         return None
-    ordered_paths: List[Tuple[str, str]] = []
+    ordered_paths: List[Tuple[str, str, str, str, str]] = []
     for category in categories:
         path = category.get("name") or ""
         cat_id = category.get("id") or ""
+        meru_id = category.get("meru_id") or ""
+        rakuma_id = category.get("rakuma_id") or ""
+        zenplus_id = category.get("zenplus_id") or ""
         path = compress_whitespace(path)
-        if path and (path, cat_id) not in ordered_paths:
-            ordered_paths.append((path, cat_id))
+        item = (path, cat_id, meru_id, rakuma_id, zenplus_id)
+        if path and item not in ordered_paths:
+            ordered_paths.append(item)
     if not ordered_paths:
         return None
-    best_path, best_id = ordered_paths[0]
+    best_path, best_id, best_meru_id, best_rakuma_id, best_zenplus_id = ordered_paths[0]
     payload: Dict[str, Any] = {
         "best_target_path": best_path,
         "best_category_id": best_id,
+        "meru_id": best_meru_id,
+        "rakuma_id": best_rakuma_id,
+        "zenplus_id": best_zenplus_id,
     }
     if include_alternatives:
         payload["alternatives"] = [
-            {"target_path": path, "category_id": cat_id} for path, cat_id in ordered_paths[1:]
+            {
+                "target_path": path,
+                "category_id": cat_id,
+                "meru_id": meru_id,
+                "rakuma_id": rakuma_id,
+                "zenplus_id": zenplus_id,
+            }
+            for path, cat_id, meru_id, rakuma_id, zenplus_id in ordered_paths[1:]
         ]
     return payload
 
@@ -815,7 +829,15 @@ class MercariAnalyzer:
             seen.add(key)
             match = self.category_store.find_category(group_name, path_clean)
             if match:
-                results.append({"id": match["id"], "name": match["name"]})
+                results.append(
+                    {
+                        "id": match["id"],
+                        "name": match["name"],
+                        "meru_id": match.get("meru_id", ""),
+                        "rakuma_id": match.get("rakuma_id", ""),
+                        "zenplus_id": match.get("zenplus_id", ""),
+                    }
+                )
             if len(results) >= category_limit:
                 break
 

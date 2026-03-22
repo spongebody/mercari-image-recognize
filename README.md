@@ -61,7 +61,7 @@ Booleans accept `1`, `true`, `yes`, or `on`.
 - `PRICE_MODEL` (default: `openai/gpt-4.1:online`): model for price estimation.
 - `CATEGORY_MODEL` (default: empty): model for category selection.
 - `BRAND_CSV_PATH` (default: `data/brand.csv`): brand data CSV path.
-- `CATEGORY_CSV_PATH` (default: `data/category.csv`): category data CSV path.
+- `CATEGORY_CSV_PATH` (default: `data/category_rakuten.csv`): category data CSV path.
 - `OPENROUTER_BASE_URL` (default: `https://openrouter.ai/api/v1/chat/completions`): API base URL.
 - `OPENROUTER_REFERER` (default: empty): optional referer header.
 - `OPENROUTER_APP_NAME` (default: `mercari-image-backend`): app name header.
