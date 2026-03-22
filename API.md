@@ -52,7 +52,7 @@
 
 #### 请求（multipart/form-data）
 字段：
-- `image_list`（文件，必填）：商品图片列表（支持多张，如正面/背面/包装/标签；JPG/PNG/GIF 等）。
+- `image_list`（文件，必填，可多次上传）：商品图片列表（支持多张，如正面/背面/包装/标签；JPG/PNG/GIF 等）。
 - `language`（字符串，可选）：`ja` / `en` / `zh`，默认 `ja`。
 - `debug`（字符串，可选）：`true` / `1` / `yes` 等，默认 `false`。
 - `category_count`（整数，可选）：返回类别数量（1-3），默认 `1`。
@@ -62,8 +62,9 @@
 - `price_model`（字符串，可选）：价格模型覆盖。
 
 说明：
+- `image_list` 是**文件列表字段**
+- 传值方式：`multipart/form-data` 中**同名字段重复出现**，每个字段为一个文件。
 - 支持多张图片同时分析，优先从正反面、标签、包装细节中提取型号、品牌、颜色、尺寸、重量、成色等信息。
-- 字段名为 `image_list`（按此拼写）。
 
 示例：
 
@@ -73,6 +74,14 @@ curl -X POST "http://localhost:8000/api/v1/mercari/image/analyze" \
   -F "image_list=@/path/to/item_back.jpg" \
   -F "language=ja" \
   -F "price_strategy=vision"
+```
+
+前端（FormData）示例：
+```js
+const formData = new FormData();
+files.forEach((file) => {
+  formData.append("image_list", file);
+});
 ```
 
 #### 响应（200）
