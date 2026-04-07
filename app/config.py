@@ -37,7 +37,7 @@ class Settings:
     vision_model_online: str = os.getenv("VISION_MODEL_ONLINE", "")
     price_model: str = os.getenv("PRICE_MODEL", "openai/gpt-4.1:online")
     category_model: str = os.getenv("CATEGORY_MODEL", "")
-    brand_csv_path: str = os.getenv("BRAND_CSV_PATH", "data/brand.csv")
+    brand_csv_path: str = os.getenv("BRAND_CSV_PATH", "data/rdx_brand.csv")
     category_csv_path: str = os.getenv("CATEGORY_CSV_PATH", "data/category_rakuten.csv")
     openrouter_base_url: str = os.getenv(
         "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1/chat/completions"

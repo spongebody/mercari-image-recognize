@@ -115,7 +115,16 @@ files.forEach((file) => {
     }
   ],
   "brand_name": "...",
-  "brand_id": "...",
+  "brand_id_obj": {
+    "rakuten_brand_id": "...",
+    "yshop_brand_id": "...",
+    "yauc_brand_id": "...",
+    "meru_brand_id": "...",
+    "ebay_brand_id": "...",
+    "rakuma_brand_id": "...",
+    "amazon_brand_id": "...",
+    "qoo10_brand_id": "..."
+  },
   "price_citations": [
     {"url": "...", "title": "...", "content": "..."}
   ],

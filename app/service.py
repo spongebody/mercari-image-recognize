@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .config import Settings
 from .constants import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, TOP_LEVEL_CATEGORIES
-from .data.brands import BrandStore
+from .data.brands import BrandStore, empty_brand_id_obj
 from .data.categories import CategoryStore
 from .errors import BadRequestError, LLMRequestError
 from .llm.client import OpenRouterClient
@@ -387,8 +387,8 @@ class MercariAnalyzer:
         brand_raw = _clean_string(ai_raw.get("brand_name", ""))
 
         brand_match = self.brand_store.match(brand_raw)
-        brand_name = brand_match["name"] if brand_match else ""
-        brand_id = brand_match["id"] if brand_match else ""
+        brand_name = brand_match["brand_name"] if brand_match else ""
+        brand_id_obj = dict(brand_match["brand_id_obj"]) if brand_match else empty_brand_id_obj()
 
         group_name = _map_top_level_category(top_level_category)
 
@@ -446,7 +446,7 @@ class MercariAnalyzer:
             "prices": prices,
             "categories": categories,
             "brand_name": brand_name,
-            "brand_id": brand_id,
+            "brand_id_obj": brand_id_obj,
             "price_citations": price_citations,
         }
         path_info = _paths_from_categories(categories, include_alternatives=False)

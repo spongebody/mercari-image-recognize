@@ -60,7 +60,7 @@ Booleans accept `1`, `true`, `yes`, or `on`.
 - `VISION_MODEL_ONLINE` (default: empty): optional override for online mode; auto derived if empty.
 - `PRICE_MODEL` (default: `openai/gpt-4.1:online`): model for price estimation.
 - `CATEGORY_MODEL` (default: empty): model for category selection.
-- `BRAND_CSV_PATH` (default: `data/brand.csv`): brand data CSV path.
+- `BRAND_CSV_PATH` (default: `data/rdx_brand.csv`): brand data CSV path.
 - `CATEGORY_CSV_PATH` (default: `data/category_rakuten.csv`): category data CSV path.
 - `OPENROUTER_BASE_URL` (default: `https://openrouter.ai/api/v1/chat/completions`): API base URL.
 - `OPENROUTER_REFERER` (default: empty): optional referer header.

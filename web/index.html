@@ -1606,15 +1606,19 @@
         }
 
         // 品牌
-        if (data.brand_id || data.brand_name) {
+        const brandIdObj = data.brand_id_obj && typeof data.brand_id_obj === "object" ? data.brand_id_obj : {};
+        const brandIdEntries = Object.entries(brandIdObj).filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "");
+        if (data.brand_name || brandIdEntries.length) {
           const brandName = data.brand_name ? escapeHtml(data.brand_name) : t("unknownBrand");
-          const brandId = data.brand_id ? escapeHtml(String(data.brand_id)) : "";
-          const brandLabel = brandId ? `${brandName} (ID: ${brandId})` : brandName;
+          const brandTags = [
+            `<span class="tag primary">${brandName}</span>`,
+            ...brandIdEntries.map(([key, value]) => `<span class="tag">${escapeHtml(key)}: ${escapeHtml(String(value))}</span>`)
+          ].join("");
           html += `
             <div class="field-group">
               <div class="field-label">${t("fieldBrand")}</div>
               <div class="tags-container">
-                <span class="tag primary">${brandLabel}</span>
+                ${brandTags}
               </div>
             </div>
           `;
