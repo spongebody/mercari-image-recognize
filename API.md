@@ -4,7 +4,7 @@
 
 ## 基本信息
 
-- 默认基础地址：`http://localhost:8000`
+- 服务地址：`http://43.133.171.134:39008`
 - 所有响应均为 JSON。
 
 ## 认证
@@ -108,6 +108,7 @@ files.forEach((file) => {
   "categories": [
     {
       "id": "123",
+      "rakuten_id": "123",
       "name": "カテゴリ/パス",
       "meru_id": "...",
       "rakuma_id": "...",
@@ -130,6 +131,7 @@ files.forEach((file) => {
   ],
   "best_target_path": "...",
   "best_category_id": "...",
+  "rakuten_id": "...",
   "meru_id": "...",
   "rakuma_id": "...",
   "zenplus_id": "...",
@@ -137,6 +139,7 @@ files.forEach((file) => {
     {
       "target_path": "...",
       "category_id": "...",
+      "rakuten_id": "...",
       "meru_id": "...",
       "rakuma_id": "...",
       "zenplus_id": "..."
@@ -189,6 +192,7 @@ files.forEach((file) => {
 {
   "best_target_path": "...",
   "best_category_id": "...",
+  "rakuten_id": "...",
   "meru_id": "...",
   "rakuma_id": "...",
   "zenplus_id": "...",
@@ -196,6 +200,7 @@ files.forEach((file) => {
     {
       "target_path": "...",
       "category_id": "...",
+      "rakuten_id": "...",
       "meru_id": "...",
       "rakuma_id": "...",
       "zenplus_id": "..."

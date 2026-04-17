@@ -283,6 +283,7 @@ def _paths_from_categories(
     payload: Dict[str, Any] = {
         "best_target_path": best_path,
         "best_category_id": best_id,
+        "rakuten_id": best_id,
         "meru_id": best_meru_id,
         "rakuma_id": best_rakuma_id,
         "zenplus_id": best_zenplus_id,
@@ -292,6 +293,7 @@ def _paths_from_categories(
             {
                 "target_path": path,
                 "category_id": cat_id,
+                "rakuten_id": cat_id,
                 "meru_id": meru_id,
                 "rakuma_id": rakuma_id,
                 "zenplus_id": zenplus_id,
@@ -832,6 +834,7 @@ class MercariAnalyzer:
                 results.append(
                     {
                         "id": match["id"],
+                        "rakuten_id": match["id"],
                         "name": match["name"],
                         "meru_id": match.get("meru_id", ""),
                         "rakuma_id": match.get("rakuma_id", ""),
