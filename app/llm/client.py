@@ -1,5 +1,5 @@
 import json
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
@@ -14,12 +14,14 @@ class OpenRouterClient:
         timeout: int,
         referer: str = "",
         app_name: str = "",
+        reasoning: Optional[Dict[str, Any]] = None,
     ):
         self.api_key = api_key
         self.base_url = base_url
         self.timeout = timeout
         self.referer = referer
         self.app_name = app_name
+        self.reasoning = dict(reasoning) if reasoning else None
         self.session = requests.Session()
 
     def chat(
@@ -49,6 +51,8 @@ class OpenRouterClient:
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
+        if self.reasoning is not None:
+            payload["reasoning"] = dict(self.reasoning)
 
         try:
             response = self.session.post(

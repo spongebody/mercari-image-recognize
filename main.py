@@ -26,6 +26,7 @@ vision_client = OpenRouterClient(
     timeout=settings.request_timeout,
     referer=settings.openrouter_referer,
     app_name=settings.openrouter_app_name,
+    reasoning=settings.reasoning,
 )
 category_client = OpenRouterClient(
     api_key=settings.openrouter_api_key,
@@ -33,6 +34,7 @@ category_client = OpenRouterClient(
     timeout=settings.request_timeout,
     referer=settings.openrouter_referer,
     app_name=settings.openrouter_app_name,
+    reasoning=settings.reasoning,
 )
 price_client = OpenRouterClient(
     api_key=settings.openrouter_api_key,
@@ -40,6 +42,7 @@ price_client = OpenRouterClient(
     timeout=settings.request_timeout,
     referer=settings.openrouter_referer,
     app_name=settings.openrouter_app_name,
+    reasoning=settings.reasoning,
 )
 
 analyzer = MercariAnalyzer(

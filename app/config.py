@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Set
+from typing import Any, Dict, Optional, Set
 
 from dotenv import load_dotenv
 
@@ -30,6 +30,43 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _env_optional_bool(name: str) -> Optional[bool]:
+    raw = os.getenv(name)
+    if raw is None:
+        return None
+    cleaned = raw.strip().lower()
+    if not cleaned:
+        return None
+    if cleaned in {"1", "true", "yes", "on"}:
+        return True
+    if cleaned in {"0", "false", "no", "off"}:
+        return False
+    return None
+
+
+def _env_optional_int(name: str) -> Optional[int]:
+    raw = os.getenv(name)
+    if raw is None:
+        return None
+    cleaned = raw.strip()
+    if not cleaned:
+        return None
+    try:
+        return int(cleaned)
+    except ValueError:
+        return None
+
+
+def _env_optional_enum(name: str, allowed: Set[str]) -> Optional[str]:
+    raw = os.getenv(name)
+    if raw is None:
+        return None
+    cleaned = raw.strip().lower()
+    if not cleaned:
+        return None
+    return cleaned if cleaned in allowed else None
+
+
 @dataclass
 class Settings:
     openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "")
@@ -37,7 +74,7 @@ class Settings:
     vision_model_online: str = os.getenv("VISION_MODEL_ONLINE", "")
     price_model: str = os.getenv("PRICE_MODEL", "openai/gpt-4.1:online")
     category_model: str = os.getenv("CATEGORY_MODEL", "")
-    brand_csv_path: str = os.getenv("BRAND_CSV_PATH", "data/rdx_brand.csv")
+    brand_csv_path: str = os.getenv("BRAND_CSV_PATH", "data/mercari_brand.csv")
     category_csv_path: str = os.getenv("CATEGORY_CSV_PATH", "data/category_rakuten.csv")
     openrouter_base_url: str = os.getenv(
         "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1/chat/completions"
@@ -54,6 +91,22 @@ class Settings:
     log_requests_max_files: int = _env_int("LOG_REQUESTS_MAX_FILES", 1000)
     category_llm_retry_enabled: bool = _env_bool("CATEGORY_LLM_RETRY_ENABLED", False)
     category_llm_max_retries: int = _env_int("CATEGORY_LLM_MAX_RETRIES", 1)
+    reasoning_enabled: Optional[bool] = field(default_factory=lambda: _env_optional_bool("REASONING_ENABLED"))
+    reasoning_effort: Optional[str] = field(
+        default_factory=lambda: _env_optional_enum(
+            "REASONING_EFFORT",
+            {"minimal", "low", "medium", "high", "xhigh", "none"},
+        )
+    )
+    reasoning_max_tokens: Optional[int] = field(
+        default_factory=lambda: _env_optional_int("REASONING_MAX_TOKENS")
+    )
+    reasoning_summary: Optional[str] = field(
+        default_factory=lambda: _env_optional_enum(
+            "REASONING_SUMMARY",
+            {"auto", "concise", "detailed"},
+        )
+    )
 
     def __post_init__(self) -> None:
         if not self.vision_model_online and self.vision_model:
@@ -62,6 +115,19 @@ class Settings:
                 self.vision_model_online = self.vision_model
             else:
                 self.vision_model_online = f"{self.vision_model}{suffix}"
+
+    @property
+    def reasoning(self) -> Optional[Dict[str, Any]]:
+        reasoning: Dict[str, Any] = {}
+        if self.reasoning_enabled is not None:
+            reasoning["enabled"] = self.reasoning_enabled
+        if self.reasoning_effort is not None:
+            reasoning["effort"] = self.reasoning_effort
+        if self.reasoning_max_tokens is not None:
+            reasoning["max_tokens"] = self.reasoning_max_tokens
+        if self.reasoning_summary is not None:
+            reasoning["summary"] = self.reasoning_summary
+        return reasoning or None
 
 
 def load_settings() -> Settings:

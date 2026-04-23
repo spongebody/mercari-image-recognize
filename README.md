@@ -60,7 +60,7 @@ Booleans accept `1`, `true`, `yes`, or `on`.
 - `VISION_MODEL_ONLINE` (default: empty): optional override for online mode; auto derived if empty.
 - `PRICE_MODEL` (default: `openai/gpt-4.1:online`): model for price estimation.
 - `CATEGORY_MODEL` (default: empty): model for category selection.
-- `BRAND_CSV_PATH` (default: `data/rdx_brand.csv`): brand data CSV path.
+- `BRAND_CSV_PATH` (default: `data/mercari_brand.csv`): brand data CSV path.
 - `CATEGORY_CSV_PATH` (default: `data/category_rakuten.csv`): category data CSV path.
 - `OPENROUTER_BASE_URL` (default: `https://openrouter.ai/api/v1/chat/completions`): API base URL.
 - `OPENROUTER_REFERER` (default: empty): optional referer header.
@@ -74,5 +74,9 @@ Booleans accept `1`, `true`, `yes`, or `on`.
 - `LOG_REQUESTS_MAX_FILES` (default: `1000`): cap on request log files.
 - `CATEGORY_LLM_RETRY_ENABLED` (default: `0`): enable retries for category selection calls.
 - `CATEGORY_LLM_MAX_RETRIES` (default: `1`): number of additional attempts when retries are enabled.
+- `REASONING_ENABLED` (optional): enable or disable reasoning globally for all OpenRouter requests.
+- `REASONING_EFFORT` (optional): reasoning effort level, one of `minimal`, `low`, `medium`, `high`, `xhigh`, `none`.
+- `REASONING_MAX_TOKENS` (optional): reasoning token budget hint sent globally to OpenRouter.
+- `REASONING_SUMMARY` (optional): reasoning summary level, one of `auto`, `concise`, `detailed`.
 
 Category retries apply only to the category selection step and cover OpenRouter request errors and JSON parsing failures, using exponential backoff (0.2s, 0.4s, 0.8s, capped).
