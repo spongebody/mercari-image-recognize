@@ -827,6 +827,14 @@
             </div>
 
             <div class="models-row">
+              <div>
+                <label for="vision-model" id="vision-model-label">视觉模型</label>
+                <input type="text" id="vision-model" value="" placeholder="留空使用默认视觉模型" />
+              </div>
+              <div>
+                <label for="category-model" id="category-model-label">分类模型</label>
+                <input type="text" id="category-model" value="" placeholder="留空使用默认分类模型" />
+              </div>
               <!-- <div>
                 <label for="vision-model" id="vision-model-label">视觉模型</label>
                 <input type="text" id="vision-model" value="" placeholder="留空使用默认视觉模型" />
@@ -1273,8 +1281,8 @@
       const priceStrategyDefault = document.getElementById("price-strategy-default");
       const priceStrategyOnline = document.getElementById("price-strategy-online");
       const priceStrategyDedicated = document.getElementById("price-strategy-dedicated");
-      // const visionModelLabel = document.getElementById("vision-model-label");
-      // const categoryModelLabel = document.getElementById("category-model-label");
+      const visionModelLabel = document.getElementById("vision-model-label");
+      const categoryModelLabel = document.getElementById("category-model-label");
       // const priceModelLabel = document.getElementById("price-model-label");
       const visionModelInput = document.getElementById("vision-model");
       const categoryModelInput = document.getElementById("category-model");
