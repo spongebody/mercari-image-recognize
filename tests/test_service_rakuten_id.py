@@ -132,6 +132,54 @@ class RakutenIdResponseTest(unittest.TestCase):
         self.assertEqual(result["prices"], [1000, 1500, 2000])
         self.assertEqual(len(vision_client.calls), 1)
 
+    def test_analyze_labels_each_uploaded_image_in_vision_prompt(self):
+        settings = SimpleNamespace(
+            vision_model="vision-test",
+            category_model="category-test",
+            log_llm_raw=False,
+            category_llm_retry_enabled=False,
+            category_llm_max_retries=0,
+        )
+        vision_client = RecordingChatClient(
+            {
+                "title": "カーディガン",
+                "description": "値札付きカーディガン",
+                "tax_excluded": "980",
+                "prices": [],
+                "top_level_category": "メンズファッション",
+                "brand_name": "",
+            }
+        )
+        analyzer = MercariAnalyzer(
+            settings=settings,
+            brand_store=FakeBrandStore(),
+            category_store=FakeCategoryStore(),
+            vision_client=vision_client,
+            category_client=FakeChatClient(
+                {"best_target_path": "メンズファッション/トップス"}
+            ),
+        )
+
+        analyzer.analyze(
+            images=[
+                (b"price-tag-image", "image/png"),
+                (b"clothing-image", "image/png"),
+            ],
+            language="ja",
+            category_limit=1,
+        )
+
+        content = vision_client.calls[0]["messages"][1]["content"]
+        text_parts = [part["text"] for part in content if part["type"] == "text"]
+        image_parts = [part for part in content if part["type"] == "image_url"]
+
+        self.assertEqual(len(image_parts), 2)
+        self.assertGreaterEqual(len(text_parts), 3)
+        self.assertIn("Image 1 of 2", text_parts[1])
+        self.assertIn("Image 2 of 2", text_parts[2])
+        self.assertLess(content.index({"type": "text", "text": text_parts[1]}), content.index(image_parts[0]))
+        self.assertLess(content.index({"type": "text", "text": text_parts[2]}), content.index(image_parts[1]))
+
     def test_analyze_includes_phase_timings(self):
         settings = SimpleNamespace(
             vision_model="vision-test",

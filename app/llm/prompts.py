@@ -33,10 +33,13 @@ VISION_SYSTEM_PROMPT_WITH_PRICE = """You are an assistant helping sellers list i
 
 Given one or more images of the same product, your task is:
 
-1. Infer what the product is (type), its condition, important attributes, and any visible details across all images.
+1. Inspect EVERY image independently, then merge the evidence into one product analysis.
+   Treat the first two images as equally important. Do not ignore later images because the first image looks sufficient.
+   If one image shows a price tag and another image shows the product, combine both: use the tag for price and the product image for item details.
+2. Infer what the product is (type), its condition, important attributes, and any visible details across all images.
    Use front/back photos, labels, tags, packaging, and close-ups to extract precise model numbers, brand, color, size, weight, and condition.
-2. Generate a short, clear, and buyer-friendly title suitable for a Japanese marketplace listing.
-3. Generate a structured description object in JSON format with ENGLISH field names only. The description must have 4 sections:
+3. Generate a short, clear, and buyer-friendly title suitable for a Japanese marketplace listing.
+4. Generate a structured description object in JSON format with ENGLISH field names only. The description must have 4 sections:
    - **product_details**: A JSON object with the required fields below. If a field is unknown, return an empty string value but keep the field.
      - brand
      - product_name
@@ -52,23 +55,25 @@ Given one or more images of the same product, your task is:
 
    Use the requested language for all text content. Include newline characters (\n) inside section strings where appropriate.
 
-4. Extract visible price information first, before estimating:
-   - If the images clearly show an actual product price on a tag, label, sticker, receipt, or packaging, return it as tax_excluded (integer JPY).
-   - If the images clearly show a tax-included price, return it as tax_included (integer JPY).
+5. Extract visible price information from ANY image first, before estimating:
+   - Check every uploaded image for an actual product price on a tag, label, sticker, receipt, or packaging.
+   - If any image clearly shows an actual product price, return it as tax_excluded (integer JPY), even if a different image is better for identifying the product.
+   - If any image clearly shows a tax-included price, return it as tax_included (integer JPY).
    - If a direct actual product price is visible, set prices to [] and do NOT infer condition-based prices.
    - If no direct actual product price is clearly visible, set tax_excluded and tax_included to null, then propose 3 realistic reference prices in Japanese Yen (integers) for three condition levels:
      - prices[0]: Poor condition - visible wear, defects, or cosmetic issues
      - prices[1]: Average condition - typical used condition
      - prices[2]: Good condition - well-maintained, minimal wear or near-new
      Prices must be in ascending order. Use your understanding of the product type, brand, and visible condition cues to anchor the prices to typical second-hand markets in Japan. Do NOT use web search or browsing tools.
-5. Choose the single best matching top-level category from the following Rakuten-style taxonomy list (return exactly one of these strings):
+6. Choose the single best matching top-level category from the following Rakuten-style taxonomy list (return exactly one of these strings):
 """ + TOP_LEVEL_CATEGORY_OPTIONS + """
 
-6. If you can clearly identify a brand name printed on the item or its packaging,
+7. If you can clearly identify a brand name printed on the item or its packaging,
    return that brand name exactly as printed (for example "Nintendo", "Sony", "UNIQLO").
    If you are not sure or no brand is visible, return an empty string "".
 
 IMPORTANT:
+- Before producing the final JSON, mentally verify that you used information from all images, especially the first two images.
 - The title and description must use the language requested by the user (default Japanese).
 - The total description text (all sections combined) should be 800-1000 characters for Japanese, or 500-1000 words for other languages.
 - Make the description persuasive and detailed, helping buyers visualize owning and using the item.
@@ -113,6 +118,11 @@ VISION_USER_PROMPT_WITH_PRICE = """Look at these product images and fill in all 
 
 Language for title and description: {language_label}.
 
+Multi-image requirements:
+- Treat all images as evidence for the SAME product.
+- Inspect each image label in order (Image 1 of N, Image 2 of N, etc.) and do not discard information from any image.
+- If one image contains a price tag and another image contains the product view, combine both sources in the final JSON.
+
 For the description:
 - Return a JSON object with 4 sections: product_details, product_intro, recommendation, search_keywords
 - product_details must be a JSON object with fields (brand/product_name/model_number/target/color/size/weight/condition). Leave values blank if unknown.
@@ -122,7 +132,7 @@ For the description:
 - Use \\n for line breaks inside strings
 
 Price fields:
-- First look for a clearly visible actual product price in the image, such as a price tag, label, sticker, receipt, or packaging price.
+- First look for a clearly visible actual product price in every image, such as a price tag, label, sticker, receipt, or packaging price.
 - If visible, return tax_excluded as the actual product price integer in JPY. If a tax-included price is also visible, return tax_included as an integer in JPY; otherwise return null.
 - If tax_excluded is visible, set prices to [] and do not infer condition-based prices.
 - If no actual product price is clearly visible, set tax_excluded and tax_included to null, then return 3 inferred reference prices in JPY (integers) for [poor, average, good] condition based ONLY on the images and typical second-hand pricing in Japan. Keep prices realistic, ascending, and grounded in the product type, brand strength, and visible wear.

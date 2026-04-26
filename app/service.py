@@ -512,9 +512,19 @@ class MercariAnalyzer:
         if not image_data_urls:
             raise BadRequestError("Image list is empty.")
         user_prompt = VISION_USER_PROMPT_WITH_PRICE.format(language_label=_language_label(language))
-        image_payloads = [
-            {"type": "image_url", "image_url": {"url": url}} for url in image_data_urls
-        ]
+        image_payloads: List[Dict[str, Any]] = []
+        image_count = len(image_data_urls)
+        for index, url in enumerate(image_data_urls, start=1):
+            image_payloads.append(
+                {
+                    "type": "text",
+                    "text": (
+                        f"Image {index} of {image_count}: inspect this image carefully. "
+                        "Extract any unique evidence from it before merging with the other images."
+                    ),
+                }
+            )
+            image_payloads.append({"type": "image_url", "image_url": {"url": url}})
         messages = [
             {"role": "system", "content": VISION_SYSTEM_PROMPT_WITH_PRICE},
             {
