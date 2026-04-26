@@ -132,6 +132,51 @@ class RakutenIdResponseTest(unittest.TestCase):
         self.assertEqual(result["prices"], [1000, 1500, 2000])
         self.assertEqual(len(vision_client.calls), 1)
 
+    def test_analyze_includes_phase_timings(self):
+        settings = SimpleNamespace(
+            vision_model="vision-test",
+            category_model="category-test",
+            log_llm_raw=False,
+            category_llm_retry_enabled=False,
+            category_llm_max_retries=0,
+        )
+        analyzer = MercariAnalyzer(
+            settings=settings,
+            brand_store=FakeBrandStore(),
+            category_store=FakeCategoryStore(),
+            vision_client=FakeChatClient(
+                {
+                    "title": "シャツ",
+                    "description": "メンズシャツ",
+                    "prices": [1000, 1500, 2000],
+                    "top_level_category": "メンズファッション",
+                    "brand_name": "",
+                }
+            ),
+            category_client=FakeChatClient(
+                {"best_target_path": "メンズファッション/トップス"}
+            ),
+        )
+
+        with patch(
+            "app.service.time.monotonic",
+            side_effect=[100.0, 100.05, 100.175, 100.25, 100.5, 100.6],
+        ):
+            result = analyzer.analyze(
+                images=[(b"image-bytes", "image/png")],
+                language="ja",
+                category_limit=1,
+            )
+
+        self.assertEqual(
+            result["timings"],
+            {
+                "total_ms": 600.0,
+                "vision_ms": 125.0,
+                "category_ms": 250.0,
+            },
+        )
+
     def test_analyze_direct_tax_excluded_clears_inferred_prices(self):
         settings = SimpleNamespace(
             vision_model="vision-test",

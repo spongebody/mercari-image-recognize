@@ -28,6 +28,8 @@ Image analysis uses one vision LLM call followed by one category selection call:
 2. `CATEGORY_SYSTEM_PROMPT` + `CATEGORY_USER_PROMPT_TEMPLATE`
    - Chooses the best category path from local CSV-backed candidates under the detected top-level category.
 
+The image analysis response includes backend timings in milliseconds: `timings.total_ms` for service-side analysis time, `timings.vision_ms` for the image recognition call, and `timings.category_ms` for the category selection call. The test page displays these backend timings instead of browser-measured request time.
+
 ## Prompt overview
 
 All prompts live in `app/llm/prompts.py`.

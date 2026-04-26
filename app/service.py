@@ -347,16 +347,19 @@ class MercariAnalyzer:
         if not images:
             raise BadRequestError("Image list is required.")
         category_limit = max(1, min(int(category_limit), 3))
+        total_started = time.monotonic()
 
         data_urls = [
             image_bytes_to_data_url(image_bytes, mime_type)
             for image_bytes, mime_type in images
         ]
+        vision_started = time.monotonic()
         ai_raw, ai_full = self._call_vision_llm(
             data_urls,
             language,
             model_override=vision_model_override,
         )
+        vision_ms = round((time.monotonic() - vision_started) * 1000, 2)
 
         title = _clean_string(ai_raw.get("title", ""))
         description_struct = _normalize_description(ai_raw.get("description"))
@@ -379,8 +382,10 @@ class MercariAnalyzer:
 
         categories: List[Dict[str, str]] = []
         llm_category_raw: Optional[Dict[str, Any]] = None
+        category_ms = 0.0
 
         if group_name:
+            category_started = time.monotonic()
             categories, llm_category_raw = self._choose_categories(
                 title=title or ai_raw.get("title", ""),
                 description=description_text or _description_to_text(ai_raw.get("description", "")),
@@ -389,6 +394,7 @@ class MercariAnalyzer:
                 category_limit=category_limit,
                 model_override=category_model_override,
             )
+            category_ms = round((time.monotonic() - category_started) * 1000, 2)
 
         result: Dict[str, Any] = {
             "title": title,
@@ -399,6 +405,11 @@ class MercariAnalyzer:
             "categories": categories,
             "brand_name": brand_name,
             "brand_id_obj": brand_id_obj,
+            "timings": {
+                "total_ms": 0.0,
+                "vision_ms": vision_ms,
+                "category_ms": category_ms,
+            },
         }
         path_info = _paths_from_categories(categories, include_alternatives=False)
         if path_info:
@@ -411,6 +422,7 @@ class MercariAnalyzer:
                 "llm_category_raw": llm_category_raw,
             }
 
+        result["timings"]["total_ms"] = round((time.monotonic() - total_started) * 1000, 2)
         return result
 
     def analyze_title(

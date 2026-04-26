@@ -1014,6 +1014,9 @@
           statusDoneText: "完成",
           resultSuccess: "成功",
           resultFail: "失败",
+          timingTotal: "总耗时",
+          timingVision: "图片识别",
+          timingCategory: "分类",
           fieldTitle: "📝 标题",
           fieldDescription: "📄 描述",
           descSectionDetails: "商品详情",
@@ -1126,6 +1129,9 @@
           statusDoneText: "完了",
           resultSuccess: "成功",
           resultFail: "失敗",
+          timingTotal: "総時間",
+          timingVision: "画像解析",
+          timingCategory: "カテゴリ分類",
           fieldTitle: "📝 タイトル",
           fieldDescription: "📄 説明",
           descSectionDetails: "商品詳細",
@@ -1445,6 +1451,26 @@
           i++;
         }
         return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[i]}`;
+      }
+
+      function formatDuration(ms) {
+        return `${(ms / 1000).toFixed(2)}s`;
+      }
+
+      function buildBackendTimingStats(payload) {
+        const data = payload?.data || payload || {};
+        const timings = data.timings || {};
+        const stats = [];
+        if (Number.isFinite(timings.total_ms)) {
+          stats.push(`<span>⏱️ ${t("timingTotal")} ${formatDuration(timings.total_ms)}</span>`);
+        }
+        if (Number.isFinite(timings.vision_ms)) {
+          stats.push(`<span>👁️ ${t("timingVision")} ${formatDuration(timings.vision_ms)}</span>`);
+        }
+        if (Number.isFinite(timings.category_ms)) {
+          stats.push(`<span>🏷️ ${t("timingCategory")} ${formatDuration(timings.category_ms)}</span>`);
+        }
+        return stats.join("");
       }
 
       // 格式化结果数据（结构化展示）
@@ -1964,13 +1990,11 @@
           if (visionModelInput?.value.trim()) formData.append("vision_model", visionModelInput.value.trim());
           if (categoryModelInput?.value.trim()) formData.append("category_model", categoryModelInput.value.trim());
 
-          const start = performance.now();
           const resp = await fetch(endpoint, {
             method: "POST",
             body: formData,
           });
 
-          const elapsedMs = performance.now() - start;
           const text = await resp.text();
           let payload = {};
 
@@ -2003,7 +2027,7 @@
             }
           }
 
-          addResultCard(batchFileObj, payload, elapsedMs, resp.ok);
+          addResultCard(batchFileObj, payload, resp.ok);
           completed = total;
         } catch (err) {
           const batchFileObj = buildBatchFileObj(selectedFiles);
@@ -2019,7 +2043,7 @@
               statusBadge.style.color = "#991b1b";
             }
           }
-          addResultCard(batchFileObj, { error: String(err) }, 0, false);
+          addResultCard(batchFileObj, { error: String(err) }, false);
           completed = total;
         }
 
@@ -2084,7 +2108,7 @@
       }
 
       function buildResultCard(entry) {
-        const { fileObj, payload, elapsedMs, success, resultId } = entry;
+        const { fileObj, payload, success, resultId } = entry;
         const card = document.createElement("div");
         card.className = "result-card";
         card.dataset.resultId = resultId;
@@ -2092,6 +2116,7 @@
         const structuredData = formatResultData(payload);
         const rawJson = JSON.stringify(payload, null, 2);
         const ratingValue = resultRatings[resultId];
+        const backendTimingStats = buildBackendTimingStats(payload);
 
         card.innerHTML = `
           <div class="result-header">
@@ -2099,7 +2124,7 @@
             <div class="result-meta">
               <div class="result-filename">${escapeHtml(fileObj.file.name)}</div>
               <div class="result-stats">
-                <span>⏱️ ${(elapsedMs / 1000).toFixed(2)}s</span>
+                ${backendTimingStats}
                 <span>${success ? `<span style="color: var(--success)">✓ ${t("resultSuccess")}</span>` : `<span style="color: var(--danger)">✗ ${t("resultFail")}</span>`}</span>
                 <span>📦 ${formatBytes(fileObj.file.size)}</span>
               </div>
@@ -2141,9 +2166,9 @@
       }
 
       // 添加结果卡片
-      function addResultCard(fileObj, payload, elapsedMs, success) {
+      function addResultCard(fileObj, payload, success) {
         const resultId = "result_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
-        testResults.unshift({ fileObj, payload, elapsedMs, success, resultId });
+        testResults.unshift({ fileObj, payload, success, resultId });
         renderResults();
       }
 

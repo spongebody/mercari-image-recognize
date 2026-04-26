@@ -126,6 +126,11 @@ files.forEach((file) => {
     "amazon_brand_id": "...",
     "qoo10_brand_id": "..."
   },
+  "timings": {
+    "total_ms": 2345.67,
+    "vision_ms": 1234.56,
+    "category_ms": 789.01
+  },
   "best_target_path": "...",
   "best_category_id": "...",
   "rakuten_id": "...",
@@ -155,6 +160,7 @@ files.forEach((file) => {
 - `tax_excluded` / `tax_included` 只表示图片中直接读到的价格。
 - `prices` 为视觉模型给出的初步价格预测；当 `tax_excluded` 有值时必须为空数组。
 - `best_target_path` / `alternatives` 在成功匹配分类路径时返回。
+- `timings.total_ms` 表示服务端分析处理总耗时；`timings.vision_ms` 表示图片识别 LLM 调用耗时；`timings.category_ms` 表示分类 LLM 调用耗时，单位均为毫秒。
 
 #### 错误
 - `400`：请求无效（图片格式/参数错误、解析失败等）。
