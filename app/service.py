@@ -361,13 +361,13 @@ class MercariAnalyzer:
         title = _clean_string(ai_raw.get("title", ""))
         description_struct = _normalize_description(ai_raw.get("description"))
         description_text = _description_to_text(description_struct)
-        tax_excluded  = _normalize_direct_price(ai_raw.get("tax_excluded "))
+        tax_excluded = _normalize_direct_price(ai_raw.get("tax_excluded"))
         tax_included = _normalize_direct_price(
             ai_raw.get("tax_included")
         )
-        if tax_excluded  is None:
+        if tax_excluded is None:
             tax_included = None
-        prices = [] if tax_excluded  is not None else normalize_price_list(ai_raw.get("prices", []))
+        prices = [] if tax_excluded is not None else normalize_price_list(ai_raw.get("prices", []))
         top_level_category = _clean_string(ai_raw.get("top_level_category", ""))
         brand_raw = _clean_string(ai_raw.get("brand_name", ""))
 
@@ -393,7 +393,7 @@ class MercariAnalyzer:
         result: Dict[str, Any] = {
             "title": title,
             "description": description_struct,
-            "tax_excluded ": tax_excluded ,
+            "tax_excluded": tax_excluded,
             "tax_included": tax_included,
             "prices": prices,
             "categories": categories,

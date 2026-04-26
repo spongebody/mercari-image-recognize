@@ -22,7 +22,7 @@ Image analysis uses one vision LLM call followed by one category selection call:
 
 1. `VISION_SYSTEM_PROMPT_WITH_PRICE` + `VISION_USER_PROMPT_WITH_PRICE`
    - Generates title, structured description, brand, top-level category, direct image price fields, and optional preliminary JPY price predictions.
-   - If a visible product price is found in the image, `tax_excluded ` / `tax_included` are returned and `prices` is empty.
+   - If a visible product price is found in the image, `tax_excluded` / `tax_included` are returned and `prices` is empty.
    - If no visible product price is found, direct price fields are `null` and `prices` contains 3 inferred condition-based values.
    - Pricing is image-only. The app does not use online search or a separate price model.
 2. `CATEGORY_SYSTEM_PROMPT` + `CATEGORY_USER_PROMPT_TEMPLATE`

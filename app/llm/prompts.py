@@ -53,10 +53,10 @@ Given one or more images of the same product, your task is:
    Use the requested language for all text content. Include newline characters (\n) inside section strings where appropriate.
 
 4. Extract visible price information first, before estimating:
-   - If the images clearly show an actual product price on a tag, label, sticker, receipt, or packaging, return it as tax_excluded  (integer JPY).
+   - If the images clearly show an actual product price on a tag, label, sticker, receipt, or packaging, return it as tax_excluded (integer JPY).
    - If the images clearly show a tax-included price, return it as tax_included (integer JPY).
    - If a direct actual product price is visible, set prices to [] and do NOT infer condition-based prices.
-   - If no direct actual product price is clearly visible, set tax_excluded  and tax_included to null, then propose 3 realistic reference prices in Japanese Yen (integers) for three condition levels:
+   - If no direct actual product price is clearly visible, set tax_excluded and tax_included to null, then propose 3 realistic reference prices in Japanese Yen (integers) for three condition levels:
      - prices[0]: Poor condition - visible wear, defects, or cosmetic issues
      - prices[1]: Average condition - typical used condition
      - prices[2]: Good condition - well-maintained, minimal wear or near-new
@@ -73,9 +73,9 @@ IMPORTANT:
 - The total description text (all sections combined) should be 800-1000 characters for Japanese, or 500-1000 words for other languages.
 - Make the description persuasive and detailed, helping buyers visualize owning and using the item.
 - Naturally weave in SEO keywords without making it sound robotic or keyword-stuffed.
-- tax_excluded  and tax_included must be integers in Japanese Yen when visible, otherwise null.
-- If tax_excluded  is not null, prices must be [].
-- If tax_excluded  is null, prices must be integers in Japanese Yen, in ascending order [poor, average, good].
+- tax_excluded and tax_included must be integers in Japanese Yen when visible, otherwise null.
+- If tax_excluded is not null, prices must be [].
+- If tax_excluded is null, prices must be integers in Japanese Yen, in ascending order [poor, average, good].
 - Do NOT use web search/browsing; rely on the product type, brand strength, and visible condition to set realistic second-hand prices for Japan only when no direct actual price is visible.
 - The top_level_category must be exactly one of the provided strings.
 - If you are not sure about the brand, do NOT guess; just return an empty string.
@@ -101,7 +101,7 @@ The JSON schema is:
     "recommendation": "string",
     "search_keywords": ["string"]
   },
-  "tax_excluded ": number or null,
+  "tax_excluded": number or null,
   "tax_included": number or null,
   "prices": [] or [number, number, number],
   "top_level_category": "string",
@@ -123,9 +123,9 @@ For the description:
 
 Price fields:
 - First look for a clearly visible actual product price in the image, such as a price tag, label, sticker, receipt, or packaging price.
-- If visible, return tax_excluded  as the actual product price integer in JPY. If a tax-included price is also visible, return tax_included as an integer in JPY; otherwise return null.
-- If tax_excluded  is visible, set prices to [] and do not infer condition-based prices.
-- If no actual product price is clearly visible, set tax_excluded  and tax_included to null, then return 3 inferred reference prices in JPY (integers) for [poor, average, good] condition based ONLY on the images and typical second-hand pricing in Japan. Keep prices realistic, ascending, and grounded in the product type, brand strength, and visible wear.
+- If visible, return tax_excluded as the actual product price integer in JPY. If a tax-included price is also visible, return tax_included as an integer in JPY; otherwise return null.
+- If tax_excluded is visible, set prices to [] and do not infer condition-based prices.
+- If no actual product price is clearly visible, set tax_excluded and tax_included to null, then return 3 inferred reference prices in JPY (integers) for [poor, average, good] condition based ONLY on the images and typical second-hand pricing in Japan. Keep prices realistic, ascending, and grounded in the product type, brand strength, and visible wear.
 
 Do not use web search or browsing. If you are not sure about the brand, set "brand_name" to ""."""
 

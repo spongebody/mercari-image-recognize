@@ -42,8 +42,8 @@
 
 ### 价格预测
 - 图片识别阶段会优先读取图片中清晰可见的实际标价。
-- `tax_excluded ` 表示图片里直接读到的商品价格；`tax_included` 表示图片里直接读到的税后价格，没有则为 `null`。
-- 如果识别到 `tax_excluded `，`prices` 返回空数组；如果没有明显标价，则 `tax_excluded ` / `tax_included` 为 `null`，`prices` 返回 3 个日元参考价格。
+- `tax_excluded` 表示图片里直接读到的商品价格；`tax_included` 表示图片里直接读到的税后价格，没有则为 `null`。
+- 如果识别到 `tax_excluded`，`prices` 返回空数组；如果没有明显标价，则 `tax_excluded` / `tax_included` 为 `null`，`prices` 返回 3 个日元参考价格。
 - 价格仅作为 LLM 初步预测，不使用在线搜索，也不再调用独立价格模型。
 
 ## 接口列表
@@ -102,7 +102,7 @@ files.forEach((file) => {
     "recommendation": "...",
     "search_keywords": ["..."]
   },
-  "tax_excluded ": 980,
+  "tax_excluded": 980,
   "tax_included": 1078,
   "prices": [],
   "categories": [
@@ -152,8 +152,8 @@ files.forEach((file) => {
 
 说明：
 - `_debug` 仅在 `debug=true` 且服务端允许调试时返回。
-- `tax_excluded ` / `tax_included` 只表示图片中直接读到的价格。
-- `prices` 为视觉模型给出的初步价格预测；当 `tax_excluded ` 有值时必须为空数组。
+- `tax_excluded` / `tax_included` 只表示图片中直接读到的价格。
+- `prices` 为视觉模型给出的初步价格预测；当 `tax_excluded` 有值时必须为空数组。
 - `best_target_path` / `alternatives` 在成功匹配分类路径时返回。
 
 #### 错误

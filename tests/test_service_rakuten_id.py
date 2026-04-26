@@ -132,7 +132,7 @@ class RakutenIdResponseTest(unittest.TestCase):
         self.assertEqual(result["prices"], [1000, 1500, 2000])
         self.assertEqual(len(vision_client.calls), 1)
 
-    def test_analyze_direct_tax_excluded _clears_inferred_prices(self):
+    def test_analyze_direct_tax_excluded_clears_inferred_prices(self):
         settings = SimpleNamespace(
             vision_model="vision-test",
             category_model="category-test",
@@ -148,7 +148,7 @@ class RakutenIdResponseTest(unittest.TestCase):
                 {
                     "title": "シャツ",
                     "description": "メンズシャツ",
-                    "tax_excluded ": "¥980",
+                    "tax_excluded": "¥980",
                     "tax_included": "税込 1,078円",
                     "prices": [1000, 1500, 2000],
                     "top_level_category": "メンズファッション",
@@ -166,11 +166,11 @@ class RakutenIdResponseTest(unittest.TestCase):
             category_limit=1,
         )
 
-        self.assertEqual(result["tax_excluded "], 980)
+        self.assertEqual(result["tax_excluded"], 980)
         self.assertEqual(result["tax_included"], 1078)
         self.assertEqual(result["prices"], [])
 
-    def test_analyze_preserves_inferred_prices_when_no_direct_tax_excluded (self):
+    def test_analyze_preserves_inferred_prices_when_no_direct_tax_excluded(self):
         settings = SimpleNamespace(
             vision_model="vision-test",
             category_model="category-test",
@@ -186,7 +186,7 @@ class RakutenIdResponseTest(unittest.TestCase):
                 {
                     "title": "シャツ",
                     "description": "メンズシャツ",
-                    "tax_excluded ": None,
+                    "tax_excluded": None,
                     "tax_included": None,
                     "prices": [1000, 1500, 2000],
                     "top_level_category": "メンズファッション",
@@ -204,11 +204,11 @@ class RakutenIdResponseTest(unittest.TestCase):
             category_limit=1,
         )
 
-        self.assertIsNone(result["tax_excluded "])
+        self.assertIsNone(result["tax_excluded"])
         self.assertIsNone(result["tax_included"])
         self.assertEqual(result["prices"], [1000, 1500, 2000])
 
-    def test_analyze_ignores_tax_included_price_without_direct_tax_excluded (self):
+    def test_analyze_ignores_tax_included_price_without_direct_tax_excluded(self):
         settings = SimpleNamespace(
             vision_model="vision-test",
             category_model="category-test",
@@ -224,7 +224,7 @@ class RakutenIdResponseTest(unittest.TestCase):
                 {
                     "title": "シャツ",
                     "description": "メンズシャツ",
-                    "tax_excluded ": None,
+                    "tax_excluded": None,
                     "tax_included": "税込 1,078円",
                     "prices": [1000, 1500, 2000],
                     "top_level_category": "メンズファッション",
@@ -242,7 +242,7 @@ class RakutenIdResponseTest(unittest.TestCase):
             category_limit=1,
         )
 
-        self.assertIsNone(result["tax_excluded "])
+        self.assertIsNone(result["tax_excluded"])
         self.assertIsNone(result["tax_included"])
         self.assertEqual(result["prices"], [1000, 1500, 2000])
 
@@ -262,7 +262,7 @@ class RakutenIdResponseTest(unittest.TestCase):
                 {
                     "title": "シャツ",
                     "description": "メンズシャツ",
-                    "tax_excluded ": "¥980（税込¥1,078）",
+                    "tax_excluded": "¥980（税込¥1,078）",
                     "tax_included": "税込¥1,078",
                     "prices": [1000, 1500, 2000],
                     "top_level_category": "メンズファッション",
@@ -280,7 +280,7 @@ class RakutenIdResponseTest(unittest.TestCase):
             category_limit=1,
         )
 
-        self.assertEqual(result["tax_excluded "], 980)
+        self.assertEqual(result["tax_excluded"], 980)
         self.assertEqual(result["tax_included"], 1078)
         self.assertEqual(result["prices"], [])
 
@@ -331,8 +331,8 @@ class RakutenIdResponseTest(unittest.TestCase):
         self.assertEqual(result["best_target_path"], "メンズファッション/トップス")
         self.assertEqual(len(vision_client.calls), 1)
         user_content = vision_client.calls[0]["messages"][1]["content"][0]["text"]
-        self.assertIn("tax_excluded ", user_content)
-        self.assertIn("If tax_excluded  is visible, set prices to []", user_content)
+        self.assertIn("tax_excluded", user_content)
+        self.assertIn("If tax_excluded is visible, set prices to []", user_content)
 
     def test_paths_from_categories_includes_rakuten_id_for_best_and_alternatives(self):
         result = _paths_from_categories(
