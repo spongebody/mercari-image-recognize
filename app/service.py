@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from .config import Settings
-from .constants import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, TOP_LEVEL_CATEGORIES
+from .constants import DEFAULT_LANGUAGE, PRICE_MAX, PRICE_MIN, SUPPORTED_LANGUAGES, TOP_LEVEL_CATEGORIES
 from .data.brands import BrandStore, empty_brand_id_obj
 from .data.categories import CategoryStore
 from .errors import BadRequestError, LLMRequestError
@@ -15,16 +15,10 @@ from .llm.client import OpenRouterClient
 from .llm.prompts import (
     CATEGORY_SYSTEM_PROMPT,
     CATEGORY_USER_PROMPT_TEMPLATE,
-    PRICE_SYSTEM_PROMPT,
-    PRICE_USER_PROMPT_TEMPLATE,
     PRODUCT_TITLE_CATEGORY_SYSTEM_PROMPT,
     PRODUCT_TITLE_CATEGORY_USER_PROMPT,
-    VISION_SYSTEM_PROMPT,
     VISION_SYSTEM_PROMPT_WITH_PRICE,
-    VISION_SYSTEM_PROMPT_WITH_SEARCH,
-    VISION_USER_PROMPT_TEMPLATE,
     VISION_USER_PROMPT_WITH_PRICE,
-    VISION_USER_PROMPT_TEMPLATE_WITH_WITH_SEARCH,
 )
 from .utils import (
     compress_whitespace,
@@ -116,6 +110,26 @@ def _clean_string(value: Any) -> str:
     if value is None:
         return ""
     return compress_whitespace(str(value))
+
+
+def _normalize_direct_price(value: Any) -> Optional[int]:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        price = int(value)
+        return price if PRICE_MIN <= price <= PRICE_MAX else None
+
+    text = _clean_string(value)
+    if not text:
+        return None
+    for match in re.finditer(r"\d[\d,，]*", text):
+        digits = re.sub(r"[^\d]", "", match.group(0))
+        if not digits:
+            continue
+        price = int(digits)
+        if PRICE_MIN <= price <= PRICE_MAX:
+            return price
+    return None
 
 
 def _stringify_value(value: Any) -> str:
@@ -303,33 +317,6 @@ def _paths_from_categories(
     return payload
 
 
-def _extract_citations(raw_response: Optional[Dict[str, Any]]) -> List[Dict[str, str]]:
-    citations: List[Dict[str, str]] = []
-    try:
-        choices = (raw_response or {}).get("choices") or []
-        if not choices:
-            return citations
-        annotations = choices[0].get("message", {}).get("annotations", [])
-        for ann in annotations:
-            if not isinstance(ann, dict):
-                continue
-            if ann.get("type") != "url_citation":
-                continue
-            url_info = ann.get("url_citation") or {}
-            url = url_info.get("url")
-            if url:
-                citations.append(
-                    {
-                        "url": url,
-                        "title": url_info.get("title") or "",
-                        "content": url_info.get("content") or "",
-                    }
-                )
-    except Exception:
-        return citations
-    return citations
-
-
 class MercariAnalyzer:
     def __init__(
         self,
@@ -338,14 +325,12 @@ class MercariAnalyzer:
         category_store: CategoryStore,
         vision_client: OpenRouterClient,
         category_client: OpenRouterClient,
-        price_client: OpenRouterClient,
     ):
         self.settings = settings
         self.brand_store = brand_store
         self.category_store = category_store
         self.vision_client = vision_client
         self.category_client = category_client
-        self.price_client = price_client
         self._logs_dir = Path(__file__).resolve().parent.parent / "logs"
 
     def analyze(
@@ -354,37 +339,35 @@ class MercariAnalyzer:
         language: str,
         debug: bool = False,
         category_limit: int = 1,
-        price_strategy: str = "vision",
         vision_model_override: Optional[str] = None,
         category_model_override: Optional[str] = None,
-        price_model_override: Optional[str] = None,
     ) -> Dict[str, Any]:
         if language not in SUPPORTED_LANGUAGES:
             raise BadRequestError("Unsupported language.")
         if not images:
             raise BadRequestError("Image list is required.")
         category_limit = max(1, min(int(category_limit), 3))
-        price_strategy = price_strategy or "vision"
-        if price_strategy not in {"vision", "dedicated", "vision_online"}:
-            price_strategy = "vision"
 
         data_urls = [
             image_bytes_to_data_url(image_bytes, mime_type)
             for image_bytes, mime_type in images
         ]
-        price_mode = "search" if price_strategy == "vision_online" else ("inline" if price_strategy == "vision" else "none")
         ai_raw, ai_full = self._call_vision_llm(
             data_urls,
             language,
-            force_online=price_strategy == "vision_online",
             model_override=vision_model_override,
-            price_mode=price_mode,
         )
 
         title = _clean_string(ai_raw.get("title", ""))
         description_struct = _normalize_description(ai_raw.get("description"))
         description_text = _description_to_text(description_struct)
-        prices = normalize_price_list(ai_raw.get("prices", []))
+        tax_excluded  = _normalize_direct_price(ai_raw.get("tax_excluded "))
+        tax_included = _normalize_direct_price(
+            ai_raw.get("tax_included")
+        )
+        if tax_excluded  is None:
+            tax_included = None
+        prices = [] if tax_excluded  is not None else normalize_price_list(ai_raw.get("prices", []))
         top_level_category = _clean_string(ai_raw.get("top_level_category", ""))
         brand_raw = _clean_string(ai_raw.get("brand_name", ""))
 
@@ -407,49 +390,15 @@ class MercariAnalyzer:
                 model_override=category_model_override,
             )
 
-        price_raw = None
-        price_error = None
-        price_citations = _extract_citations(ai_full)
-        price_source = "vision_online" if price_mode == "search" else ("vision" if price_mode == "inline" else "none")
-        if price_strategy == "dedicated":
-            try:
-                (
-                    price_info_model,
-                    price_raw,
-                    price_error,
-                    price_citations_model,
-                ) = self._predict_price_with_model(
-                    title=title,
-                    description=description_text,
-                    brand=brand_raw or brand_name,
-                    group_name=group_name or "",
-                    category_candidates=categories,
-                    language=language,
-                    price_model_override=price_model_override,
-                    image_data_urls=data_urls,
-                )
-                if price_citations_model:
-                    price_citations = price_citations_model
-                if price_error or not price_info_model:
-                    prices = []
-                    price_source = "price_model_failed"
-                else:
-                    prices = price_info_model
-                    price_source = "price_model"
-            except Exception as exc:
-                price_error = str(exc)
-                self._log_raw("price_unhandled_error", {"error": price_error})
-                price_source = "price_model_failed"
-                prices = []
-
         result: Dict[str, Any] = {
             "title": title,
             "description": description_struct,
+            "tax_excluded ": tax_excluded ,
+            "tax_included": tax_included,
             "prices": prices,
             "categories": categories,
             "brand_name": brand_name,
             "brand_id_obj": brand_id_obj,
-            "price_citations": price_citations,
         }
         path_info = _paths_from_categories(categories, include_alternatives=False)
         if path_info:
@@ -460,11 +409,6 @@ class MercariAnalyzer:
                 "ai_raw": ai_raw,
                 "group_name": group_name,
                 "llm_category_raw": llm_category_raw,
-                "price_raw": price_raw,
-                "price_strategy": price_strategy,
-                "price_citations": price_citations,
-                "price_error": price_error,
-                "price_source": price_source,
             }
 
         return result
@@ -551,40 +495,22 @@ class MercariAnalyzer:
         self,
         image_data_urls: List[str],
         language: str,
-        force_online: bool = False,
         model_override: Optional[str] = None,
-        price_mode: str = "none",
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         if not image_data_urls:
             raise BadRequestError("Image list is empty.")
-        price_mode = price_mode or "none"
-        if price_mode not in {"none", "inline", "search"}:
-            price_mode = "none"
-        if price_mode == "search":
-            user_prompt_template = VISION_USER_PROMPT_TEMPLATE_WITH_WITH_SEARCH
-            system_prompt = VISION_SYSTEM_PROMPT_WITH_SEARCH
-        elif price_mode == "inline":
-            user_prompt_template = VISION_USER_PROMPT_WITH_PRICE
-            system_prompt = VISION_SYSTEM_PROMPT_WITH_PRICE
-        else:
-            user_prompt_template = VISION_USER_PROMPT_TEMPLATE
-            system_prompt = VISION_SYSTEM_PROMPT
-        user_prompt = user_prompt_template.format(language_label=_language_label(language))
+        user_prompt = VISION_USER_PROMPT_WITH_PRICE.format(language_label=_language_label(language))
         image_payloads = [
             {"type": "image_url", "image_url": {"url": url}} for url in image_data_urls
         ]
         messages = [
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": VISION_SYSTEM_PROMPT_WITH_PRICE},
             {
                 "role": "user",
                 "content": [{"type": "text", "text": user_prompt}] + image_payloads,
             },
         ]
-        model = model_override or (
-            self.settings.vision_model_online
-            if force_online and self.settings.vision_model_online
-            else self.settings.vision_model
-        )
+        model = model_override or self.settings.vision_model
         content, raw_response = self.vision_client.chat(
             model=model,
             messages=messages,
@@ -632,81 +558,6 @@ class MercariAnalyzer:
         if not isinstance(parsed, dict):
             raise BadRequestError("Title category LLM did not return a JSON object.")
         return parsed
-
-    def _predict_price_with_model(
-        self,
-        title: str,
-        description: str,
-        brand: str,
-        group_name: str,
-        category_candidates: List[Dict[str, str]],
-        language: str,
-        price_model_override: Optional[str],
-        image_data_urls: Optional[List[str]] = None,
-    ) -> Tuple[List[int], Optional[Dict[str, Any]], Optional[str], List[Dict[str, str]]]:
-        if not self.settings.price_model:
-            raise BadRequestError("PRICE_MODEL is not configured.")
-
-        candidate_names = ", ".join(cat.get("name", "") for cat in category_candidates if cat.get("name"))
-        user_prompt = PRICE_USER_PROMPT_TEMPLATE.format(
-            title=title,
-            description=description,
-            brand=brand,
-            group_name=group_name,
-            category_candidates=candidate_names or "N/A",
-            language_label=_language_label(language),
-        )
-        user_content: Any
-        if image_data_urls:
-            image_payloads = [
-                {"type": "image_url", "image_url": {"url": url}} for url in image_data_urls
-            ]
-            user_content = [{"type": "text", "text": user_prompt}] + image_payloads
-        else:
-            user_content = user_prompt
-
-        messages = [
-            {"role": "system", "content": PRICE_SYSTEM_PROMPT},
-            {"role": "user", "content": user_content},
-        ]
-
-        content: Optional[str] = None
-        raw_response: Optional[Dict[str, Any]] = None
-        parsed: Optional[Dict[str, Any]] = None
-        error: Optional[str] = None
-        citations: List[Dict[str, str]] = []
-
-        model_to_use = price_model_override or self.settings.price_model
-        if not model_to_use:
-            raise BadRequestError("PRICE_MODEL is not configured.")
-
-        try:
-            content, raw_response = self.price_client.chat(
-                model=model_to_use,
-                messages=messages,
-                temperature=0.3,
-                max_tokens=16000,
-            )
-        except Exception as exc:
-            error = str(exc)
-            self._log_raw("price_call_error", {"error": error})
-        else:
-            self._log_raw("price_content", content)
-            self._log_raw("price_raw_response", raw_response)
-            citations = _extract_citations(raw_response)
-            try:
-                parsed = safe_json_loads(content or "")
-            except Exception as exc:
-                error = str(exc)
-                self._log_raw("price_parse_error", {"error": error, "content": content})
-
-        if isinstance(parsed, dict):
-            price_block = parsed.get("prices") or parsed
-        else:
-            price_block = parsed
-
-        normalized = normalize_price_list(price_block)
-        return normalized, parsed, error, citations
 
     def _log_raw(self, name: str, payload: Any) -> None:
         if not self.settings.log_llm_raw:
@@ -860,7 +711,6 @@ class MercariAnalyzer:
             [data_url],
             language,
             model_override=vision_model_override,
-            price_mode="none",
         )
 
         title = _clean_string(ai_raw.get("title", ""))

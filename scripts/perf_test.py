@@ -80,7 +80,6 @@ def call_image(
         "language": "ja",
         "debug": "false",
         "category_count": "1",
-        "price_strategy": "vision",
     }
     url = f"{base_url}/api/v1/mercari/image/analyze"
     return _post_request(url, timeout=timeout, files=files, data=data_fields)

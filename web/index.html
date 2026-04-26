@@ -816,14 +816,6 @@
                   <option value="3">3</option>
                 </select>
               </div>
-              <div>
-                <label for="price-strategy" id="price-strategy-label">价格策略</label>
-                <select id="price-strategy">
-                  <option value="vision" selected id="price-strategy-default">默认(推理)</option>
-                  <option value="vision_online" id="price-strategy-online">搜索模式(速度较慢)</option>
-                  <option value="dedicated" id="price-strategy-dedicated">独立模型+搜索(优先精度)</option>
-                </select>
-              </div>
             </div>
 
             <div class="models-row">
@@ -835,18 +827,6 @@
                 <label for="category-model" id="category-model-label">分类模型</label>
                 <input type="text" id="category-model" value="" placeholder="留空使用默认分类模型" />
               </div>
-              <!-- <div>
-                <label for="vision-model" id="vision-model-label">视觉模型</label>
-                <input type="text" id="vision-model" value="" placeholder="留空使用默认视觉模型" />
-              </div>
-              <div>
-                <label for="category-model" id="category-model-label">分类模型</label>
-                <input type="text" id="category-model" value="" placeholder="留空使用默认分类模型" />
-              </div>
-              <div id="price-model-row">
-                <label for="price-model" id="price-model-label">价格模型（仅方式1）</label>
-                <input type="text" id="price-model" value="" placeholder="留空使用默认价格模型" />
-              </div> -->
             </div>
 
             <!-- 操作按钮 -->
@@ -1006,16 +986,10 @@
           outputLangEn: "英语",
           outputLangZh: "简体中文",
           categoryCountLabel: "返回类别个数",
-          priceStrategyLabel: "价格策略",
-          priceStrategyVision: "默认(推理)",
-          priceStrategyDedicated: "独立模型+搜索(优先精度)",
-          priceStrategyVisionOnline: "搜索模式(速度较慢)",
           visionModelLabel: "视觉模型",
           visionModelPlaceholder: "留空使用默认视觉模型",
           categoryModelLabel: "分类模型",
           categoryModelPlaceholder: "留空使用默认分类模型",
-          priceModelLabel: "价格模型",
-          priceModelPlaceholder: "留空使用默认价格模型",
           startButton: "开始识别",
           clearImages: "清空图片",
           progressLabel: "处理进度",
@@ -1066,12 +1040,12 @@
           fieldBrand: "🔖 品牌",
           unknownBrand: "未知品牌",
           fieldPriceSingle: "💰 建议价格",
+          fieldImagePrice: "💰 图片标价",
+          fieldImageTaxIncludedPrice: "💰 图片税后价",
           fieldPriceList: "💰 价格预测",
           priceCandidateLabel: "候选",
           priceNone: "暂无价格",
           priceFailed: "预测失败或无结果",
-          priceRefs: "🔗 价格搜索引用",
-          priceRefFallback: "参考",
           fieldCondition: "📦 商品状态",
           fieldShipping: "🚚 配送方式",
           noStructuredData: "无结构化数据",
@@ -1124,16 +1098,10 @@
           outputLangEn: "英語",
           outputLangZh: "中国語（簡体字）",
           categoryCountLabel: "返却するカテゴリ数",
-          priceStrategyLabel: "価格モード",
-          priceStrategyVision: "デフォルト(推理)",
-          priceStrategyDedicated: "独立模型+検索(優先精度)",
-          priceStrategyVisionOnline: "検索モード(速度較遅)",
           visionModelLabel: "ビジョンモデル",
           visionModelPlaceholder: "空欄なら既定モデルを使用",
           categoryModelLabel: "カテゴリモデル",
           categoryModelPlaceholder: "空欄なら既定モデルを使用",
-          priceModelLabel: "価格モデル",
-          priceModelPlaceholder: "空欄なら既定モデルを使用",
           startButton: "解析を開始",
           clearImages: "画像をクリア",
           progressLabel: "処理進捗",
@@ -1184,12 +1152,12 @@
           fieldBrand: "🔖 ブランド",
           unknownBrand: "不明ブランド",
           fieldPriceSingle: "💰 推奨価格",
+          fieldImagePrice: "💰 画像内価格",
+          fieldImageTaxIncludedPrice: "💰 画像内税込価格",
           fieldPriceList: "💰 価格予測",
           priceCandidateLabel: "候補",
           priceNone: "価格なし",
           priceFailed: "価格予測に失敗またはなし",
-          priceRefs: "🔗 価格検索の参照",
-          priceRefFallback: "参照",
           fieldCondition: "📦 商品状態",
           fieldShipping: "🚚 配送方法",
           noStructuredData: "構造化データなし",
@@ -1276,18 +1244,10 @@
       const outputLanguageLabel = document.getElementById("output-language-label");
       const categoryCountLabel = document.getElementById("category-count-label");
       const categoryCountSelect = document.getElementById("category-count");
-      const priceStrategyLabel = document.getElementById("price-strategy-label");
-      const priceStrategySelect = document.getElementById("price-strategy");
-      const priceStrategyDefault = document.getElementById("price-strategy-default");
-      const priceStrategyOnline = document.getElementById("price-strategy-online");
-      const priceStrategyDedicated = document.getElementById("price-strategy-dedicated");
       const visionModelLabel = document.getElementById("vision-model-label");
       const categoryModelLabel = document.getElementById("category-model-label");
-      // const priceModelLabel = document.getElementById("price-model-label");
       const visionModelInput = document.getElementById("vision-model");
       const categoryModelInput = document.getElementById("category-model");
-      const priceModelInput = document.getElementById("price-model");
-      // const priceModelRow = document.getElementById("price-model-row");
       const apiInput = document.getElementById("api-endpoint");
       const submitBtn = document.getElementById("submit-btn");
       const buttonText = document.getElementById("button-text");
@@ -1369,16 +1329,10 @@
         langOptEn.textContent = t("outputLangEn");
         langOptZh.textContent = t("outputLangZh");
         categoryCountLabel.textContent = t("categoryCountLabel");
-        priceStrategyLabel.textContent = t("priceStrategyLabel");
-        priceStrategyDefault.textContent = t("priceStrategyVision");
-        priceStrategyOnline.textContent = t("priceStrategyVisionOnline");
-        priceStrategyDedicated.textContent = t("priceStrategyDedicated");
         // visionModelLabel.textContent = t("visionModelLabel");
         // visionModelInput.placeholder = t("visionModelPlaceholder");
         // categoryModelLabel.textContent = t("categoryModelLabel");
         // categoryModelInput.placeholder = t("categoryModelPlaceholder");
-        // priceModelLabel.textContent = t("priceModelLabel");
-        // priceModelInput.placeholder = t("priceModelPlaceholder");
 
         buttonText.innerHTML = processing
           ? `<span class="spinner"></span> ${t("processingButton")}`
@@ -1642,6 +1596,24 @@
           `;
         }
 
+        if (data.tax_excluded  !== undefined && data.tax_excluded  !== null) {
+          html += `
+            <div class="field-group">
+              <div class="field-label">${t("fieldImagePrice")}</div>
+              <div class="field-value">¥${escapeHtml(String(data.tax_excluded ))}</div>
+            </div>
+          `;
+        }
+
+        if (data.tax_included !== undefined && data.tax_included !== null) {
+          html += `
+            <div class="field-group">
+              <div class="field-label">${t("fieldImageTaxIncludedPrice")}</div>
+              <div class="field-value">¥${escapeHtml(String(data.tax_included))}</div>
+            </div>
+          `;
+        }
+
         // 价格列表（最可能的3个价格，已按可能性排序）
         if (Array.isArray(data.prices) && data.prices.length) {
           const priceTags = data.prices
@@ -1665,25 +1637,6 @@
             <div class="field-group">
               <div class="field-label">${t("fieldPriceList")}</div>
               <div class="field-value" style="color: var(--danger);">${t("priceFailed")}</div>
-            </div>
-          `;
-        }
-
-        // 价格引用链接
-        if (Array.isArray(data.price_citations) && data.price_citations.length) {
-          const links = data.price_citations
-            .map((c, idx) => {
-              const url = c.url || "";
-              const title = c.title || getHostname(url) || `${t("priceRefFallback")}${idx + 1}`;
-              return `<li><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(title)}</a></li>`;
-            })
-            .join("");
-          html += `
-            <div class="field-group">
-              <div class="field-label">${t("priceRefs")}</div>
-              <ul style="padding-left: 18px; margin: 6px 0; color: var(--accent);">
-                ${links}
-              </ul>
             </div>
           `;
         }
@@ -1808,14 +1761,6 @@
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
-      }
-
-      function getHostname(url) {
-        try {
-          return new URL(url).hostname.replace(/^www\./, '');
-        } catch (e) {
-          return '';
-        }
       }
 
       function setActiveTab(tab) {
@@ -1950,16 +1895,6 @@
         updateFileList();
       });
 
-      // // 切换价格模型输入可见性
-      // function updatePriceModelVisibility() {
-      //   if (priceStrategySelect.value === "dedicated") {
-      //     priceModelRow.style.display = "block";
-      //   } else {
-      //     priceModelRow.style.display = "none";
-      //   }
-      // }
-      // priceStrategySelect.addEventListener("change", updatePriceModelVisibility);
-      // updatePriceModelVisibility();
       uiLanguageSelect.addEventListener("change", () => {
         uiLanguage = uiLanguageSelect.value === "ja" ? "ja" : "zh";
         localStorage.setItem("mercari_ui_lang", uiLanguage);
@@ -2026,12 +1961,8 @@
           });
           formData.append("language", languageSelect.value);
           formData.append("category_count", categoryCountSelect.value || "1");
-          formData.append("price_strategy", priceStrategySelect.value || "vision");
           if (visionModelInput?.value.trim()) formData.append("vision_model", visionModelInput.value.trim());
           if (categoryModelInput?.value.trim()) formData.append("category_model", categoryModelInput.value.trim());
-          if (priceModelInput?.value.trim() && priceStrategySelect.value === "dedicated") {
-            formData.append("price_model", priceModelInput.value.trim());
-          }
 
           const start = performance.now();
           const resp = await fetch(endpoint, {
@@ -2263,7 +2194,6 @@
           const models = data.models || {};
           if (models.vision_model) visionModelInput.value = models.vision_model;
           if (models.category_model) categoryModelInput.value = models.category_model;
-          if (models.price_model) priceModelInput.value = models.price_model;
         } catch (e) {
           console.warn(t("warnDefaults"), e);
         }

@@ -36,14 +36,6 @@ category_client = OpenRouterClient(
     app_name=settings.openrouter_app_name,
     reasoning=settings.reasoning,
 )
-price_client = OpenRouterClient(
-    api_key=settings.openrouter_api_key,
-    base_url=settings.openrouter_base_url,
-    timeout=settings.request_timeout,
-    referer=settings.openrouter_referer,
-    app_name=settings.openrouter_app_name,
-    reasoning=settings.reasoning,
-)
 
 analyzer = MercariAnalyzer(
     settings=settings,
@@ -51,7 +43,6 @@ analyzer = MercariAnalyzer(
     category_store=category_store,
     vision_client=vision_client,
     category_client=category_client,
-    price_client=price_client,
 )
 
 app = FastAPI(title="Mercari Image Analyzer", version="1.0.0")
@@ -111,10 +102,8 @@ async def analyze_image(
     language: str = Form(DEFAULT_LANGUAGE),
     debug: str = Form("false"),
     category_count: int = Form(1),
-    price_strategy: str = Form("vision"),
     vision_model: str = Form(None),
     category_model: str = Form(None),
-    price_model: str = Form(None),
 ):
     if not image_list:
         raise HTTPException(status_code=400, detail="Image files are required.")
@@ -157,7 +146,6 @@ async def analyze_image(
 
     debug_enabled = settings.enable_debug_param and parse_bool_param(debug, False)
     category_count = max(1, min(category_count, 3))
-    price_strategy = price_strategy or "vision"
 
     try:
         result = await run_in_threadpool(
@@ -166,10 +154,8 @@ async def analyze_image(
             language=language,
             debug=debug_enabled,
             category_limit=category_count,
-            price_strategy=price_strategy,
             vision_model_override=vision_model,
             category_model_override=category_model,
-            price_model_override=price_model,
         )
     except BadRequestError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -216,8 +202,6 @@ def health() -> dict:
         "status": "ok",
         "models": {
             "vision_model": settings.vision_model,
-            "vision_model_online": settings.vision_model_online,
             "category_model": settings.category_model,
-            "price_model": settings.price_model,
         },
     }

@@ -5,71 +5,6 @@ TOP_LEVEL_CATEGORY_OPTIONS = "\n".join(
     f"    {index}. {name}" for index, name in enumerate(TOP_LEVEL_CATEGORIES, start=1)
 )
 
-VISION_SYSTEM_PROMPT = """You are an assistant helping sellers list items for a Japanese marketplace.
-
-Given one or more images of the same product, your task is:
-
-1. Infer what the product is (type), its condition, important attributes, and any visible details across all images.
-   Use front/back photos, labels, tags, packaging, and close-ups to extract precise model numbers, brand, color, size, weight, and condition.
-2. Generate a short, clear, and buyer-friendly title suitable for a Japanese marketplace listing.
-3. Generate a structured description object in JSON format with ENGLISH field names only. The description must have 4 sections:
-   - **product_details**: A JSON object with the required fields below. If a field is unknown, return an empty string value but keep the field.
-     - brand
-     - product_name
-     - model_number
-     - target
-     - color
-     - size
-     - weight
-     - condition
-   - **product_intro**: A professional product introduction based on brand/model/type. Include functions, features, advantages, usage scenarios, and included items.
-   - **recommendation**: Short, persuasive lines summarizing the key selling points.
-   - **search_keywords**: An array of relevant search keywords (brand, model, product type, synonyms).
-
-   Use the requested language for all text content. Include newline characters (\n) inside section strings where appropriate.
-
-4. Choose the single best matching top-level category from the following Rakuten-style taxonomy list (return exactly one of these strings):
-""" + TOP_LEVEL_CATEGORY_OPTIONS + """
-
-5. If you can clearly identify a brand name printed on the item or its packaging,
-   return that brand name exactly as printed (for example "Nintendo", "Sony", "UNIQLO").
-   If you are not sure or no brand is visible, return an empty string "".
-
-IMPORTANT:
-- The title and description must use the language requested by the user (default Japanese).
-- The total description text (all sections combined) should be 800-1000 characters for Japanese, or 500-1000 words for other languages.
-- Make the description persuasive and detailed, helping buyers visualize owning and using the item.
-- Naturally weave in SEO keywords without making it sound robotic or keyword-stuffed.
-- Do NOT include any pricing in your response.
-- The top_level_category must be exactly one of the provided strings.
-- If you are not sure about the brand, do NOT guess; just return an empty string.
-
-You must respond with pure JSON only, without any explanations, without markdown, and without comments.
-
-The JSON schema is:
-
-{
-  "title": "string",
-  "description": {
-    "product_details": {
-      "brand": "string",
-      "product_name": "string",
-      "model_number": "string",
-      "target": "string",
-      "color": "string",
-      "size": "string",
-      "weight": "string",
-      "condition": "string"
-    },
-    "product_intro": "string",
-    "recommendation": "string",
-    "search_keywords": ["string"]
-  },
-  "top_level_category": "string",
-  "brand_name": "string"
-}
-"""
-
 PRODUCT_TITLE_CATEGORY_SYSTEM_PROMPT = """You are an assistant helping sellers choose the correct top-level category in a Japanese e-commerce taxonomy based on Rakuten categories.
 
 Given a product title, choose the single best matching top-level category from the following list (return exactly one of these strings):
@@ -117,11 +52,15 @@ Given one or more images of the same product, your task is:
 
    Use the requested language for all text content. Include newline characters (\n) inside section strings where appropriate.
 
-4. Propose 3 realistic reference prices in Japanese Yen (integers) for three condition levels:
-   - prices[0]: Poor condition - visible wear, defects, or cosmetic issues
-   - prices[1]: Average condition - typical used condition
-   - prices[2]: Good condition - well-maintained, minimal wear or near-new
-   Prices must be in ascending order. Use your understanding of the product type, brand, and visible condition cues to anchor the prices to typical second-hand markets in Japan. Do NOT use web search or browsing tools.
+4. Extract visible price information first, before estimating:
+   - If the images clearly show an actual product price on a tag, label, sticker, receipt, or packaging, return it as tax_excluded  (integer JPY).
+   - If the images clearly show a tax-included price, return it as tax_included (integer JPY).
+   - If a direct actual product price is visible, set prices to [] and do NOT infer condition-based prices.
+   - If no direct actual product price is clearly visible, set tax_excluded  and tax_included to null, then propose 3 realistic reference prices in Japanese Yen (integers) for three condition levels:
+     - prices[0]: Poor condition - visible wear, defects, or cosmetic issues
+     - prices[1]: Average condition - typical used condition
+     - prices[2]: Good condition - well-maintained, minimal wear or near-new
+     Prices must be in ascending order. Use your understanding of the product type, brand, and visible condition cues to anchor the prices to typical second-hand markets in Japan. Do NOT use web search or browsing tools.
 5. Choose the single best matching top-level category from the following Rakuten-style taxonomy list (return exactly one of these strings):
 """ + TOP_LEVEL_CATEGORY_OPTIONS + """
 
@@ -134,8 +73,10 @@ IMPORTANT:
 - The total description text (all sections combined) should be 800-1000 characters for Japanese, or 500-1000 words for other languages.
 - Make the description persuasive and detailed, helping buyers visualize owning and using the item.
 - Naturally weave in SEO keywords without making it sound robotic or keyword-stuffed.
-- Prices must be integers in Japanese Yen, in ascending order [poor, average, good].
-- Do NOT use web search/browsing; rely on the product type, brand strength, and visible condition to set realistic second-hand prices for Japan.
+- tax_excluded  and tax_included must be integers in Japanese Yen when visible, otherwise null.
+- If tax_excluded  is not null, prices must be [].
+- If tax_excluded  is null, prices must be integers in Japanese Yen, in ascending order [poor, average, good].
+- Do NOT use web search/browsing; rely on the product type, brand strength, and visible condition to set realistic second-hand prices for Japan only when no direct actual price is visible.
 - The top_level_category must be exactly one of the provided strings.
 - If you are not sure about the brand, do NOT guess; just return an empty string.
 
@@ -160,101 +101,13 @@ The JSON schema is:
     "recommendation": "string",
     "search_keywords": ["string"]
   },
-  "prices": [number, number, number],
+  "tax_excluded ": number or null,
+  "tax_included": number or null,
+  "prices": [] or [number, number, number],
   "top_level_category": "string",
   "brand_name": "string"
 }
 """
-
-VISION_SYSTEM_PROMPT_WITH_SEARCH = """You are an assistant helping sellers list items for a Japanese marketplace.
-
-Given one or more images of the same product, your task is:
-
-1. Infer what the product is (type), its condition, important attributes, and any visible details across all images.
-   Use your web search / browsing capability to check recent Mercari Japan listings for similar items.
-   First attempt a reverse/visual image search with the most informative image (front view, label, or packaging) using `site:jp.mercari.com` to surface identical or near-identical Mercari listings.
-   If image search is unavailable, extract visible brand/model numbers or text from the images and craft Japanese keyword queries starting with `site:jp.mercari.com` to keep results on the Mercari Japan domain.
-   Prioritize `jp.mercari.com/item/` or `jp.mercari.com/sold/` pages and ignore non-Mercari sites unless no relevant Mercari results exist after multiple tries.
-2. Generate a short, clear, and buyer-friendly title suitable for a Japanese marketplace listing.
-3. Generate a structured description object in JSON format with ENGLISH field names only. The description must have 4 sections:
-   - **product_details**: A JSON object with the required fields below. If a field is unknown, return an empty string value but keep the field.
-     - brand
-     - product_name
-     - model_number
-     - target
-     - color
-     - size
-     - weight
-     - condition
-   - **product_intro**: A professional product introduction based on brand/model/type. Include functions, features, advantages, usage scenarios, and included items.
-   - **recommendation**: Short, persuasive lines summarizing the key selling points.
-   - **search_keywords**: An array of relevant search keywords (brand, model, product type, synonyms).
-
-   Use the requested language for all text content. Include newline characters (\n) inside section strings where appropriate.
-
-4. Propose 3 prices in Japanese Yen (integers) based on the searched comparables, corresponding to three condition levels:
-   - prices[0]: Poor condition - item with visible wear, defects, or cosmetic issues
-   - prices[1]: Average condition - typical used condition
-   - prices[2]: Good condition - well-maintained, minimal wear
-   Prices must be in ascending order and reflect realistic market differences between conditions.
-5. Choose the single best matching top-level category from the following Rakuten-style taxonomy list (return exactly one of these strings):
-""" + TOP_LEVEL_CATEGORY_OPTIONS + """
-
-6. If you can clearly identify a brand name printed on the item or its packaging,
-   return that brand name exactly as printed (for example "Nintendo", "Sony", "UNIQLO").
-   If you are not sure or no brand is visible, return an empty string "".
-
-IMPORTANT:
-- The title and description must use the language requested by the user (default Japanese).
-- The total description text (all sections combined) should be 800-1000 characters for Japanese, or 500-1000 words for other languages.
-- Make the description persuasive and detailed, helping buyers visualize owning and using the item.
-- Naturally weave in SEO keywords without making it sound robotic or keyword-stuffed.
-- Prices must be integers in Japanese Yen, in ascending order [poor, average, good].
-- Always use web search/browse to ground prices; prioritize Mercari Japan used-item results across different conditions.
-- The top_level_category must be exactly one of the provided strings.
-- If you are not sure about the brand, do NOT guess; just return an empty string.
-
-You must respond with pure JSON only, without any explanations, without markdown, and without comments.
-
-The JSON schema is:
-
-{
-  "title": "string",
-  "description": {
-    "product_details": {
-      "brand": "string",
-      "product_name": "string",
-      "model_number": "string",
-      "target": "string",
-      "color": "string",
-      "size": "string",
-      "weight": "string",
-      "condition": "string"
-    },
-    "product_intro": "string",
-    "recommendation": "string",
-    "search_keywords": ["string"]
-  },
-  "prices": [number, number, number],
-  "top_level_category": "string",
-  "brand_name": "string"
-}
-"""
-
-VISION_USER_PROMPT_TEMPLATE = """Look at these product images and fill in all JSON fields according to the instructions.
-
-Language for title and description: {language_label}.
-
-For the description:
-- Return a JSON object with 4 sections: product_details, product_intro, recommendation, search_keywords
-- product_details must be a JSON object with fields (brand/product_name/model_number/target/color/size/weight/condition). Leave values blank if unknown.
-- product_intro should cover features, advantages, usage scenarios, and included items
-- recommendation should be short and persuasive
-- search_keywords should be an array of relevant keywords
-- Use \\n for line breaks inside strings
-- Do NOT include prices
-
-If you are not sure about the brand, set "brand_name" to ""."""
 
 VISION_USER_PROMPT_WITH_PRICE = """Look at these product images and fill in all JSON fields according to the instructions.
 
@@ -268,96 +121,13 @@ For the description:
 - search_keywords should be an array of relevant keywords
 - Use \\n for line breaks inside strings
 
-Return 3 reference prices in JPY (integers) for [poor, average, good] condition based ONLY on the images and typical second-hand pricing in Japan. Keep prices realistic, ascending, and grounded in the product type, brand strength, and visible wear. Do not use web search or browsing. If you are not sure about the brand, set "brand_name" to ""."""
+Price fields:
+- First look for a clearly visible actual product price in the image, such as a price tag, label, sticker, receipt, or packaging price.
+- If visible, return tax_excluded  as the actual product price integer in JPY. If a tax-included price is also visible, return tax_included as an integer in JPY; otherwise return null.
+- If tax_excluded  is visible, set prices to [] and do not infer condition-based prices.
+- If no actual product price is clearly visible, set tax_excluded  and tax_included to null, then return 3 inferred reference prices in JPY (integers) for [poor, average, good] condition based ONLY on the images and typical second-hand pricing in Japan. Keep prices realistic, ascending, and grounded in the product type, brand strength, and visible wear.
 
-VISION_USER_PROMPT_TEMPLATE_WITH_WITH_SEARCH = """Look at these product images and fill in all JSON fields according to the instructions.
-
-Language for title and description: {language_label}.
-
-For the description:
-- Return a JSON object with 4 sections: product_details, product_intro, recommendation, search_keywords
-- product_details must be a JSON object with fields (brand/product_name/model_number/target/color/size/weight/condition). Leave values blank if unknown.
-- product_intro should cover features, advantages, usage scenarios, and included items
-- recommendation should be short and persuasive
-- search_keywords should be an array of relevant keywords
-- Use \\n for line breaks inside strings
-
-Prices must be in JPY and integers. Use web search/browse to ground prices across different conditions. Return EXACTLY 3 prices in ascending order [poor, average, good]. Base price gaps on actual market comps showing condition-based pricing.
-If you are not sure about the brand, set "brand_name" to ""."""
-
-PRICE_SYSTEM_PROMPT = """You are a pricing assistant for second-hand items on Mercari Japan.
-
-Your task is to determine 3 prices for a product based on ACTUAL Mercari Japan listings.
-
-**STEP-BY-STEP WORKFLOW:**
-
-1. **ANALYZE THE IMAGES FIRST** (DO NOT use any provided text hints yet)
-   - Examine all product images carefully (front/back, labels, packaging, close-ups)
-   - Identify: brand, model/series, product type, color, visible condition
-   - Note any text, logos, model numbers visible across the images
-   - Assess visible condition from the photos (scratches, wear, box condition, etc.)
-
-2. **BUILD SEARCH QUERIES** from your image analysis
-   - Create 3-5 Japanese search queries combining:
-     * Brand name + product type (e.g., "ルイヴィトン 財布")
-     * Brand + model/series name (e.g., "ルイヴィトン ヴィクトリーヌ")
-     * Add specific attributes like color (e.g., "モノグラム")
-   - For EACH query, add the site restriction: `site:jp.mercari.com`
-   - Example queries:
-     * "site:jp.mercari.com ルイヴィトン ポルトフォイユヴィクトリーヌ"
-     * "site:jp.mercari.com LOUIS VUITTON Victorine 三つ折り財布"
-     * "site:jp.mercari.com LV モノグラム 財布 ヴィクトリーヌ"
-
-3. **SEARCH AND COLLECT COMPARABLES**
-   - Execute your queries using web search (NOT image search - focus on text-based search with site:jp.mercari.com)
-   - Look for SOLD items (jp.mercari.com/sold/) preferably, or active listings
-   - Collect at least 5-10 comparable listings
-   - For EACH listing, note:
-     * Price
-     * Stated condition (新品未使用/未使用に近い/目立った傷や汚れなし/やや傷や汚れあり/傷や汚れあり/全体的に状態が悪い)
-     * URL
-
-4. **COMPARE IMAGES TO LISTINGS**
-   - Compare your product images to the found listings
-   - Match based on: exact model, similar design, same series
-   - Prioritize listings that look most similar to your product
-
-5. **DETERMINE 3 PRICES BY CONDITION**
-   From your collected comps, extract prices for:
-   - **prices[0] - Poor condition** (傷や汚れあり / 全体的に状態が悪い): Find the LOWEST prices in your comps
-   - **prices[1] - Average condition** (やや傷や汚れあり / 目立った傷や汚れなし): Find MEDIAN prices
-   - **prices[2] - Good condition** (未使用に近い / 新品未使用): Find the HIGHEST prices in your comps
-   
-   Prices MUST be in ASCENDING order: poor < average < good
-
-**OUTPUT FORMAT:**
-{
-  "prices": [number, number, number],
-  "reason": "Explain your search queries, number of Mercari listings found, price range observed, and how you determined the 3 condition-based prices. Include 2-3 markdown links to key Mercari listings."
-}**CRITICAL RULES:**
-- ONLY use jp.mercari.com results for pricing
-- If you cannot find Mercari results, say so clearly and explain why
-- Do NOT use prices from Rakuten, Yahoo Shopping, or other platforms
-- Do NOT estimate or guess prices - base everything on actual search results
-- Prices must be integers in JPY, ascending order [poor, average, good]
-- Your "reason" should mention: your search queries, how many Mercari results found, and the price patterns observed"""
-
-PRICE_USER_PROMPT_TEMPLATE = """**ATTACHED: Product Images**
-
-Follow the step-by-step workflow in the system prompt:
-1. Analyze the images to identify the product
-2. Build Japanese search queries with site:jp.mercari.com
-3. Search and collect Mercari Japan listings
-4. Compare listings to your images
-5. Determine 3 prices for different conditions
-
-Language preference for your reason: {language_label}
-
-Return JSON with:
-- prices[0]: Poor condition price from Mercari comps
-- prices[1]: Average condition price from Mercari comps
-- prices[2]: Good condition price from Mercari comps
-- reason: Your analysis process with Mercari links"""
+Do not use web search or browsing. If you are not sure about the brand, set "brand_name" to ""."""
 
 CATEGORY_SYSTEM_PROMPT = """You are an e-commerce taxonomy specialist working with a Japanese marketplace taxonomy based on Rakuten categories.
 

@@ -71,8 +71,6 @@ def _env_optional_enum(name: str, allowed: Set[str]) -> Optional[str]:
 class Settings:
     openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "")
     vision_model: str = os.getenv("VISION_MODEL", "")
-    vision_model_online: str = os.getenv("VISION_MODEL_ONLINE", "")
-    price_model: str = os.getenv("PRICE_MODEL", "openai/gpt-4.1:online")
     category_model: str = os.getenv("CATEGORY_MODEL", "")
     brand_csv_path: str = os.getenv("BRAND_CSV_PATH", "data/mercari_brand.csv")
     category_csv_path: str = os.getenv("CATEGORY_CSV_PATH", "data/category_rakuten.csv")
@@ -107,14 +105,6 @@ class Settings:
             {"auto", "concise", "detailed"},
         )
     )
-
-    def __post_init__(self) -> None:
-        if not self.vision_model_online and self.vision_model:
-            suffix = ":online"
-            if self.vision_model.endswith(suffix):
-                self.vision_model_online = self.vision_model
-            else:
-                self.vision_model_online = f"{self.vision_model}{suffix}"
 
     @property
     def reasoning(self) -> Optional[Dict[str, Any]]:

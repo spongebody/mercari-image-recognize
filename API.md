@@ -40,10 +40,11 @@
 - `search_keywords` 为字符串数组。
 - 文本内容使用客户端 `language` 指定的语言。
 
-### 价格策略（price_strategy）
-- `vision`（默认）：由视觉模型直接生成价格。
-- `vision_online`：视觉模型在提示中进行搜索参考定价。
-- `dedicated`：独立价格模型；失败时 `prices` 为空。
+### 价格预测
+- 图片识别阶段会优先读取图片中清晰可见的实际标价。
+- `tax_excluded ` 表示图片里直接读到的商品价格；`tax_included` 表示图片里直接读到的税后价格，没有则为 `null`。
+- 如果识别到 `tax_excluded `，`prices` 返回空数组；如果没有明显标价，则 `tax_excluded ` / `tax_included` 为 `null`，`prices` 返回 3 个日元参考价格。
+- 价格仅作为 LLM 初步预测，不使用在线搜索，也不再调用独立价格模型。
 
 ## 接口列表
 
@@ -56,10 +57,8 @@
 - `language`（字符串，可选）：`ja` / `en` / `zh`，默认 `ja`。
 - `debug`（字符串，可选）：`true` / `1` / `yes` 等，默认 `false`。
 - `category_count`（整数，可选）：返回类别数量（1-3），默认 `1`。
-- `price_strategy`（字符串，可选）：`vision` / `vision_online` / `dedicated`，默认 `vision`。
 - `vision_model`（字符串，可选）：视觉模型覆盖。
 - `category_model`（字符串，可选）：分类模型覆盖。
-- `price_model`（字符串，可选）：价格模型覆盖。
 
 说明：
 - `image_list` 是**文件列表字段**
@@ -72,8 +71,7 @@
 curl -X POST "http://localhost:8000/api/v1/mercari/image/analyze" \
   -F "image_list=@/path/to/item_front.jpg" \
   -F "image_list=@/path/to/item_back.jpg" \
-  -F "language=ja" \
-  -F "price_strategy=vision"
+  -F "language=ja"
 ```
 
 前端（FormData）示例：
@@ -104,7 +102,9 @@ files.forEach((file) => {
     "recommendation": "...",
     "search_keywords": ["..."]
   },
-  "prices": [1000, 2000, 3000],
+  "tax_excluded ": 980,
+  "tax_included": 1078,
+  "prices": [],
   "categories": [
     {
       "id": "123",
@@ -126,9 +126,6 @@ files.forEach((file) => {
     "amazon_brand_id": "...",
     "qoo10_brand_id": "..."
   },
-  "price_citations": [
-    {"url": "...", "title": "...", "content": "..."}
-  ],
   "best_target_path": "...",
   "best_category_id": "...",
   "rakuten_id": "...",
@@ -148,19 +145,15 @@ files.forEach((file) => {
   "_debug": {
     "ai_raw": {"...": "..."},
     "group_name": "...",
-    "llm_category_raw": {"...": "..."},
-    "price_raw": {"...": "..."},
-    "price_strategy": "vision",
-    "price_citations": [],
-    "price_error": null,
-    "price_source": "vision"
+    "llm_category_raw": {"...": "..."}
   }
 }
 ```
 
 说明：
 - `_debug` 仅在 `debug=true` 且服务端允许调试时返回。
-- `prices` 在定价失败或禁用时可能为空。
+- `tax_excluded ` / `tax_included` 只表示图片中直接读到的价格。
+- `prices` 为视觉模型给出的初步价格预测；当 `tax_excluded ` 有值时必须为空数组。
 - `best_target_path` / `alternatives` 在成功匹配分类路径时返回。
 
 #### 错误
@@ -224,9 +217,7 @@ files.forEach((file) => {
   "status": "ok",
   "models": {
     "vision_model": "...",
-    "vision_model_online": "...",
-    "category_model": "...",
-    "price_model": "..."
+    "category_model": "..."
   }
 }
 ```
