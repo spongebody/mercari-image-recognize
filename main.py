@@ -12,6 +12,7 @@ from app.constants import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES
 from app.data.brands import BrandStore
 from app.data.categories import CategoryStore
 from app.errors import BadRequestError, LLMRequestError
+from app.image_processing import compress_image_if_needed
 from app.llm.client import OpenRouterClient
 from app.request_logging import build_request_log, write_request_log
 from app.service import MercariAnalyzer
@@ -110,6 +111,7 @@ async def analyze_image(
 
     image_list = image_list
     image_payloads: List[Tuple[bytes, str]] = []
+    image_processing = []
     for index, image in enumerate(image_list, start=1):
         if not image:
             raise HTTPException(
@@ -138,7 +140,21 @@ async def analyze_image(
                 status_code=400, detail=f"Image is too large (index {index})."
             )
 
-        image_payloads.append((data, image.content_type or "application/octet-stream"))
+        processed = compress_image_if_needed(
+            image_bytes=data,
+            mime_type=image.content_type or "application/octet-stream",
+            threshold_bytes=settings.image_compression_threshold_bytes,
+        )
+        image_payloads.append((processed.data, processed.mime_type))
+        image_processing.append(
+            {
+                "index": index,
+                "filename": image.filename or "",
+                "compressed": processed.compressed,
+                "original_bytes": processed.original_bytes,
+                "processed_bytes": processed.processed_bytes,
+            }
+        )
 
     language = language or DEFAULT_LANGUAGE
     if language not in SUPPORTED_LANGUAGES:
@@ -156,6 +172,7 @@ async def analyze_image(
             category_limit=category_count,
             vision_model_override=vision_model,
             category_model_override=category_model,
+            image_processing=image_processing,
         )
     except BadRequestError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

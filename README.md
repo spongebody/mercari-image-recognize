@@ -56,6 +56,7 @@ Booleans accept `1`, `true`, `yes`, or `on`.
 - `REQUEST_TIMEOUT` (default: `60`): OpenRouter request timeout in seconds.
 - `ENABLE_DEBUG` (default: `true`): allow debug response fields.
 - `MAX_IMAGE_BYTES` (default: `5242880`): max upload size in bytes.
+- `IMAGE_COMPRESSION_THRESHOLD_MB` (default: `1`): backend compresses any single uploaded image larger than this size in MB before sending it to the vision model. Set `0` to disable backend compression.
 - `LOG_LLM_RAW` (default: `false`): write raw LLM logs under `logs/`.
 - `LOG_REQUESTS` (default: `true`): write request logs under `logs/requests/`.
 - `LOG_REQUESTS_RETENTION_DAYS` (default: `7`): request log retention days.

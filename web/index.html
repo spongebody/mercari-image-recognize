@@ -829,20 +829,6 @@
               </div>
             </div>
 
-            <div class="controls-row">
-              <div>
-                <label for="compression-threshold" id="compression-threshold-label">压缩阈值（MB，0=不压缩）</label>
-                <input
-                  type="number"
-                  id="compression-threshold"
-                  min="0"
-                  step="0.1"
-                  value="1"
-                  placeholder="默认 1"
-                />
-              </div>
-            </div>
-
             <!-- 操作按钮 -->
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
               <button id="submit-btn">
@@ -979,13 +965,7 @@
       </div>
     </div>
 
-    <script type="module">
-      import {
-        DEFAULT_UPLOAD_OPTIONS,
-        prepareCompressedUploadSelection,
-        resolveCompressionThresholdBytes,
-      } from "./upload-utils.mjs";
-
+    <script>
       const translations = {
         zh: {
           documentTitle: "Mercari 商品图片识别测试",
@@ -1010,8 +990,6 @@
           visionModelPlaceholder: "留空使用默认视觉模型",
           categoryModelLabel: "分类模型",
           categoryModelPlaceholder: "留空使用默认分类模型",
-          compressionThresholdLabel: "压缩阈值（MB，0=不压缩）",
-          compressionThresholdPlaceholder: "默认 1",
           startButton: "开始识别",
           clearImages: "清空图片",
           progressLabel: "处理进度",
@@ -1027,8 +1005,6 @@
           apiPlaceholder: "请输入API地址，默认 /api/v1/mercari/image/analyze",
           alertNoFiles: "请先选择图片",
           alertNoEndpoint: "请填写接口地址",
-          compressingImages: "正在压缩图片...",
-          uploadTooLarge: "压缩后图片总大小仍为 {size}，超过 {limit} 上限。请减少图片数量或先压缩原图。",
           uploadCompressed: "已压缩上传：{uploadSize}（原始 {originalSize}）",
           processingButton: "处理中...",
           statusBadgeProcessing: "处理中...",
@@ -1130,8 +1106,6 @@
           visionModelPlaceholder: "空欄なら既定モデルを使用",
           categoryModelLabel: "カテゴリモデル",
           categoryModelPlaceholder: "空欄なら既定モデルを使用",
-          compressionThresholdLabel: "圧縮しきい値（MB、0=圧縮なし）",
-          compressionThresholdPlaceholder: "既定 1",
           startButton: "解析を開始",
           clearImages: "画像をクリア",
           progressLabel: "処理進捗",
@@ -1147,8 +1121,6 @@
           apiPlaceholder: "API エンドポイントを入力（既定: /api/v1/mercari/image/analyze）",
           alertNoFiles: "画像を選択してください",
           alertNoEndpoint: "API エンドポイントを入力してください",
-          compressingImages: "画像を圧縮しています...",
-          uploadTooLarge: "圧縮後の合計サイズが {size} で、上限 {limit} を超えています。画像枚数を減らすか、元画像を圧縮してください。",
           uploadCompressed: "圧縮して送信: {uploadSize}（元画像 {originalSize}）",
           processingButton: "処理中...",
           statusBadgeProcessing: "処理中...",
@@ -1284,8 +1256,6 @@
       const categoryModelLabel = document.getElementById("category-model-label");
       const visionModelInput = document.getElementById("vision-model");
       const categoryModelInput = document.getElementById("category-model");
-      const compressionThresholdLabel = document.getElementById("compression-threshold-label");
-      const compressionThresholdInput = document.getElementById("compression-threshold");
       const apiInput = document.getElementById("api-endpoint");
       const submitBtn = document.getElementById("submit-btn");
       const buttonText = document.getElementById("button-text");
@@ -1371,8 +1341,6 @@
         // visionModelInput.placeholder = t("visionModelPlaceholder");
         // categoryModelLabel.textContent = t("categoryModelLabel");
         // categoryModelInput.placeholder = t("categoryModelPlaceholder");
-        compressionThresholdLabel.textContent = t("compressionThresholdLabel");
-        compressionThresholdInput.placeholder = t("compressionThresholdPlaceholder");
 
         buttonText.innerHTML = processing
           ? `<span class="spinner"></span> ${t("processingButton")}`
@@ -1962,14 +1930,13 @@
       });
 
       // 批量处理
-      function buildBatchFileObj(files, uploadSummary) {
+      function buildBatchFileObj(files) {
         const first = files[0];
         const totalBytes = files.reduce((sum, item) => sum + (item.file?.size || 0), 0);
         const firstName = first?.file?.name || "image";
         const name = files.length === 1 ? firstName : `${files.length} images (e.g. ${firstName})`;
         return {
           file: { name, size: totalBytes },
-          uploadSummary,
           url: first?.url || "",
           _files: files
         };
@@ -2016,24 +1983,14 @@
         }
 
         try {
-          buttonText.innerHTML = `<span class="spinner"></span> ${t("compressingImages")}`;
-          const compressionThresholdBytes = resolveCompressionThresholdBytes(
-            compressionThresholdInput.value,
-            DEFAULT_UPLOAD_OPTIONS.compressionThresholdBytes,
-          );
-          const uploadSelection = await prepareCompressedUploadSelection(selectedFiles, {
-            ...DEFAULT_UPLOAD_OPTIONS,
-            compressionThresholdBytes,
-          });
           const formData = new FormData();
-          uploadSelection.files.forEach((file) => {
-            formData.append("image_list", file);
+          selectedFiles.forEach((fileObj) => {
+            formData.append("image_list", fileObj.file);
           });
           formData.append("language", languageSelect.value);
           formData.append("category_count", categoryCountSelect.value || "1");
           if (visionModelInput?.value.trim()) formData.append("vision_model", visionModelInput.value.trim());
           if (categoryModelInput?.value.trim()) formData.append("category_model", categoryModelInput.value.trim());
-          buttonText.innerHTML = `<span class="spinner"></span> ${t("processingButton")}`;
 
           const resp = await fetch(endpoint, {
             method: "POST",
@@ -2049,11 +2006,7 @@
             payload = { error: t("jsonParseFailed"), raw: text };
           }
 
-          const batchFileObj = buildBatchFileObj(selectedFiles, {
-            originalBytes: uploadSelection.totalOriginalBytes,
-            uploadBytes: uploadSelection.totalUploadBytes,
-            savedBytes: uploadSelection.savedBytes,
-          });
+          const batchFileObj = buildBatchFileObj(selectedFiles);
           for (let i = 0; i < selectedFiles.length; i++) {
             const previewItem = previewGrid.children[i];
             if (!previewItem) continue;
@@ -2079,16 +2032,7 @@
           addResultCard(batchFileObj, payload, resp.ok);
           completed = total;
         } catch (err) {
-          const message = String(err?.message || err);
-          const isSizeError = /Upload payload is too large/i.test(message);
-          const payload = isSizeError
-            ? {
-                error: t("uploadTooLarge", {
-                  size: formatBytes(Number(message.match(/large: (\d+) bytes/)?.[1] || 0)),
-                  limit: formatBytes(DEFAULT_UPLOAD_OPTIONS.maxTotalBytes),
-                }),
-              }
-            : { error: message };
+          const payload = { error: String(err?.message || err) };
           const batchFileObj = buildBatchFileObj(selectedFiles);
           for (let i = 0; i < selectedFiles.length; i++) {
             const previewItem = previewGrid.children[i];
@@ -2176,12 +2120,14 @@
         const rawJson = JSON.stringify(payload, null, 2);
         const ratingValue = resultRatings[resultId];
         const backendTimingStats = buildBackendTimingStats(payload);
-        const uploadSummary = fileObj.uploadSummary;
-        const uploadStats = uploadSummary
-          ? `<span>${t("uploadCompressed", {
-              uploadSize: formatBytes(uploadSummary.uploadBytes),
-              originalSize: formatBytes(uploadSummary.originalBytes),
-            })}</span>`
+        const compressedImages = Array.isArray(payload?.image_processing)
+          ? payload.image_processing.filter((item) => item?.compressed)
+          : [];
+        const uploadStats = compressedImages.length > 0
+          ? compressedImages.map((item) => `<span>${t("uploadCompressed", {
+              uploadSize: formatBytes(item.processed_bytes || 0),
+              originalSize: formatBytes(item.original_bytes || 0),
+            })}</span>`).join("")
           : `<span>📦 ${formatBytes(fileObj.file.size)}</span>`;
 
         card.innerHTML = `

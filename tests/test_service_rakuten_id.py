@@ -180,6 +180,49 @@ class RakutenIdResponseTest(unittest.TestCase):
         self.assertLess(content.index({"type": "text", "text": text_parts[1]}), content.index(image_parts[0]))
         self.assertLess(content.index({"type": "text", "text": text_parts[2]}), content.index(image_parts[1]))
 
+    def test_analyze_includes_image_processing_metadata_when_provided(self):
+        settings = SimpleNamespace(
+            vision_model="vision-test",
+            category_model="category-test",
+            log_llm_raw=False,
+            category_llm_retry_enabled=False,
+            category_llm_max_retries=0,
+        )
+        analyzer = MercariAnalyzer(
+            settings=settings,
+            brand_store=FakeBrandStore(),
+            category_store=FakeCategoryStore(),
+            vision_client=FakeChatClient(
+                {
+                    "title": "シャツ",
+                    "description": "メンズシャツ",
+                    "prices": [1000, 1500, 2000],
+                    "top_level_category": "メンズファッション",
+                    "brand_name": "",
+                }
+            ),
+            category_client=FakeChatClient(
+                {"best_target_path": "メンズファッション/トップス"}
+            ),
+        )
+
+        result = analyzer.analyze(
+            images=[(b"image-bytes", "image/jpeg")],
+            language="ja",
+            category_limit=1,
+            image_processing=[
+                {
+                    "index": 1,
+                    "compressed": True,
+                    "original_bytes": 2_000_000,
+                    "processed_bytes": 400_000,
+                }
+            ],
+        )
+
+        self.assertEqual(result["image_processing"][0]["original_bytes"], 2_000_000)
+        self.assertEqual(result["image_processing"][0]["processed_bytes"], 400_000)
+
     def test_analyze_includes_phase_timings(self):
         settings = SimpleNamespace(
             vision_model="vision-test",

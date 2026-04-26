@@ -82,6 +82,7 @@ class Settings:
     request_timeout: int = _env_int("REQUEST_TIMEOUT", 60)
     enable_debug_param: bool = _env_bool("ENABLE_DEBUG", True)
     max_image_bytes: int = _env_int("MAX_IMAGE_BYTES", 5 * 1024 * 1024)
+    image_compression_threshold_mb: int = _env_int("IMAGE_COMPRESSION_THRESHOLD_MB", 1)
     allowed_mime_types: Set[str] = field(default_factory=lambda: set(ALLOWED_MIME_TYPES))
     log_llm_raw: bool = _env_bool("LOG_LLM_RAW", False)
     log_requests: bool = _env_bool("LOG_REQUESTS", True)
@@ -118,6 +119,10 @@ class Settings:
         if self.reasoning_summary is not None:
             reasoning["summary"] = self.reasoning_summary
         return reasoning or None
+
+    @property
+    def image_compression_threshold_bytes(self) -> int:
+        return max(0, int(self.image_compression_threshold_mb)) * 1024 * 1024
 
 
 def load_settings() -> Settings:

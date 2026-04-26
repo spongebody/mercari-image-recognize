@@ -131,6 +131,15 @@ files.forEach((file) => {
     "vision_ms": 1234.56,
     "category_ms": 789.01
   },
+  "image_processing": [
+    {
+      "index": 1,
+      "filename": "front.jpg",
+      "compressed": true,
+      "original_bytes": 2457600,
+      "processed_bytes": 524288
+    }
+  ],
   "best_target_path": "...",
   "best_category_id": "...",
   "rakuten_id": "...",
@@ -161,6 +170,7 @@ files.forEach((file) => {
 - `prices` 为视觉模型给出的初步价格预测；当 `tax_excluded` 有值时必须为空数组。
 - `best_target_path` / `alternatives` 在成功匹配分类路径时返回。
 - `timings.total_ms` 表示服务端分析处理总耗时；`timings.vision_ms` 表示图片识别 LLM 调用耗时；`timings.category_ms` 表示分类 LLM 调用耗时，单位均为毫秒。
+- `image_processing` 表示后端图片预处理结果；当单张图片超过服务端 `IMAGE_COMPRESSION_THRESHOLD_MB` 阈值并成功压缩时，`compressed=true` 且包含压缩前后的字节数。
 
 #### 错误
 - `400`：请求无效（图片格式/参数错误、解析失败等）。

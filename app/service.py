@@ -341,6 +341,7 @@ class MercariAnalyzer:
         category_limit: int = 1,
         vision_model_override: Optional[str] = None,
         category_model_override: Optional[str] = None,
+        image_processing: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         if language not in SUPPORTED_LANGUAGES:
             raise BadRequestError("Unsupported language.")
@@ -411,6 +412,8 @@ class MercariAnalyzer:
                 "category_ms": category_ms,
             },
         }
+        if image_processing:
+            result["image_processing"] = image_processing
         path_info = _paths_from_categories(categories, include_alternatives=False)
         if path_info:
             result.update(path_info)
