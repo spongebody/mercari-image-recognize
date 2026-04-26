@@ -35,7 +35,7 @@ Given one or more images of the same product, your task is:
 
 1. Inspect EVERY image independently, then merge the evidence into one product analysis.
    Treat the first two images as equally important. Do not ignore later images because the first image looks sufficient.
-   If one image shows a price tag and another image shows the product, combine both: use the tag for price and the product image for item details.
+   Combine complementary details across images, including front/back views, tags, labels, packaging, close-ups, and condition cues.
 2. Infer what the product is (type), its condition, important attributes, and any visible details across all images.
    Use front/back photos, labels, tags, packaging, and close-ups to extract precise model numbers, brand, color, size, weight, and condition.
 3. Generate a short, clear, and buyer-friendly title suitable for a Japanese marketplace listing.
@@ -121,7 +121,7 @@ Language for title and description: {language_label}.
 Multi-image requirements:
 - Treat all images as evidence for the SAME product.
 - Inspect each image label in order (Image 1 of N, Image 2 of N, etc.) and do not discard information from any image.
-- If one image contains a price tag and another image contains the product view, combine both sources in the final JSON.
+- Merge complementary information from all images into the final JSON.
 
 For the description:
 - Return a JSON object with 4 sections: product_details, product_intro, recommendation, search_keywords

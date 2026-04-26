@@ -2,6 +2,7 @@ export const DEFAULT_UPLOAD_OPTIONS = {
   maxDimension: 1600,
   outputType: "image/jpeg",
   quality: 0.82,
+  compressionThresholdBytes: 1024 * 1024,
   maxTotalBytes: 10 * 1024 * 1024,
 };
 
@@ -50,6 +51,24 @@ export function prepareUploadSelection(selectedFiles, options = {}) {
   };
 }
 
+export function shouldCompressFile(file, compressionThresholdBytes = DEFAULT_UPLOAD_OPTIONS.compressionThresholdBytes) {
+  if (!file?.type?.startsWith("image/") || file.type === "image/svg+xml") {
+    return false;
+  }
+  if (!compressionThresholdBytes || compressionThresholdBytes <= 0) {
+    return false;
+  }
+  return (file.size || 0) > compressionThresholdBytes;
+}
+
+export function resolveCompressionThresholdBytes(value, fallback = DEFAULT_UPLOAD_OPTIONS.compressionThresholdBytes) {
+  const numeric = Number.parseFloat(String(value ?? "").trim());
+  if (!Number.isFinite(numeric) || numeric < 0) {
+    return fallback;
+  }
+  return Math.round(numeric * 1024 * 1024);
+}
+
 function readImage(file) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -84,7 +103,7 @@ function canvasToBlob(canvas, type, quality) {
 
 export async function compressImageFile(file, options = {}) {
   const settings = { ...DEFAULT_UPLOAD_OPTIONS, ...options };
-  if (!file?.type?.startsWith("image/") || file.type === "image/svg+xml") {
+  if (!shouldCompressFile(file, settings.compressionThresholdBytes)) {
     return file;
   }
 

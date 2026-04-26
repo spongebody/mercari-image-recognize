@@ -829,6 +829,20 @@
               </div>
             </div>
 
+            <div class="controls-row">
+              <div>
+                <label for="compression-threshold" id="compression-threshold-label">压缩阈值（MB，0=不压缩）</label>
+                <input
+                  type="number"
+                  id="compression-threshold"
+                  min="0"
+                  step="0.1"
+                  value="1"
+                  placeholder="默认 1"
+                />
+              </div>
+            </div>
+
             <!-- 操作按钮 -->
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
               <button id="submit-btn">
@@ -969,6 +983,7 @@
       import {
         DEFAULT_UPLOAD_OPTIONS,
         prepareCompressedUploadSelection,
+        resolveCompressionThresholdBytes,
       } from "./upload-utils.mjs";
 
       const translations = {
@@ -995,6 +1010,8 @@
           visionModelPlaceholder: "留空使用默认视觉模型",
           categoryModelLabel: "分类模型",
           categoryModelPlaceholder: "留空使用默认分类模型",
+          compressionThresholdLabel: "压缩阈值（MB，0=不压缩）",
+          compressionThresholdPlaceholder: "默认 1",
           startButton: "开始识别",
           clearImages: "清空图片",
           progressLabel: "处理进度",
@@ -1113,6 +1130,8 @@
           visionModelPlaceholder: "空欄なら既定モデルを使用",
           categoryModelLabel: "カテゴリモデル",
           categoryModelPlaceholder: "空欄なら既定モデルを使用",
+          compressionThresholdLabel: "圧縮しきい値（MB、0=圧縮なし）",
+          compressionThresholdPlaceholder: "既定 1",
           startButton: "解析を開始",
           clearImages: "画像をクリア",
           progressLabel: "処理進捗",
@@ -1265,6 +1284,8 @@
       const categoryModelLabel = document.getElementById("category-model-label");
       const visionModelInput = document.getElementById("vision-model");
       const categoryModelInput = document.getElementById("category-model");
+      const compressionThresholdLabel = document.getElementById("compression-threshold-label");
+      const compressionThresholdInput = document.getElementById("compression-threshold");
       const apiInput = document.getElementById("api-endpoint");
       const submitBtn = document.getElementById("submit-btn");
       const buttonText = document.getElementById("button-text");
@@ -1350,6 +1371,8 @@
         // visionModelInput.placeholder = t("visionModelPlaceholder");
         // categoryModelLabel.textContent = t("categoryModelLabel");
         // categoryModelInput.placeholder = t("categoryModelPlaceholder");
+        compressionThresholdLabel.textContent = t("compressionThresholdLabel");
+        compressionThresholdInput.placeholder = t("compressionThresholdPlaceholder");
 
         buttonText.innerHTML = processing
           ? `<span class="spinner"></span> ${t("processingButton")}`
@@ -1994,7 +2017,14 @@
 
         try {
           buttonText.innerHTML = `<span class="spinner"></span> ${t("compressingImages")}`;
-          const uploadSelection = await prepareCompressedUploadSelection(selectedFiles, DEFAULT_UPLOAD_OPTIONS);
+          const compressionThresholdBytes = resolveCompressionThresholdBytes(
+            compressionThresholdInput.value,
+            DEFAULT_UPLOAD_OPTIONS.compressionThresholdBytes,
+          );
+          const uploadSelection = await prepareCompressedUploadSelection(selectedFiles, {
+            ...DEFAULT_UPLOAD_OPTIONS,
+            compressionThresholdBytes,
+          });
           const formData = new FormData();
           uploadSelection.files.forEach((file) => {
             formData.append("image_list", file);

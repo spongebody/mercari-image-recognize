@@ -3,6 +3,8 @@ import {
   buildUploadFileName,
   calculateResizeDimensions,
   prepareUploadSelection,
+  resolveCompressionThresholdBytes,
+  shouldCompressFile,
 } from "../web/upload-utils.mjs";
 
 function file(name, size) {
@@ -51,4 +53,16 @@ function file(name, size) {
 {
   assert.equal(buildUploadFileName("IMG_001.PNG", "image/jpeg"), "IMG_001-upload.jpg");
   assert.equal(buildUploadFileName("photo", "image/webp"), "photo-upload.webp");
+}
+
+{
+  assert.equal(shouldCompressFile(file("small.png", 900_000), 1_000_000), false);
+  assert.equal(shouldCompressFile(file("large.png", 1_000_001), 1_000_000), true);
+}
+
+{
+  assert.equal(resolveCompressionThresholdBytes("1"), 1_048_576);
+  assert.equal(resolveCompressionThresholdBytes("2.5"), 2_621_440);
+  assert.equal(resolveCompressionThresholdBytes("0"), 0);
+  assert.equal(resolveCompressionThresholdBytes("bad"), 1_048_576);
 }
