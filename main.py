@@ -1,13 +1,14 @@
 import time
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
-from app.config import load_settings
+from app.config import BASE_DIR, load_settings
 from app.constants import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES
 from app.data.brands import BrandStore
 from app.data.categories import CategoryStore
@@ -15,6 +16,7 @@ from app.errors import BadRequestError, LLMRequestError
 from app.image_processing import compress_image_if_needed
 from app.llm.client import OpenRouterClient
 from app.request_logging import build_request_log, write_request_log
+from app.runtime_config import get_public_config, update_runtime_config
 from app.service import MercariAnalyzer
 from app.utils import parse_bool_param
 
@@ -47,6 +49,8 @@ analyzer = MercariAnalyzer(
 )
 
 app = FastAPI(title="Mercari Image Analyzer", version="1.0.0")
+CONFIG_ENV_PATH = BASE_DIR / ".env"
+CONFIG_PAGE_PATH = BASE_DIR / "web" / "config.html"
 
 # Allow local dev CORS for the test page or other origins.
 app.add_middleware(
@@ -56,6 +60,43 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _sync_runtime_clients() -> None:
+    vision_client.timeout = settings.request_timeout
+    category_client.timeout = settings.request_timeout
+
+
+@app.get("/config", response_class=HTMLResponse)
+def config_page() -> HTMLResponse:
+    try:
+        return HTMLResponse(CONFIG_PAGE_PATH.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Config page not found.") from exc
+
+
+@app.get("/api/v1/config")
+def read_config() -> Dict[str, Any]:
+    return get_public_config(settings)
+
+
+@app.put("/api/v1/config")
+def save_config(payload: Dict[str, Any], request: Request) -> Dict[str, Any]:
+    origin = request.headers.get("origin")
+    if origin:
+        origin_host = urlparse(origin).netloc
+        request_host = request.headers.get("host", "")
+        if origin_host != request_host:
+            raise HTTPException(status_code=403, detail="Cross-origin config updates are not allowed.")
+    try:
+        return update_runtime_config(
+            settings,
+            payload,
+            env_path=CONFIG_ENV_PATH,
+            on_applied=_sync_runtime_clients,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.middleware("http")

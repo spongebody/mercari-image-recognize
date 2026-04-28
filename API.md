@@ -48,6 +48,52 @@
 
 ## 接口列表
 
+### GET /config
+返回 API 配置页面。
+
+说明：
+- 该页面由当前 FastAPI 服务直接提供，不需要额外运行前端服务。
+- 页面保存配置后会写入项目根目录 `.env`，并立即影响后续 API 请求。
+- 页面不暴露 `OPENROUTER_API_KEY`。
+
+### GET /api/v1/config
+读取当前可在页面上管理的运行时配置。
+
+#### 响应（200）
+
+```json
+{
+  "VISION_MODEL": "...",
+  "CATEGORY_MODEL": "...",
+  "LOG_LLM_RAW": false,
+  "LOG_REQUESTS": true,
+  "ENABLE_DEBUG": true,
+  "CATEGORY_LLM_RETRY_ENABLED": false,
+  "CATEGORY_LLM_MAX_RETRIES": 1,
+  "IMAGE_COMPRESSION_THRESHOLD_MB": 1,
+  "REQUEST_TIMEOUT": 60
+}
+```
+
+### PUT /api/v1/config
+保存配置并立即生效。
+
+#### 请求（application/json）
+
+```json
+{
+  "VISION_MODEL": "openai/gpt-4.1-mini",
+  "CATEGORY_MODEL": "openai/gpt-4.1-mini",
+  "LOG_REQUESTS": true
+}
+```
+
+说明：
+- 只允许更新白名单字段；未知字段返回 `400`。
+- 带 `Origin` 请求头的跨站写入会返回 `403`；配置页面本身使用同源请求。
+- 保存会同步写入 `.env`，因此服务重启后仍然保持相同配置。
+- 保存后当前进程内的 `settings` 会更新，后续请求立即使用新配置。
+
 ### POST /api/v1/mercari/image/analyze
 上传并解析商品图片。
 

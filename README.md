@@ -16,6 +16,10 @@ pip install -r requirements.txt
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
+The same FastAPI process also serves the runtime configuration page at `/config`.
+Changes saved from that page are written to `.env` and applied to subsequent API
+requests immediately.
+
 ## Image analysis flow
 
 Image analysis uses one vision LLM call followed by one category selection call:
@@ -69,3 +73,24 @@ Booleans accept `1`, `true`, `yes`, or `on`.
 - `REASONING_SUMMARY` (optional): reasoning summary level, one of `auto`, `concise`, `detailed`.
 
 Category retries apply only to the category selection step and cover OpenRouter request errors and JSON parsing failures, using exponential backoff (0.2s, 0.4s, 0.8s, capped).
+
+## Runtime configuration page
+
+Open `http://<host>:<port>/config` to edit the common API settings without
+manually changing `.env`. The page can update:
+
+- `VISION_MODEL`
+- `CATEGORY_MODEL`
+- `LOG_LLM_RAW`
+- `LOG_REQUESTS`
+- `ENABLE_DEBUG`
+- `CATEGORY_LLM_RETRY_ENABLED`
+- `CATEGORY_LLM_MAX_RETRIES`
+- `IMAGE_COMPRESSION_THRESHOLD_MB`
+- `REQUEST_TIMEOUT`
+
+`OPENROUTER_API_KEY` is intentionally not exposed on the page.
+
+Runtime updates are applied inside the current API process. The provided systemd
+command runs a single uvicorn worker, which matches this behavior. If you deploy
+multiple workers later, restart or reload all workers after changing config.

@@ -30,6 +30,11 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _env_int_min(name: str, default: int, minimum: int) -> int:
+    value = _env_int(name, default)
+    return value if value >= minimum else default
+
+
 def _env_optional_bool(name: str) -> Optional[bool]:
     raw = os.getenv(name)
     if raw is None:
@@ -79,7 +84,7 @@ class Settings:
     )
     openrouter_referer: str = os.getenv("OPENROUTER_REFERER", "")
     openrouter_app_name: str = os.getenv("OPENROUTER_APP_NAME", "mercari-image-backend")
-    request_timeout: int = _env_int("REQUEST_TIMEOUT", 60)
+    request_timeout: int = _env_int_min("REQUEST_TIMEOUT", 60, 1)
     enable_debug_param: bool = _env_bool("ENABLE_DEBUG", True)
     max_image_bytes: int = _env_int("MAX_IMAGE_BYTES", 5 * 1024 * 1024)
     image_compression_threshold_mb: int = _env_int("IMAGE_COMPRESSION_THRESHOLD_MB", 1)

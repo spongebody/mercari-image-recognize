@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>API 配置</title>
+    <style>
+      :root {
+        --bg: #f7f8fa;
+        --card: #ffffff;
+        --text: #1c1f25;
+        --muted: #6b7280;
+        --accent: #2f80ed;
+        --border: #e5e7eb;
+        --danger: #e11d48;
+        --success: #16a34a;
+        --shadow: 0 14px 40px rgba(15, 23, 42, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: radial-gradient(circle at 10% 20%, #eef2ff 0, transparent 25%),
+          radial-gradient(circle at 80% 0%, #e0f2fe 0, transparent 28%),
+          var(--bg);
+        color: var(--text);
+        font-family: "Inter", "Noto Sans SC", "Noto Sans JP", system-ui, -apple-system, sans-serif;
+        min-height: 100vh;
+      }
+
+      .page {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 28px 20px 40px;
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 26px;
+        letter-spacing: -0.2px;
+      }
+
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+        color: var(--muted);
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--muted);
+      }
+
+      .dot.live {
+        background: var(--success);
+        box-shadow: 0 0 12px rgba(22, 163, 74, 0.5);
+      }
+
+      .pill {
+        background: #e0e7ff;
+        color: #1e3a8a;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 18px;
+        box-shadow: var(--shadow);
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .controls-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 12px;
+      }
+
+      label {
+        display: block;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      input[type="text"],
+      input[type="number"],
+      select {
+        width: 100%;
+        padding: 12px 16px;
+        border: 2px solid var(--border);
+        border-radius: 10px;
+        background: #fdfdfd;
+        font-size: 14px;
+        transition: all 0.2s ease;
+        font-family: inherit;
+      }
+
+      input:focus,
+      select:focus {
+        outline: none;
+        border-color: var(--accent);
+        background-color: white;
+        box-shadow: 0 0 0 3px rgba(47, 128, 237, 0.1);
+      }
+
+      .hint {
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      button {
+        width: 100%;
+        border: none;
+        background: linear-gradient(135deg, var(--accent), #1d4ed8);
+        color: white;
+        padding: 14px 16px;
+        border-radius: 12px;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.08s ease, box-shadow 0.08s ease;
+        box-shadow: 0 10px 25px rgba(47, 128, 237, 0.2);
+      }
+
+      button.secondary {
+        background: white;
+        color: var(--text);
+        border: 2px solid var(--border);
+        box-shadow: none;
+      }
+
+      button:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+      }
+
+      button:not(:disabled):hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 32px rgba(47, 128, 237, 0.28);
+      }
+
+      .message {
+        display: none;
+        border-radius: 10px;
+        padding: 12px 14px;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .message.show {
+        display: block;
+      }
+
+      .message.success {
+        background: #dcfce7;
+        color: #166534;
+        border: 1px solid #86efac;
+      }
+
+      .message.error {
+        background: #fee2e2;
+        color: #991b1b;
+        border: 1px solid #fecdd3;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header>
+        <div>
+          <h1>API 配置</h1>
+          <p class="status">
+            <span class="dot" id="status-dot"></span>
+            <span id="status-text">正在读取配置...</span>
+          </p>
+        </div>
+        <span class="pill">同服务配置页</span>
+      </header>
+
+      <main class="card grid">
+        <div class="controls-row">
+          <div>
+            <label for="VISION_MODEL">图片识别默认模型</label>
+            <input id="VISION_MODEL" type="text" placeholder="例如 openai/gpt-4.1-mini" />
+            <div class="hint">保存后，未在请求中覆盖 vision_model 的图片识别会使用该模型。</div>
+          </div>
+          <div>
+            <label for="CATEGORY_MODEL">分类默认模型</label>
+            <input id="CATEGORY_MODEL" type="text" placeholder="例如 openai/gpt-4.1-mini" />
+            <div class="hint">保存后，标题分类和图片后的分类选择会使用该模型。</div>
+          </div>
+        </div>
+
+        <div class="controls-row">
+          <div>
+            <label for="LOG_LLM_RAW">打印 LLM 原始日志</label>
+            <select id="LOG_LLM_RAW">
+              <option value="true">开启</option>
+              <option value="false">关闭</option>
+            </select>
+            <div class="hint">开启后会把 LLM 原始内容写入服务端 logs 目录。</div>
+          </div>
+          <div>
+            <label for="LOG_REQUESTS">打印请求日志</label>
+            <select id="LOG_REQUESTS">
+              <option value="true">开启</option>
+              <option value="false">关闭</option>
+            </select>
+            <div class="hint">开启后会记录 API 请求日志。</div>
+          </div>
+        </div>
+
+        <div class="controls-row">
+          <div>
+            <label for="ENABLE_DEBUG">允许 debug 响应字段</label>
+            <select id="ENABLE_DEBUG">
+              <option value="true">开启</option>
+              <option value="false">关闭</option>
+            </select>
+          </div>
+          <div>
+            <label for="CATEGORY_LLM_RETRY_ENABLED">分类模型失败重试</label>
+            <select id="CATEGORY_LLM_RETRY_ENABLED">
+              <option value="true">开启</option>
+              <option value="false">关闭</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="controls-row">
+          <div>
+            <label for="CATEGORY_LLM_MAX_RETRIES">分类模型最大重试次数</label>
+            <input id="CATEGORY_LLM_MAX_RETRIES" type="number" min="0" step="1" />
+          </div>
+          <div>
+            <label for="IMAGE_COMPRESSION_THRESHOLD_MB">图片压缩阈值 MB</label>
+            <input id="IMAGE_COMPRESSION_THRESHOLD_MB" type="number" min="0" step="1" />
+            <div class="hint">设置为 0 可以关闭后端压缩。</div>
+          </div>
+        </div>
+
+        <div class="controls-row">
+          <div>
+            <label for="REQUEST_TIMEOUT">OpenRouter 请求超时秒数</label>
+            <input id="REQUEST_TIMEOUT" type="number" min="1" step="1" />
+          </div>
+        </div>
+
+        <div class="message" id="message"></div>
+
+        <div class="actions">
+          <button id="save-btn">保存配置并立即生效</button>
+          <button class="secondary" id="reload-btn">重新读取</button>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      const fields = [
+        "VISION_MODEL",
+        "CATEGORY_MODEL",
+        "LOG_LLM_RAW",
+        "LOG_REQUESTS",
+        "ENABLE_DEBUG",
+        "CATEGORY_LLM_RETRY_ENABLED",
+        "CATEGORY_LLM_MAX_RETRIES",
+        "IMAGE_COMPRESSION_THRESHOLD_MB",
+        "REQUEST_TIMEOUT",
+      ];
+
+      const statusDot = document.getElementById("status-dot");
+      const statusText = document.getElementById("status-text");
+      const message = document.getElementById("message");
+      const saveBtn = document.getElementById("save-btn");
+      const reloadBtn = document.getElementById("reload-btn");
+
+      function showMessage(text, type) {
+        message.textContent = text;
+        message.className = `message show ${type}`;
+      }
+
+      function setStatus(text, live) {
+        statusText.textContent = text;
+        statusDot.classList.toggle("live", Boolean(live));
+      }
+
+      function setFormValues(config) {
+        fields.forEach((key) => {
+          const el = document.getElementById(key);
+          if (!el) return;
+          const value = config[key];
+          if (typeof value === "boolean") {
+            el.value = value ? "true" : "false";
+          } else {
+            el.value = value ?? "";
+          }
+        });
+      }
+
+      function getFormValues() {
+        return fields.reduce((payload, key) => {
+          const el = document.getElementById(key);
+          if (!el) return payload;
+          if (el.tagName === "SELECT") {
+            payload[key] = el.value === "true";
+          } else if (el.type === "number") {
+            payload[key] = Number(el.value || 0);
+          } else {
+            payload[key] = el.value.trim();
+          }
+          return payload;
+        }, {});
+      }
+
+      async function loadConfig() {
+        setStatus("正在读取配置...", false);
+        message.className = "message";
+        const resp = await fetch("/api/v1/config");
+        const data = await resp.json();
+        if (!resp.ok) {
+          throw new Error(data.detail || "读取配置失败");
+        }
+        setFormValues(data);
+        setStatus("配置已加载", true);
+      }
+
+      async function saveConfig() {
+        saveBtn.disabled = true;
+        saveBtn.textContent = "保存中...";
+        try {
+          const resp = await fetch("/api/v1/config", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(getFormValues()),
+          });
+          const data = await resp.json();
+          if (!resp.ok) {
+            throw new Error(data.detail || "保存配置失败");
+          }
+          setFormValues(data);
+          setStatus("配置已保存并立即生效", true);
+          showMessage("保存成功：已写入 .env，并对后续 API 请求立即生效。", "success");
+        } catch (err) {
+          showMessage(String(err.message || err), "error");
+        } finally {
+          saveBtn.disabled = false;
+          saveBtn.textContent = "保存配置并立即生效";
+        }
+      }
+
+      saveBtn.addEventListener("click", saveConfig);
+      reloadBtn.addEventListener("click", () => {
+        loadConfig().catch((err) => showMessage(String(err.message || err), "error"));
+      });
+
+      loadConfig().catch((err) => {
+        setStatus("读取失败", false);
+        showMessage(String(err.message || err), "error");
+      });
+    </script>
+  </body>
+</html>

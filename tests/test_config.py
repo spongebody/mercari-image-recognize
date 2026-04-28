@@ -22,6 +22,13 @@ class SettingsConfigTest(unittest.TestCase):
         self.assertEqual(settings.image_compression_threshold_mb, 3)
         self.assertEqual(settings.image_compression_threshold_bytes, 3 * 1024 * 1024)
 
+    def test_request_timeout_zero_falls_back_to_default(self):
+        with patch.dict("os.environ", {"REQUEST_TIMEOUT": "0"}, clear=True):
+            module = importlib.reload(config_module)
+            settings = module.load_settings()
+
+        self.assertEqual(settings.request_timeout, 60)
+
 
 if __name__ == "__main__":
     unittest.main()
