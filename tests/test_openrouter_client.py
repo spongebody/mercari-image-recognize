@@ -90,6 +90,33 @@ class OpenRouterClientReasoningTest(unittest.TestCase):
             {"enabled": True, "effort": "medium", "summary": "auto"},
         )
 
+    def test_chat_timeout_override(self):
+        client = OpenRouterClient(
+            api_key="key",
+            base_url="https://openrouter.ai/api/v1/chat/completions",
+            timeout=30,
+        )
+        captured = {}
+
+        def fake_post(url, headers, data, timeout):
+            captured["timeout"] = timeout
+            return _FakeResponse({"choices": [{"message": {"content": "ok"}}]})
+
+        client.session.post = fake_post
+
+        client.chat(
+            model="google/gemini-3.1-pro-preview",
+            messages=[{"role": "user", "content": "hi"}],
+            timeout=5,
+        )
+        self.assertEqual(captured["timeout"], 5)
+
+        client.chat(
+            model="google/gemini-3.1-pro-preview",
+            messages=[{"role": "user", "content": "hi"}],
+        )
+        self.assertEqual(captured["timeout"], 30)
+
     def test_chat_omits_reasoning_when_not_configured(self):
         client = OpenRouterClient(
             api_key="key",

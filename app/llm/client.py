@@ -30,6 +30,7 @@ class OpenRouterClient:
         messages: List[Dict[str, Any]],
         temperature: float = 0.2,
         max_tokens: int = 1024,
+        timeout: Optional[float] = None,
     ) -> Tuple[str, Dict[str, Any]]:
         if not self.api_key:
             raise LLMRequestError("OPENROUTER_API_KEY is not configured.")
@@ -54,9 +55,13 @@ class OpenRouterClient:
         if self.reasoning is not None:
             payload["reasoning"] = dict(self.reasoning)
 
+        effective_timeout = timeout if timeout is not None else self.timeout
         try:
             response = self.session.post(
-                self.base_url, headers=headers, data=json.dumps(payload), timeout=self.timeout
+                self.base_url,
+                headers=headers,
+                data=json.dumps(payload),
+                timeout=effective_timeout,
             )
         except requests.RequestException as exc:
             raise LLMRequestError(f"OpenRouter request failed: {exc}") from exc
