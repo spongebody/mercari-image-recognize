@@ -10,8 +10,9 @@ from .config import Settings
 from .constants import DEFAULT_LANGUAGE, PRICE_MAX, PRICE_MIN, SUPPORTED_LANGUAGES, TOP_LEVEL_CATEGORIES
 from .data.brands import BrandStore, empty_brand_id_obj
 from .data.categories import CategoryStore
-from .errors import BadRequestError, LLMRequestError
+from .errors import BadRequestError, LLMAllAttemptsFailedError
 from .llm.client import OpenRouterClient
+from .llm.resilient import AttemptRecord, ResilientCaller
 from .llm.prompts import (
     CATEGORY_SYSTEM_PROMPT,
     CATEGORY_USER_PROMPT_TEMPLATE,
@@ -26,7 +27,6 @@ from .utils import (
     image_bytes_to_data_url,
     normalize_category_label,
     normalize_price_list,
-    safe_json_loads,
 )
 
 
@@ -332,6 +332,18 @@ class MercariAnalyzer:
         self.vision_client = vision_client
         self.category_client = category_client
         self._logs_dir = Path(__file__).resolve().parent.parent / "logs"
+        self.vision_caller = ResilientCaller(
+            client=vision_client,
+            max_retries=settings.model_call_max_retries,
+            total_budget_s=settings.model_call_total_budget_seconds,
+            per_attempt_timeout_s=settings.request_timeout,
+        )
+        self.category_caller = ResilientCaller(
+            client=category_client,
+            max_retries=settings.model_call_max_retries,
+            total_budget_s=settings.model_call_total_budget_seconds,
+            per_attempt_timeout_s=settings.request_timeout,
+        )
 
     def analyze(
         self,
@@ -349,17 +361,19 @@ class MercariAnalyzer:
             raise BadRequestError("Image list is required.")
         category_limit = max(1, min(int(category_limit), 3))
         total_started = time.monotonic()
+        attempts_by_stage: Dict[str, List[AttemptRecord]] = {}
 
         data_urls = [
             image_bytes_to_data_url(image_bytes, mime_type)
             for image_bytes, mime_type in images
         ]
         vision_started = time.monotonic()
-        ai_raw, ai_full = self._call_vision_llm(
+        ai_raw, ai_full, vision_attempts = self._call_vision_llm(
             data_urls,
             language,
             model_override=vision_model_override,
         )
+        attempts_by_stage["vision"] = vision_attempts
         vision_ms = round((time.monotonic() - vision_started) * 1000, 2)
 
         title = _clean_string(ai_raw.get("title", ""))
@@ -387,7 +401,7 @@ class MercariAnalyzer:
 
         if group_name:
             category_started = time.monotonic()
-            categories, llm_category_raw = self._choose_categories(
+            categories, llm_category_raw, category_attempts = self._choose_categories(
                 title=title or ai_raw.get("title", ""),
                 description=description_text or _description_to_text(ai_raw.get("description", "")),
                 brand_for_prompt=brand_raw or brand_name,
@@ -395,6 +409,7 @@ class MercariAnalyzer:
                 category_limit=category_limit,
                 model_override=category_model_override,
             )
+            attempts_by_stage["category"] = category_attempts
             category_ms = round((time.monotonic() - category_started) * 1000, 2)
 
         result: Dict[str, Any] = {
@@ -423,6 +438,10 @@ class MercariAnalyzer:
                 "ai_raw": ai_raw,
                 "group_name": group_name,
                 "llm_category_raw": llm_category_raw,
+                "attempts": {
+                    stage: [a.__dict__ for a in attempts]
+                    for stage, attempts in attempts_by_stage.items()
+                },
             }
 
         result["timings"]["total_ms"] = round((time.monotonic() - total_started) * 1000, 2)
@@ -449,7 +468,7 @@ class MercariAnalyzer:
         title_error: Optional[Exception] = None
 
         try:
-            title_payload = self._call_title_category_llm(
+            title_payload, _title_attempts = self._call_title_category_llm(
                 title=title_clean,
                 language=language,
                 model_override=category_model_override,
@@ -457,7 +476,7 @@ class MercariAnalyzer:
             top_level_category = _clean_string(title_payload.get("top_level_category", ""))
             group_name = _map_top_level_category(top_level_category)
             if group_name:
-                categories, _ = self._choose_categories(
+                categories, _, _category_attempts = self._choose_categories(
                     title=title_clean,
                     description="",
                     brand_for_prompt="",
@@ -465,7 +484,7 @@ class MercariAnalyzer:
                     category_limit=category_limit,
                     model_override=category_model_override,
                 )
-        except (BadRequestError, LLMRequestError) as exc:
+        except (BadRequestError, LLMAllAttemptsFailedError) as exc:
             title_error = exc
 
         paths_result = _paths_from_categories(categories)
@@ -473,11 +492,9 @@ class MercariAnalyzer:
             return paths_result
 
         if not image_url:
-            if title_error:
-                if isinstance(title_error, LLMRequestError):
-                    raise LLMRequestError(
-                        f"{title_error} (image_url is required for fallback)"
-                    ) from title_error
+            if isinstance(title_error, LLMAllAttemptsFailedError):
+                raise title_error
+            if title_error is not None:
                 raise BadRequestError(
                     f"Title classification failed; image_url is required for fallback. ({title_error})"
                 ) from title_error
@@ -511,7 +528,7 @@ class MercariAnalyzer:
         image_data_urls: List[str],
         language: str,
         model_override: Optional[str] = None,
-    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    ) -> Tuple[Dict[str, Any], Dict[str, Any], List[AttemptRecord]]:
         if not image_data_urls:
             raise BadRequestError("Image list is empty.")
         user_prompt = VISION_USER_PROMPT_WITH_PRICE.format(language_label=_language_label(language))
@@ -535,30 +552,32 @@ class MercariAnalyzer:
                 "content": [{"type": "text", "text": user_prompt}] + image_payloads,
             },
         ]
-        model = model_override or self.settings.vision_model
-        content, raw_response = self.vision_client.chat(
-            model=model,
-            messages=messages,
-            temperature=0.2,
-            max_tokens=16000,
-        )
-        self._log_raw("vision_content", content)
-        self._log_raw("vision_raw_response", raw_response)
+        primary = model_override or self.settings.vision_model
+        fallbacks = self.settings.vision_fallback_models
+
         try:
-            parsed = safe_json_loads(content)
-        except Exception as exc:
-            self._log_raw("vision_parse_error", {"error": str(exc), "content": content})
-            raise BadRequestError("Failed to parse vision LLM JSON.") from exc
-        if not isinstance(parsed, dict):
-            raise BadRequestError("Vision LLM did not return a JSON object.")
-        return parsed, raw_response
+            parsed, raw_response, attempts = self.vision_caller.call_and_parse(
+                stage="vision",
+                primary_model=primary,
+                fallback_models=fallbacks,
+                messages=messages,
+                temperature=0.2,
+                max_tokens=16000,
+            )
+        except LLMAllAttemptsFailedError as exc:
+            self._log_raw("vision_attempts", [a.__dict__ for a in exc.attempts])
+            raise
+        self._log_raw("vision_parsed", parsed)
+        self._log_raw("vision_raw_response", raw_response)
+        self._log_raw("vision_attempts", [a.__dict__ for a in attempts])
+        return parsed, raw_response, attempts
 
     def _call_title_category_llm(
         self,
         title: str,
         language: str,
         model_override: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> Tuple[Dict[str, Any], List[AttemptRecord]]:
         user_prompt = PRODUCT_TITLE_CATEGORY_USER_PROMPT.format(
             title=title,
             language_label=_language_label(language),
@@ -567,22 +586,25 @@ class MercariAnalyzer:
             {"role": "system", "content": PRODUCT_TITLE_CATEGORY_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ]
-        content, raw_response = self.category_client.chat(
-            model=model_override or self.settings.category_model,
-            messages=messages,
-            temperature=0.3,
-            max_tokens=16000,
-        )
-        self._log_raw("title_category_content", content)
-        self._log_raw("title_category_raw_response", raw_response)
+        primary = model_override or self.settings.category_model
+        fallbacks = self.settings.category_fallback_models
+
         try:
-            parsed = safe_json_loads(content)
-        except Exception as exc:
-            self._log_raw("title_category_parse_error", {"error": str(exc), "content": content})
-            raise BadRequestError("Failed to parse title category LLM JSON.") from exc
-        if not isinstance(parsed, dict):
-            raise BadRequestError("Title category LLM did not return a JSON object.")
-        return parsed
+            parsed, raw_response, attempts = self.category_caller.call_and_parse(
+                stage="title_category",
+                primary_model=primary,
+                fallback_models=fallbacks,
+                messages=messages,
+                temperature=0.3,
+                max_tokens=16000,
+            )
+        except LLMAllAttemptsFailedError as exc:
+            self._log_raw("title_category_attempts", [a.__dict__ for a in exc.attempts])
+            raise
+        self._log_raw("title_category_parsed", parsed)
+        self._log_raw("title_category_raw_response", raw_response)
+        self._log_raw("title_category_attempts", [a.__dict__ for a in attempts])
+        return parsed, attempts
 
     def _log_raw(self, name: str, payload: Any) -> None:
         if not self.settings.log_llm_raw:
@@ -608,10 +630,10 @@ class MercariAnalyzer:
         group_name: str,
         category_limit: int,
         model_override: Optional[str] = None,
-    ) -> Tuple[List[Dict[str, str]], Optional[Dict[str, Any]]]:
+    ) -> Tuple[List[Dict[str, str]], Optional[Dict[str, Any]], List[AttemptRecord]]:
         candidates = self.category_store.get_categories_by_group(group_name)
         if not candidates:
-            return [], None
+            return [], None, []
 
         candidate_paths = [item["name"] for item in candidates]
         candidate_block = "\n".join(candidate_paths)
@@ -627,60 +649,24 @@ class MercariAnalyzer:
             {"role": "user", "content": user_prompt},
         ]
 
-        max_retries = max(0, int(self.settings.category_llm_max_retries))
-        attempts = 1 + max_retries if self.settings.category_llm_retry_enabled else 1
-        parsed: Optional[Dict[str, Any]] = None
+        primary = model_override or self.settings.category_model
+        fallbacks = self.settings.category_fallback_models
 
-        base_delay_s = 0.2
-
-        for attempt in range(1, attempts + 1):
-            try:
-                content, raw_response = self.category_client.chat(
-                    model=model_override or self.settings.category_model,
-                    messages=messages,
-                    temperature=0.1,
-                    max_tokens=16000,
-                )
-            except LLMRequestError as exc:
-                self._log_raw(
-                    "category_call_error",
-                    {"error": str(exc), "attempt": attempt, "max_attempts": attempts},
-                )
-                if attempt < attempts:
-                    time.sleep(min(1.5, base_delay_s * (2 ** (attempt - 1))))
-                    continue
-                raise
-            self._log_raw("category_content", content)
-            self._log_raw("category_raw_response", raw_response)
-            try:
-                parsed = safe_json_loads(content)
-            except Exception as exc:
-                self._log_raw(
-                    "category_parse_error",
-                    {"error": str(exc), "attempt": attempt, "max_attempts": attempts},
-                )
-                if attempt < attempts:
-                    time.sleep(min(1.5, base_delay_s * (2 ** (attempt - 1))))
-                    continue
-                raise BadRequestError("Failed to parse category LLM JSON.") from exc
-            if not isinstance(parsed, dict):
-                self._log_raw(
-                    "category_parse_error",
-                    {
-                        "error": "Category LLM did not return a JSON object.",
-                        "attempt": attempt,
-                        "max_attempts": attempts,
-                    },
-                )
-                if attempt < attempts:
-                    parsed = None
-                    time.sleep(min(1.5, base_delay_s * (2 ** (attempt - 1))))
-                    continue
-                raise BadRequestError("Category LLM did not return a JSON object.")
-            break
-
-        if parsed is None:
-            raise BadRequestError("Category LLM did not return a JSON object.")
+        try:
+            parsed, raw_response, attempts = self.category_caller.call_and_parse(
+                stage="category",
+                primary_model=primary,
+                fallback_models=fallbacks,
+                messages=messages,
+                temperature=0.1,
+                max_tokens=16000,
+            )
+        except LLMAllAttemptsFailedError as exc:
+            self._log_raw("category_attempts", [a.__dict__ for a in exc.attempts])
+            raise
+        self._log_raw("category_parsed", parsed)
+        self._log_raw("category_raw_response", raw_response)
+        self._log_raw("category_attempts", [a.__dict__ for a in attempts])
 
         ordered_paths: List[str] = []
         best = parsed.get("best_target_path")
@@ -720,7 +706,7 @@ class MercariAnalyzer:
             if len(results) >= category_limit:
                 break
 
-        return results, parsed
+        return results, parsed, attempts
 
     def _classify_image_to_paths(
         self,
@@ -732,7 +718,7 @@ class MercariAnalyzer:
         category_model_override: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         data_url = image_bytes_to_data_url(image_bytes, mime_type)
-        ai_raw, _ = self._call_vision_llm(
+        ai_raw, _, _ = self._call_vision_llm(
             [data_url],
             language,
             model_override=vision_model_override,
@@ -748,7 +734,7 @@ class MercariAnalyzer:
         if not group_name:
             return None
 
-        categories, _ = self._choose_categories(
+        categories, _, _ = self._choose_categories(
             title=title or ai_raw.get("title", ""),
             description=description_text or _description_to_text(ai_raw.get("description", "")),
             brand_for_prompt=brand_raw,

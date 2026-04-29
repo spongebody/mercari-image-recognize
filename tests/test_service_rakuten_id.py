@@ -64,8 +64,11 @@ class RakutenIdResponseTest(unittest.TestCase):
             vision_model="vision-test",
             category_model="category-test",
             log_llm_raw=False,
-            category_llm_retry_enabled=False,
-            category_llm_max_retries=0,
+            vision_fallback_models=[],
+            category_fallback_models=[],
+            model_call_max_retries=0,
+            model_call_total_budget_seconds=10,
+            request_timeout=10,
         )
         analyzer = MercariAnalyzer(
             settings=settings,
@@ -101,8 +104,11 @@ class RakutenIdResponseTest(unittest.TestCase):
             vision_model="vision-test",
             category_model="category-test",
             log_llm_raw=False,
-            category_llm_retry_enabled=False,
-            category_llm_max_retries=0,
+            vision_fallback_models=[],
+            category_fallback_models=[],
+            model_call_max_retries=0,
+            model_call_total_budget_seconds=10,
+            request_timeout=10,
         )
         vision_client = RecordingChatClient(
             {
@@ -137,8 +143,11 @@ class RakutenIdResponseTest(unittest.TestCase):
             vision_model="vision-test",
             category_model="category-test",
             log_llm_raw=False,
-            category_llm_retry_enabled=False,
-            category_llm_max_retries=0,
+            vision_fallback_models=[],
+            category_fallback_models=[],
+            model_call_max_retries=0,
+            model_call_total_budget_seconds=10,
+            request_timeout=10,
         )
         vision_client = RecordingChatClient(
             {
@@ -185,8 +194,11 @@ class RakutenIdResponseTest(unittest.TestCase):
             vision_model="vision-test",
             category_model="category-test",
             log_llm_raw=False,
-            category_llm_retry_enabled=False,
-            category_llm_max_retries=0,
+            vision_fallback_models=[],
+            category_fallback_models=[],
+            model_call_max_retries=0,
+            model_call_total_budget_seconds=10,
+            request_timeout=10,
         )
         analyzer = MercariAnalyzer(
             settings=settings,
@@ -228,8 +240,11 @@ class RakutenIdResponseTest(unittest.TestCase):
             vision_model="vision-test",
             category_model="category-test",
             log_llm_raw=False,
-            category_llm_retry_enabled=False,
-            category_llm_max_retries=0,
+            vision_fallback_models=[],
+            category_fallback_models=[],
+            model_call_max_retries=0,
+            model_call_total_budget_seconds=10,
+            request_timeout=10,
         )
         analyzer = MercariAnalyzer(
             settings=settings,
@@ -249,9 +264,29 @@ class RakutenIdResponseTest(unittest.TestCase):
             ),
         )
 
+        # ResilientCaller.call_and_parse calls time.monotonic 4 times per
+        # successful single-attempt call (deadline / remaining / t0 / latency).
+        # Plus analyze itself calls it 6 times (total_started, vision_started,
+        # vision_ms, category_started, category_ms, total_ms). With one vision
+        # stage and one category stage that's 6 + 4 + 4 = 14 calls.
         with patch(
             "app.service.time.monotonic",
-            side_effect=[100.0, 100.05, 100.175, 100.25, 100.5, 100.6],
+            side_effect=[
+                100.0,    # total_started
+                100.05,   # vision_started
+                100.06,   # resilient.deadline (vision)
+                100.07,   # resilient.remaining (vision)
+                100.08,   # resilient.t0 (vision)
+                100.10,   # resilient.latency end (vision)
+                100.175,  # vision_ms compute
+                100.25,   # category_started
+                100.26,   # resilient.deadline (category)
+                100.27,   # resilient.remaining (category)
+                100.28,   # resilient.t0 (category)
+                100.30,   # resilient.latency end (category)
+                100.5,    # category_ms compute
+                100.6,    # total_ms compute
+            ],
         ):
             result = analyzer.analyze(
                 images=[(b"image-bytes", "image/png")],
@@ -273,8 +308,11 @@ class RakutenIdResponseTest(unittest.TestCase):
             vision_model="vision-test",
             category_model="category-test",
             log_llm_raw=False,
-            category_llm_retry_enabled=False,
-            category_llm_max_retries=0,
+            vision_fallback_models=[],
+            category_fallback_models=[],
+            model_call_max_retries=0,
+            model_call_total_budget_seconds=10,
+            request_timeout=10,
         )
         analyzer = MercariAnalyzer(
             settings=settings,
@@ -311,8 +349,11 @@ class RakutenIdResponseTest(unittest.TestCase):
             vision_model="vision-test",
             category_model="category-test",
             log_llm_raw=False,
-            category_llm_retry_enabled=False,
-            category_llm_max_retries=0,
+            vision_fallback_models=[],
+            category_fallback_models=[],
+            model_call_max_retries=0,
+            model_call_total_budget_seconds=10,
+            request_timeout=10,
         )
         analyzer = MercariAnalyzer(
             settings=settings,
@@ -349,8 +390,11 @@ class RakutenIdResponseTest(unittest.TestCase):
             vision_model="vision-test",
             category_model="category-test",
             log_llm_raw=False,
-            category_llm_retry_enabled=False,
-            category_llm_max_retries=0,
+            vision_fallback_models=[],
+            category_fallback_models=[],
+            model_call_max_retries=0,
+            model_call_total_budget_seconds=10,
+            request_timeout=10,
         )
         analyzer = MercariAnalyzer(
             settings=settings,
@@ -387,8 +431,11 @@ class RakutenIdResponseTest(unittest.TestCase):
             vision_model="vision-test",
             category_model="category-test",
             log_llm_raw=False,
-            category_llm_retry_enabled=False,
-            category_llm_max_retries=0,
+            vision_fallback_models=[],
+            category_fallback_models=[],
+            model_call_max_retries=0,
+            model_call_total_budget_seconds=10,
+            request_timeout=10,
         )
         analyzer = MercariAnalyzer(
             settings=settings,
@@ -428,8 +475,10 @@ class RakutenIdResponseTest(unittest.TestCase):
             max_image_bytes=1024,
             allowed_mime_types={"image/png"},
             log_llm_raw=False,
-            category_llm_retry_enabled=False,
-            category_llm_max_retries=0,
+            vision_fallback_models=[],
+            category_fallback_models=[],
+            model_call_max_retries=0,
+            model_call_total_budget_seconds=10,
         )
         vision_client = RecordingChatClient(
             {
