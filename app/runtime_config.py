@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable
+from typing import Any, Callable, Dict, Iterable, List
 
 from .config import BASE_DIR
 
@@ -11,7 +11,7 @@ from .config import BASE_DIR
 class ConfigField:
     env_name: str
     settings_attr: str
-    value_type: str
+    value_type: str  # "str" | "int" | "bool" | "multiline_str"
     min_value: int | None = None
 
 
@@ -21,10 +21,17 @@ CONFIG_FIELDS = (
     ConfigField("LOG_LLM_RAW", "log_llm_raw", "bool"),
     ConfigField("LOG_REQUESTS", "log_requests", "bool"),
     ConfigField("ENABLE_DEBUG", "enable_debug_param", "bool"),
-    ConfigField("CATEGORY_LLM_RETRY_ENABLED", "category_llm_retry_enabled", "bool"),
-    ConfigField("CATEGORY_LLM_MAX_RETRIES", "category_llm_max_retries", "int"),
     ConfigField("IMAGE_COMPRESSION_THRESHOLD_MB", "image_compression_threshold_mb", "int"),
     ConfigField("REQUEST_TIMEOUT", "request_timeout", "int", min_value=1),
+    ConfigField("VISION_FALLBACK_MODELS", "vision_fallback_models", "multiline_str"),
+    ConfigField("CATEGORY_FALLBACK_MODELS", "category_fallback_models", "multiline_str"),
+    ConfigField("MODEL_CALL_MAX_RETRIES", "model_call_max_retries", "int"),
+    ConfigField(
+        "MODEL_CALL_TOTAL_BUDGET_SECONDS",
+        "model_call_total_budget_seconds",
+        "int",
+        min_value=1,
+    ),
 )
 CONFIG_FIELD_BY_ENV = {field.env_name: field for field in CONFIG_FIELDS}
 
@@ -55,11 +62,26 @@ def _parse_int(value: Any, field: ConfigField) -> int:
     return parsed
 
 
+def _parse_multiline_str(value: Any, field: ConfigField) -> List[str]:
+    if isinstance(value, list):
+        items = [str(v).strip() for v in value]
+    elif isinstance(value, str):
+        items = [piece.strip() for piece in value.replace("\r", "").split("\n")]
+    else:
+        raise ValueError(
+            f"{field.env_name} must be a list of strings or a newline-delimited string."
+        )
+    items = [item for item in items if item]
+    return items
+
+
 def _parse_value(field: ConfigField, value: Any) -> Any:
     if field.value_type == "bool":
         return _parse_bool(value)
     if field.value_type == "int":
         return _parse_int(value, field)
+    if field.value_type == "multiline_str":
+        return _parse_multiline_str(value, field)
     if value is None:
         return ""
     parsed = str(value).strip()
@@ -71,6 +93,8 @@ def _parse_value(field: ConfigField, value: Any) -> Any:
 def _serialize_value(field: ConfigField, value: Any) -> str:
     if field.value_type == "bool":
         return "true" if bool(value) else "false"
+    if field.value_type == "multiline_str":
+        return ",".join(value)
     return str(value)
 
 
@@ -118,7 +142,7 @@ def update_runtime_config(
         serialized[env_name] = _serialize_value(field, parsed_value)
 
     target_path = env_path or (BASE_DIR / ".env")
-    existing_lines = []
+    existing_lines: List[str] = []
     if target_path.exists():
         existing_lines = target_path.read_text(encoding="utf-8").splitlines()
 
