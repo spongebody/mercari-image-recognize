@@ -1,17 +1,17 @@
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, List, Optional, Sequence, Set
 
 from dotenv import load_dotenv
 
-from .constants import ALLOWED_MIME_TYPES
+from .constants import ALLOWED_MIME_TYPES, DEFAULT_FALLBACK_MODELS
 
 # Load .env early so os.getenv can pick up values defined there.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# 明确指定 .env 路径
 load_dotenv(BASE_DIR / ".env")
+
 
 def _env_bool(name: str, default: bool) -> bool:
     raw = os.getenv(name)
@@ -72,6 +72,15 @@ def _env_optional_enum(name: str, allowed: Set[str]) -> Optional[str]:
     return cleaned if cleaned in allowed else None
 
 
+def _env_str_list(name: str, default: Sequence[str]) -> List[str]:
+    raw = os.getenv(name)
+    if raw is None:
+        return list(default)
+    items = [item.strip() for item in raw.split(",")]
+    items = [item for item in items if item]
+    return items if items else list(default)
+
+
 @dataclass
 class Settings:
     openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "")
@@ -93,8 +102,18 @@ class Settings:
     log_requests: bool = _env_bool("LOG_REQUESTS", True)
     log_requests_retention_days: int = _env_int("LOG_REQUESTS_RETENTION_DAYS", 7)
     log_requests_max_files: int = _env_int("LOG_REQUESTS_MAX_FILES", 1000)
-    category_llm_retry_enabled: bool = _env_bool("CATEGORY_LLM_RETRY_ENABLED", False)
-    category_llm_max_retries: int = _env_int("CATEGORY_LLM_MAX_RETRIES", 1)
+
+    vision_fallback_models: List[str] = field(
+        default_factory=lambda: _env_str_list("VISION_FALLBACK_MODELS", DEFAULT_FALLBACK_MODELS)
+    )
+    category_fallback_models: List[str] = field(
+        default_factory=lambda: _env_str_list("CATEGORY_FALLBACK_MODELS", DEFAULT_FALLBACK_MODELS)
+    )
+    model_call_max_retries: int = _env_int_min("MODEL_CALL_MAX_RETRIES", 3, 0)
+    model_call_total_budget_seconds: int = _env_int_min(
+        "MODEL_CALL_TOTAL_BUDGET_SECONDS", 120, 1
+    )
+
     reasoning_enabled: Optional[bool] = field(default_factory=lambda: _env_optional_bool("REASONING_ENABLED"))
     reasoning_effort: Optional[str] = field(
         default_factory=lambda: _env_optional_enum(
