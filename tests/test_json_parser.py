@@ -23,6 +23,11 @@ class ParseLLMJsonTest(unittest.TestCase):
     def test_bare_array(self):
         self.assertEqual(parse_llm_json("[1, 2, 3]"), [1, 2, 3])
 
+    def test_array_with_surrounding_prose_uses_bracket_strategy(self):
+        # Strategies 1-3 fail (prose breaks json.loads, no fence, no braces);
+        # only strategy 4 (first '[' to last ']') can recover this.
+        self.assertEqual(parse_llm_json("Result: [1, 2, 3] done."), [1, 2, 3])
+
     def test_unicode_preserved(self):
         self.assertEqual(parse_llm_json('{"name": "東京"}'), {"name": "東京"})
 
