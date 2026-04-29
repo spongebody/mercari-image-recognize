@@ -1856,8 +1856,13 @@
           return;
         }
         if (!success) {
-          const message = payload.error || payload.detail || t("titleError");
-          titleResult.innerHTML = `<div class="field-value" style="color: var(--danger);">${escapeHtml(String(message))}</div>`;
+          if (payload.detail && typeof payload.detail === "object" && payload.detail.kind === "all_attempts_failed") {
+            titleResult.innerHTML = formatStructuredError(payload.detail);
+          } else {
+            const message = (typeof payload.detail === "string" && payload.detail)
+              || payload.error || t("titleError");
+            titleResult.innerHTML = `<div class="field-value" style="color: var(--danger);">${escapeHtml(String(message))}</div>`;
+          }
           return;
         }
         const bestPath = payload.best_target_path || "";
@@ -2148,8 +2153,7 @@
           if (resp.ok) {
             renderTitleResult(data, true);
           } else {
-            const message = data.detail || data.error || text || t("titleError");
-            renderTitleResult({ error: message }, false);
+            renderTitleResult(data, false);
           }
         } catch (err) {
           renderTitleResult({ error: String(err) }, false);
