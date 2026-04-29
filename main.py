@@ -12,7 +12,7 @@ from app.config import BASE_DIR, load_settings
 from app.constants import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES
 from app.data.brands import BrandStore
 from app.data.categories import CategoryStore
-from app.errors import BadRequestError, LLMRequestError
+from app.errors import BadRequestError, LLMAllAttemptsFailedError
 from app.image_processing import compress_image_if_needed
 from app.llm.client import OpenRouterClient
 from app.request_logging import build_request_log, write_request_log
@@ -47,6 +47,26 @@ analyzer = MercariAnalyzer(
     vision_client=vision_client,
     category_client=category_client,
 )
+
+def _format_attempts_error(exc: LLMAllAttemptsFailedError) -> Dict[str, Any]:
+    return {
+        "message": f"{exc.stage} stage failed after {len(exc.attempts)} attempt(s).",
+        "stage": exc.stage,
+        "kind": "all_attempts_failed",
+        "attempts": [
+            {
+                "model": a.model,
+                "attempt": a.attempt,
+                "attempt_global": a.attempt_global,
+                "error_kind": a.error_kind,
+                "message": a.message,
+                "status_code": a.status_code,
+                "latency_ms": a.latency_ms,
+            }
+            for a in exc.attempts
+        ],
+    }
+
 
 app = FastAPI(title="Mercari Image Analyzer", version="1.0.0")
 CONFIG_ENV_PATH = BASE_DIR / ".env"
@@ -217,8 +237,8 @@ async def analyze_image(
         )
     except BadRequestError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except LLMRequestError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except LLMAllAttemptsFailedError as exc:
+        raise HTTPException(status_code=502, detail=_format_attempts_error(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail="Internal server error.") from exc
 
@@ -246,8 +266,8 @@ async def analyze_title(request: TitleCategoryRequest):
         )
     except BadRequestError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except LLMRequestError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except LLMAllAttemptsFailedError as exc:
+        raise HTTPException(status_code=502, detail=_format_attempts_error(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail="Internal server error.") from exc
 
