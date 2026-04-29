@@ -46,3 +46,13 @@ ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 PRICE_MIN = 100
 PRICE_MAX = 1_000_000
+
+DEFAULT_FALLBACK_MODELS = (
+    "google/gemini-3-flash-preview",
+    "google/gemini-2.5-flash",
+    "google/gemini-3.1-pro-preview",
+    "openai/gpt-4o-mini",
+    "openai/gpt-5-mini",
+    "openai/gpt-5.4",
+    "openai/gpt-5.5",
+)
