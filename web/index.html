@@ -219,6 +219,17 @@
         border-color: var(--danger);
       }
 
+      .structured-error { color: var(--danger); display: block; }
+      .structured-error-header { font-weight: 600; margin-bottom: 6px; }
+      .structured-error-details summary { cursor: pointer; font-size: 13px; color: var(--muted); margin-top: 4px; }
+      .structured-error-details .attempt-row { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; padding: 6px 0; border-bottom: 1px dashed var(--border); }
+      .structured-error-details .attempt-row:last-child { border-bottom: none; }
+      .structured-error-details .attempt-msg { color: var(--muted); margin-top: 2px; white-space: pre-wrap; word-break: break-word; }
+      .attempt-kind.request_failed { color: var(--danger); }
+      .attempt-kind.parse_failed { color: #d97706; }
+      .attempt-kind.budget_exhausted { color: var(--muted); }
+      .attempt-kind.ok { color: var(--success); }
+
       @keyframes borderPulse {
         0%, 100% { border-color: var(--accent); }
         50% { border-color: #93c5fd; }
@@ -1475,10 +1486,49 @@
         return stats.join("");
       }
 
+      function formatStructuredError(structured) {
+        if (!structured || typeof structured !== "object") return "";
+        const stage = String(structured.stage || "");
+        const attempts = Array.isArray(structured.attempts) ? structured.attempts : [];
+        const stageLabel = {
+          vision: "图片识别",
+          category: "类别选择",
+          title_category: "标题分类",
+        }[stage] || stage || "LLM";
+        const headerMsg = structured.message || `${stageLabel} 失败：尝试 ${attempts.length} 次后均失败。`;
+
+        const rows = attempts.map((a, idx) => {
+          const errLabel = {
+            request_failed: "请求失败",
+            parse_failed: "解析失败",
+            budget_exhausted: "预算耗尽",
+            ok: "成功",
+          }[a.error_kind] || a.error_kind || "未知";
+          const status = a.status_code != null ? `HTTP ${a.status_code}` : "—";
+          const latency = Number.isFinite(a.latency_ms) ? `${Math.round(a.latency_ms)}ms` : "—";
+          const msg = String(a.message || "").replace(/[<>]/g, "");
+          return `<div class="attempt-row">[${String(idx + 1).padStart(2, "0")}] <code>${a.model}</code> · attempt ${a.attempt} · <span class="attempt-kind ${a.error_kind}">${errLabel}</span> · ${status} · ${latency}<div class="attempt-msg">${msg}</div></div>`;
+        }).join("");
+
+        return `
+          <div class="field-value structured-error">
+            <div class="structured-error-header">❌ ${headerMsg}</div>
+            <details class="structured-error-details">
+              <summary>查看 ${attempts.length} 次尝试详情</summary>
+              ${rows}
+            </details>
+          </div>
+        `;
+      }
+
       // 格式化结果数据（结构化展示）
       function formatResultData(payload) {
-        if (payload.error) {
-          return `<div class="field-value" style="color: var(--danger);">❌ ${payload.error}</div>`;
+        if (payload && payload.detail && typeof payload.detail === "object" && payload.detail.kind === "all_attempts_failed") {
+          return formatStructuredError(payload.detail);
+        }
+        const errMsg = payload?.error || (typeof payload?.detail === "string" ? payload.detail : "");
+        if (errMsg) {
+          return `<div class="field-value" style="color: var(--danger);">❌ ${errMsg}</div>`;
         }
 
         const data = payload.data || payload;
