@@ -109,7 +109,8 @@
 
       input[type="text"],
       input[type="number"],
-      select {
+      select,
+      textarea {
         width: 100%;
         padding: 12px 16px;
         border: 2px solid var(--border);
@@ -252,20 +253,6 @@
             </select>
           </div>
           <div>
-            <label for="CATEGORY_LLM_RETRY_ENABLED">分类模型失败重试</label>
-            <select id="CATEGORY_LLM_RETRY_ENABLED">
-              <option value="true">开启</option>
-              <option value="false">关闭</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="controls-row">
-          <div>
-            <label for="CATEGORY_LLM_MAX_RETRIES">分类模型最大重试次数</label>
-            <input id="CATEGORY_LLM_MAX_RETRIES" type="number" min="0" step="1" />
-          </div>
-          <div>
             <label for="IMAGE_COMPRESSION_THRESHOLD_MB">图片压缩阈值 MB</label>
             <input id="IMAGE_COMPRESSION_THRESHOLD_MB" type="number" min="0" step="1" />
             <div class="hint">设置为 0 可以关闭后端压缩。</div>
@@ -274,8 +261,34 @@
 
         <div class="controls-row">
           <div>
-            <label for="REQUEST_TIMEOUT">OpenRouter 请求超时秒数</label>
+            <label for="REQUEST_TIMEOUT">OpenRouter 单次调用超时秒数</label>
             <input id="REQUEST_TIMEOUT" type="number" min="1" step="1" />
+            <div class="hint">单次 LLM 请求最多等多久。</div>
+          </div>
+          <div>
+            <label for="MODEL_CALL_MAX_RETRIES">主模型重试次数</label>
+            <input id="MODEL_CALL_MAX_RETRIES" type="number" min="0" step="1" />
+            <div class="hint">总尝试数 = 1 次初始 + 这里设置的重试次数（默认 3）。</div>
+          </div>
+        </div>
+
+        <div class="controls-row">
+          <div>
+            <label for="MODEL_CALL_TOTAL_BUDGET_SECONDS">单阶段总预算秒数</label>
+            <input id="MODEL_CALL_TOTAL_BUDGET_SECONDS" type="number" min="1" step="1" />
+            <div class="hint">vision / category 阶段各自的总耗时上限（默认 120）。</div>
+          </div>
+        </div>
+
+        <div class="controls-row">
+          <div>
+            <label for="VISION_FALLBACK_MODELS">图片识别回退模型（一行一个）</label>
+            <textarea id="VISION_FALLBACK_MODELS" rows="6" placeholder="google/gemini-2.5-flash"></textarea>
+            <div class="hint">主模型 3 次重试后会按顺序逐个尝试。</div>
+          </div>
+          <div>
+            <label for="CATEGORY_FALLBACK_MODELS">分类回退模型（一行一个）</label>
+            <textarea id="CATEGORY_FALLBACK_MODELS" rows="6" placeholder="google/gemini-2.5-flash"></textarea>
           </div>
         </div>
 
@@ -295,11 +308,18 @@
         "LOG_LLM_RAW",
         "LOG_REQUESTS",
         "ENABLE_DEBUG",
-        "CATEGORY_LLM_RETRY_ENABLED",
-        "CATEGORY_LLM_MAX_RETRIES",
         "IMAGE_COMPRESSION_THRESHOLD_MB",
         "REQUEST_TIMEOUT",
+        "MODEL_CALL_MAX_RETRIES",
+        "MODEL_CALL_TOTAL_BUDGET_SECONDS",
+        "VISION_FALLBACK_MODELS",
+        "CATEGORY_FALLBACK_MODELS",
       ];
+
+      const MULTILINE_FIELDS = new Set([
+        "VISION_FALLBACK_MODELS",
+        "CATEGORY_FALLBACK_MODELS",
+      ]);
 
       const statusDot = document.getElementById("status-dot");
       const statusText = document.getElementById("status-text");
@@ -322,7 +342,9 @@
           const el = document.getElementById(key);
           if (!el) return;
           const value = config[key];
-          if (typeof value === "boolean") {
+          if (MULTILINE_FIELDS.has(key)) {
+            el.value = Array.isArray(value) ? value.join("\n") : "";
+          } else if (typeof value === "boolean") {
             el.value = value ? "true" : "false";
           } else {
             el.value = value ?? "";
@@ -334,7 +356,12 @@
         return fields.reduce((payload, key) => {
           const el = document.getElementById(key);
           if (!el) return payload;
-          if (el.tagName === "SELECT") {
+          if (MULTILINE_FIELDS.has(key)) {
+            payload[key] = String(el.value || "")
+              .split(/\r?\n/)
+              .map((s) => s.trim())
+              .filter(Boolean);
+          } else if (el.tagName === "SELECT") {
             payload[key] = el.value === "true";
           } else if (el.type === "number") {
             payload[key] = Number(el.value || 0);
