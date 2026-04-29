@@ -30,7 +30,11 @@ class SettingsConfigTest(unittest.TestCase):
         self.assertEqual(settings.request_timeout, 60)
 
     def test_default_fallback_models_when_env_unset(self):
-        with patch.dict("os.environ", {}, clear=True):
+        # Also patch dotenv.load_dotenv to no-op so the on-disk .env doesn't
+        # repopulate the cleared environment when config_module re-imports it
+        # during reload.
+        with patch.dict("os.environ", {}, clear=True), \
+             patch("dotenv.load_dotenv", lambda *a, **kw: None):
             module = importlib.reload(config_module)
             settings = module.load_settings()
         self.assertEqual(settings.vision_fallback_models[0], "google/gemini-3-flash-preview")
