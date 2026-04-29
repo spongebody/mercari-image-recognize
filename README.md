@@ -57,7 +57,7 @@ Booleans accept `1`, `true`, `yes`, or `on`.
 - `OPENROUTER_BASE_URL` (default: `https://openrouter.ai/api/v1/chat/completions`): API base URL.
 - `OPENROUTER_REFERER` (default: empty): optional referer header.
 - `OPENROUTER_APP_NAME` (default: `mercari-image-backend`): app name header.
-- `REQUEST_TIMEOUT` (default: `60`): OpenRouter request timeout in seconds.
+- `REQUEST_TIMEOUT` (default: `60`): per-call OpenRouter request timeout in seconds.
 - `ENABLE_DEBUG` (default: `true`): allow debug response fields.
 - `MAX_IMAGE_BYTES` (default: `5242880`): max upload size in bytes.
 - `IMAGE_COMPRESSION_THRESHOLD_MB` (default: `1`): backend compresses any single uploaded image larger than this size in MB before sending it to the vision model. Set `0` to disable backend compression.
@@ -65,14 +65,29 @@ Booleans accept `1`, `true`, `yes`, or `on`.
 - `LOG_REQUESTS` (default: `true`): write request logs under `logs/requests/`.
 - `LOG_REQUESTS_RETENTION_DAYS` (default: `7`): request log retention days.
 - `LOG_REQUESTS_MAX_FILES` (default: `1000`): cap on request log files.
-- `CATEGORY_LLM_RETRY_ENABLED` (default: `0`): enable retries for category selection calls.
-- `CATEGORY_LLM_MAX_RETRIES` (default: `1`): number of additional attempts when retries are enabled.
+- `VISION_FALLBACK_MODELS` (default: built-in 7-model list): comma-separated OpenRouter model
+  ids tried in order if the primary `VISION_MODEL` exhausts its retries.
+- `CATEGORY_FALLBACK_MODELS` (default: built-in 7-model list): comma-separated OpenRouter
+  model ids tried in order if the primary `CATEGORY_MODEL` exhausts its retries.
+- `MODEL_CALL_MAX_RETRIES` (default: `3`): number of retries on the primary model before the
+  caller starts walking the fallback list. The total primary attempt count is
+  `MODEL_CALL_MAX_RETRIES + 1`. Applies to vision, category, and title-category stages.
+- `MODEL_CALL_TOTAL_BUDGET_SECONDS` (default: `120`): hard cap on the total wall-clock time
+  one stage may spend across all retries and fallbacks. Each per-attempt timeout is reduced
+  to `min(REQUEST_TIMEOUT, remaining budget)`. The vision stage and the category stage have
+  independent budgets.
 - `REASONING_ENABLED` (optional): enable or disable reasoning globally for all OpenRouter requests.
 - `REASONING_EFFORT` (optional): reasoning effort level, one of `minimal`, `low`, `medium`, `high`, `xhigh`, `none`.
 - `REASONING_MAX_TOKENS` (optional): reasoning token budget hint sent globally to OpenRouter.
 - `REASONING_SUMMARY` (optional): reasoning summary level, one of `auto`, `concise`, `detailed`.
 
-Category retries apply only to the category selection step and cover OpenRouter request errors and JSON parsing failures, using exponential backoff (0.2s, 0.4s, 0.8s, capped).
+Every LLM stage retries the primary model up to `MODEL_CALL_MAX_RETRIES + 1` times with
+exponential backoff (0.2s, 0.4s, 0.8s, capped at 1.5s and clamped by remaining budget),
+then walks the fallback list (one attempt each, no inter-model backoff). Both OpenRouter
+request errors and JSON parse failures feed the same retry/fallback loop. Once every
+attempt has failed the stage raises an error that the API surfaces as a structured 502
+response (see `API.md`). The deprecated `CATEGORY_LLM_RETRY_ENABLED` /
+`CATEGORY_LLM_MAX_RETRIES` settings have been removed.
 
 ## Runtime configuration page
 
@@ -84,10 +99,12 @@ manually changing `.env`. The page can update:
 - `LOG_LLM_RAW`
 - `LOG_REQUESTS`
 - `ENABLE_DEBUG`
-- `CATEGORY_LLM_RETRY_ENABLED`
-- `CATEGORY_LLM_MAX_RETRIES`
 - `IMAGE_COMPRESSION_THRESHOLD_MB`
 - `REQUEST_TIMEOUT`
+- `MODEL_CALL_MAX_RETRIES`
+- `MODEL_CALL_TOTAL_BUDGET_SECONDS`
+- `VISION_FALLBACK_MODELS`
+- `CATEGORY_FALLBACK_MODELS`
 
 `OPENROUTER_API_KEY` is intentionally not exposed on the page.
 

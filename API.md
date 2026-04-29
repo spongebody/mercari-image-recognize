@@ -219,9 +219,45 @@ files.forEach((file) => {
 - `image_processing` 表示后端图片预处理结果；当单张图片超过服务端 `IMAGE_COMPRESSION_THRESHOLD_MB` 阈值并成功压缩时，`compressed=true` 且包含压缩前后的字节数。
 
 #### 错误
-- `400`：请求无效（图片格式/参数错误、解析失败等）。
-- `502`：LLM 请求失败。
-- `500`：内部错误。
+- `400`：请求无效（图片格式/参数错误、参数校验失败）。`detail` 为字符串。
+- `502`：LLM 链路全部尝试失败。`detail` 为对象，结构如下：
+
+  ```json
+  {
+    "detail": {
+      "message": "vision stage failed after 8 attempt(s).",
+      "stage": "vision",
+      "kind": "all_attempts_failed",
+      "attempts": [
+        {
+          "model": "google/gemini-3-flash-preview",
+          "attempt": 1,
+          "attempt_global": 1,
+          "error_kind": "request_failed",
+          "message": "OpenRouter returned 503: ...",
+          "status_code": 503,
+          "latency_ms": 12034.5
+        },
+        {
+          "model": "google/gemini-2.5-flash",
+          "attempt": 1,
+          "attempt_global": 5,
+          "error_kind": "parse_failed",
+          "message": "JSON decode failed: ...",
+          "status_code": 200,
+          "latency_ms": 8123.7
+        }
+      ]
+    }
+  }
+  ```
+
+  字段约束：
+  - `stage` ∈ `"vision"`, `"category"`, `"title_category"`。
+  - `kind` 当前固定为 `"all_attempts_failed"`，保留供未来扩展。
+  - `attempts[].error_kind` ∈ `"request_failed"`, `"parse_failed"`, `"budget_exhausted"`。
+  - `attempts[].status_code` 在 `parse_failed` 时为 200；`request_failed` 时尽力从上游消息中解析整数 HTTP 状态码，否则 `null`。
+- `500`：内部错误，`detail` 为字符串。
 
 ### POST /api/v1/mercari/title/analyze
 根据标题分类。
@@ -265,9 +301,9 @@ files.forEach((file) => {
 ```
 
 #### 错误
-- `400`：请求无效
-- `502`：LLM 请求失败
-- `500`：内部错误
+- `400`：请求无效。`detail` 为字符串。
+- `502`：LLM 链路全部尝试失败。`detail` 为结构化对象，schema 与 image/analyze 接口一致（见上文）；`stage` 取值为 `"title_category"`、`"category"` 或在图片兜底失败时为 `"vision"`。
+- `500`：内部错误，`detail` 为字符串。
 
 ### GET /health
 健康检查。
