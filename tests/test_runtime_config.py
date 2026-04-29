@@ -10,6 +10,9 @@ def _fake_settings(**overrides):
     base = dict(
         vision_model="old-vision",
         category_model="old-category",
+        product_data_model="old-product-data",
+        product_data_fallback_model="openai/gpt-4o-mini",
+        product_data_fallback_timeout_seconds=10.0,
         showcase_model="old-showcase",
         log_llm_raw=False,
         log_requests=False,
@@ -136,10 +139,75 @@ class RuntimeConfigTest(unittest.TestCase):
             self.assertIn("SHOWCASE_MODEL=openai/gpt-image-1", env_text)
             self.assertIn("OPENROUTER_API_KEY=secret", env_text)
 
+    def test_product_data_model_round_trip(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_path = Path(tmpdir) / ".env"
+            env_path.write_text(
+                "OPENROUTER_API_KEY=secret\nPRODUCT_DATA_MODEL=old-product\n",
+                encoding="utf-8",
+            )
+            settings = _fake_settings()
+
+            result = update_runtime_config(
+                settings,
+                {"PRODUCT_DATA_MODEL": "google/gemini-2.5-flash"},
+                env_path=env_path,
+            )
+
+            self.assertEqual(result["PRODUCT_DATA_MODEL"], "google/gemini-2.5-flash")
+            self.assertEqual(settings.product_data_model, "google/gemini-2.5-flash")
+            env_text = env_path.read_text(encoding="utf-8")
+            self.assertIn("PRODUCT_DATA_MODEL=google/gemini-2.5-flash", env_text)
+            self.assertIn("OPENROUTER_API_KEY=secret", env_text)
+
     def test_get_public_config_includes_showcase_model(self):
         settings = _fake_settings(showcase_model="custom/showcase")
         result = get_public_config(settings)
         self.assertEqual(result["SHOWCASE_MODEL"], "custom/showcase")
+
+    def test_get_public_config_includes_product_data_model(self):
+        settings = _fake_settings(product_data_model="custom/product-data")
+        result = get_public_config(settings)
+        self.assertEqual(result["PRODUCT_DATA_MODEL"], "custom/product-data")
+
+    def test_product_data_fallback_round_trip(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_path = Path(tmpdir) / ".env"
+            env_path.write_text("", encoding="utf-8")
+            settings = _fake_settings()
+
+            result = update_runtime_config(
+                settings,
+                {
+                    "PRODUCT_DATA_FALLBACK_MODEL": "openai/gpt-4o-mini",
+                    "PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS": 7.5,
+                },
+                env_path=env_path,
+            )
+
+            self.assertEqual(result["PRODUCT_DATA_FALLBACK_MODEL"], "openai/gpt-4o-mini")
+            self.assertEqual(result["PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS"], 7.5)
+            self.assertEqual(settings.product_data_fallback_model, "openai/gpt-4o-mini")
+            self.assertEqual(settings.product_data_fallback_timeout_seconds, 7.5)
+            env_text = env_path.read_text(encoding="utf-8")
+            self.assertIn("PRODUCT_DATA_FALLBACK_MODEL=openai/gpt-4o-mini", env_text)
+            self.assertIn("PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS=7.5", env_text)
+
+    def test_product_data_fallback_timeout_must_be_positive(self):
+        with self.assertRaises(ValueError):
+            update_runtime_config(
+                _fake_settings(),
+                {"PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS": 0},
+            )
+
+    def test_get_public_config_includes_fallback_settings(self):
+        settings = _fake_settings(
+            product_data_fallback_model="custom/mini",
+            product_data_fallback_timeout_seconds=15.0,
+        )
+        result = get_public_config(settings)
+        self.assertEqual(result["PRODUCT_DATA_FALLBACK_MODEL"], "custom/mini")
+        self.assertEqual(result["PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS"], 15.0)
 
     def test_multiline_str_value_must_be_list_or_string(self):
         with self.assertRaises(ValueError):

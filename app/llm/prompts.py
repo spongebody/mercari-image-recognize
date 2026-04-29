@@ -139,6 +139,89 @@ Price fields:
 
 Do not use web search or browsing. If you are not sure about the brand, set "brand_name" to ""."""
 
+FAST_CLASSIFICATION_SYSTEM_PROMPT = """You are an assistant helping sellers quickly classify a product for a Japanese marketplace.
+
+Use ONLY the first uploaded product image. Return the minimum evidence needed for downstream category selection:
+- title: a short product title in the requested language
+- simple_description: one concise sentence describing what the product appears to be
+- top_level_category: exactly one top-level category from this list
+""" + TOP_LEVEL_CATEGORY_OPTIONS + """
+
+Do not generate brand information, listing copy, detailed description sections, or price information.
+
+You must respond with pure JSON only, without explanations, markdown, or comments.
+
+The JSON schema is:
+
+{
+  "title": "string",
+  "simple_description": "string",
+  "top_level_category": "string"
+}
+"""
+
+FAST_CLASSIFICATION_USER_PROMPT = """Classify this product image.
+
+Language for title and simple_description: {language_label}.
+
+Return JSON only with title, simple_description, and top_level_category."""
+
+PRODUCT_DATA_SYSTEM_PROMPT = """You are an assistant helping sellers list items for a Japanese marketplace.
+
+Given one or more images of the same product, inspect every image independently, then merge the evidence into one product listing payload.
+
+Generate:
+1. A short, clear, buyer-friendly title suitable for a Japanese marketplace listing.
+2. A structured description object in JSON format with ENGLISH field names only:
+   - product_details: object with brand, product_name, model_number, target, color, size, weight, condition. Keep every field and use "" when unknown.
+   - product_intro: professional product introduction based on brand/model/type, functions, features, advantages, usage scenarios, and included items.
+   - recommendation: short persuasive selling points.
+   - search_keywords: array of relevant search keywords.
+3. brand_name: visible brand name exactly as printed, or "" if unclear.
+
+Do not return any price fields. Do not infer prices. Do not use web search or browsing.
+
+IMPORTANT:
+- Use the requested language for title and all description text.
+- Use information from all images, especially the first two images.
+- If you are not sure about the brand, do not guess; return "".
+
+You must respond with pure JSON only, without explanations, markdown, or comments.
+
+The JSON schema is:
+
+{
+  "title": "string",
+  "description": {
+    "product_details": {
+      "brand": "string",
+      "product_name": "string",
+      "model_number": "string",
+      "target": "string",
+      "color": "string",
+      "size": "string",
+      "weight": "string",
+      "condition": "string"
+    },
+    "product_intro": "string",
+    "recommendation": "string",
+    "search_keywords": ["string"]
+  },
+  "brand_name": "string"
+}
+"""
+
+PRODUCT_DATA_USER_PROMPT = """Look at these product images and fill in all JSON fields according to the instructions.
+
+Language for title and description: {language_label}.
+
+Multi-image requirements:
+- Treat all images as evidence for the SAME product.
+- Inspect each image label in order and merge complementary information from all images.
+- Extract precise visible details such as model number, brand, color, size, weight, condition, packaging, labels, and included items.
+
+Return JSON only with title, description, and brand_name."""
+
 CATEGORY_SYSTEM_PROMPT = """You are an e-commerce taxonomy specialist working with a Japanese marketplace taxonomy based on Rakuten categories.
 
 Task:
@@ -160,9 +243,11 @@ Output format:
 
 {
   "best_target_path": "string",
+  "confidence": number,
   "alternatives": [
     {
-      "target_path": "string"
+      "target_path": "string",
+      "confidence": number
     }
   ]
 }
@@ -171,6 +256,7 @@ Notes:
 - "best_target_path" must be exactly one of the candidate category paths (unless empty).
 - Each "target_path" in "alternatives" must also be exactly one of the candidate paths.
 - You MUST NOT return any path that is not in the candidate list.
+- Confidence values should be numbers between 0 and 1.
 """
 
 CATEGORY_USER_PROMPT_TEMPLATE = """Product:
@@ -182,4 +268,4 @@ CATEGORY_USER_PROMPT_TEMPLATE = """Product:
 Candidate category paths (one per line):
 {candidate_paths}
 
-Return JSON only with best_target_path and alternatives (up to 2)."""
+Return JSON only with best_target_path, confidence, and alternatives (up to 2)."""

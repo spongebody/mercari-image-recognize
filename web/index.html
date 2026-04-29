@@ -904,9 +904,9 @@
               <div>
                 <label for="category-count" id="category-count-label">返回类别个数</label>
                 <select id="category-count">
-                  <option value="1" selected>1</option>
+                  <option value="1">1</option>
                   <option value="2">2</option>
-                  <option value="3">3</option>
+                  <option value="3" selected>3</option>
                 </select>
               </div>
             </div>
@@ -1158,9 +1158,14 @@
           statusDoneText: "完成",
           resultSuccess: "成功",
           resultFail: "失败",
+          fieldStatus: "状态",
+          productDataPending: "商品数据仍在生成中，正在轮询完整结果...",
           timingTotal: "总耗时",
-          timingVision: "图片识别",
-          timingCategory: "分类",
+          timingClassification: "分类接口",
+          timingProductData: "商品数据接口",
+          productDataSourceLabel: "商品数据来源",
+          productDataSourcePrimary: "主模型",
+          productDataSourceFallback: "保底模型",
           fieldTitle: "📝 标题",
           fieldDescription: "📄 描述",
           descSectionDetails: "商品详情",
@@ -1310,9 +1315,14 @@
           statusDoneText: "完了",
           resultSuccess: "成功",
           resultFail: "失敗",
+          fieldStatus: "ステータス",
+          productDataPending: "商品データを生成中です。完全な結果をポーリングしています...",
           timingTotal: "総時間",
-          timingVision: "画像解析",
-          timingCategory: "カテゴリ分類",
+          timingClassification: "カテゴリ分類API",
+          timingProductData: "商品データAPI",
+          productDataSourceLabel: "商品データのソース",
+          productDataSourcePrimary: "メインモデル",
+          productDataSourceFallback: "フォールバックモデル",
           fieldTitle: "📝 タイトル",
           fieldDescription: "📄 説明",
           descSectionDetails: "商品詳細",
@@ -1730,11 +1740,18 @@
         if (Number.isFinite(timings.total_ms)) {
           stats.push(`<span>⏱️ ${t("timingTotal")} ${formatDuration(timings.total_ms)}</span>`);
         }
-        if (Number.isFinite(timings.vision_ms)) {
-          stats.push(`<span>👁️ ${t("timingVision")} ${formatDuration(timings.vision_ms)}</span>`);
+        if (Number.isFinite(timings.classification_ms)) {
+          stats.push(`<span>🏷️ ${t("timingClassification")} ${formatDuration(timings.classification_ms)}</span>`);
         }
-        if (Number.isFinite(timings.category_ms)) {
-          stats.push(`<span>🏷️ ${t("timingCategory")} ${formatDuration(timings.category_ms)}</span>`);
+        if (Number.isFinite(timings.product_data_ms)) {
+          stats.push(`<span>📦 ${t("timingProductData")} ${formatDuration(timings.product_data_ms)}</span>`);
+        }
+        if (data.product_data_source) {
+          const sourceLabel =
+            data.product_data_source === "fallback"
+              ? t("productDataSourceFallback")
+              : t("productDataSourcePrimary");
+          stats.push(`<span>🤖 ${t("productDataSourceLabel")} ${sourceLabel}</span>`);
         }
         return stats.join("");
       }
@@ -1786,6 +1803,15 @@
 
         const data = payload.data || payload;
         let html = '';
+
+        if (data.status === "product_pending") {
+          html += `
+            <div class="field-group">
+              <div class="field-label">${t("fieldStatus")}</div>
+              <div class="field-value">${t("productDataPending")}</div>
+            </div>
+          `;
+        }
 
         // 标题
         if (data.title) {
@@ -1961,13 +1987,6 @@
               <div class="tags-container">
                 ${priceTags || `<span class="tag">${t("priceNone")}</span>`}
               </div>
-            </div>
-          `;
-        } else {
-          html += `
-            <div class="field-group">
-              <div class="field-label">${t("fieldPriceList")}</div>
-              <div class="field-value" style="color: var(--danger);">${t("priceFailed")}</div>
             </div>
           `;
         }
@@ -2304,7 +2323,7 @@
             formData.append("image_list", fileObj.file);
           });
           formData.append("language", languageSelect.value);
-          formData.append("category_count", categoryCountSelect.value || "1");
+          formData.append("category_count", categoryCountSelect.value || "3");
           if (visionModelInput?.value.trim()) formData.append("vision_model", visionModelInput.value.trim());
           if (categoryModelInput?.value.trim()) formData.append("category_model", categoryModelInput.value.trim());
 
@@ -2345,7 +2364,19 @@
             }
           }
 
-          addResultCard(batchFileObj, payload, resp.ok);
+          const resultId = addResultCard(batchFileObj, payload, resp.ok);
+          if (resp.ok && payload?.status === "product_pending" && payload?.job_id) {
+            try {
+              const completedPayload = await pollAnalysisJob(endpoint, payload.job_id);
+              updateResultCard(resultId, completedPayload, true);
+            } catch (pollErr) {
+              updateResultCard(
+                resultId,
+                { error: String(pollErr?.message || pollErr), job_id: payload.job_id },
+                false
+              );
+            }
+          }
           completed = total;
         } catch (err) {
           const payload = { error: String(err?.message || err) };
@@ -2492,10 +2523,47 @@
         });
       }
 
+      function buildPollEndpoint(endpoint, jobId) {
+        const base = String(endpoint || "/api/v1/mercari/image/analyze").replace(/\/$/, "");
+        return `${base}/${encodeURIComponent(jobId)}`;
+      }
+
+      async function pollAnalysisJob(endpoint, jobId) {
+        const pollEndpoint = buildPollEndpoint(endpoint, jobId);
+        for (let attempt = 0; attempt < 60; attempt += 1) {
+          const resp = await fetch(pollEndpoint);
+          const text = await resp.text();
+          let payload;
+          try {
+            payload = JSON.parse(text);
+          } catch (err) {
+            payload = { error: t("jsonParseFailed"), raw: text };
+          }
+          if (!resp.ok) {
+            const message = payload?.detail?.message || payload?.detail || payload?.error || `HTTP ${resp.status}`;
+            throw new Error(message);
+          }
+          if (payload.status !== "product_pending") {
+            return payload;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+        }
+        throw new Error("Polling timed out before product data was ready.");
+      }
+
       // 添加结果卡片
       function addResultCard(fileObj, payload, success) {
         const resultId = "result_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
         testResults.unshift({ fileObj, payload, success, resultId });
+        renderResults();
+        return resultId;
+      }
+
+      function updateResultCard(resultId, payload, success) {
+        const entry = testResults.find((item) => item.resultId === resultId);
+        if (!entry) return;
+        entry.payload = payload;
+        entry.success = success;
         renderResults();
       }
 

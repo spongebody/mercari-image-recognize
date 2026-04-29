@@ -16,6 +16,10 @@ from .llm.resilient import AttemptRecord, ResilientCaller
 from .llm.prompts import (
     CATEGORY_SYSTEM_PROMPT,
     CATEGORY_USER_PROMPT_TEMPLATE,
+    FAST_CLASSIFICATION_SYSTEM_PROMPT,
+    FAST_CLASSIFICATION_USER_PROMPT,
+    PRODUCT_DATA_SYSTEM_PROMPT,
+    PRODUCT_DATA_USER_PROMPT,
     PRODUCT_TITLE_CATEGORY_SYSTEM_PROMPT,
     PRODUCT_TITLE_CATEGORY_USER_PROMPT,
     VISION_SYSTEM_PROMPT_WITH_PRICE,
@@ -130,6 +134,16 @@ def _normalize_direct_price(value: Any) -> Optional[int]:
         if PRICE_MIN <= price <= PRICE_MAX:
             return price
     return None
+
+
+def _normalize_confidence(value: Any) -> float:
+    if value is None or isinstance(value, bool):
+        return 0.0
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, min(parsed, 1.0))
 
 
 def _stringify_value(value: Any) -> str:
@@ -344,6 +358,118 @@ class MercariAnalyzer:
             total_budget_s=settings.model_call_total_budget_seconds,
             per_attempt_timeout_s=settings.request_timeout,
         )
+
+    def classify_first_image_categories(
+        self,
+        images: List[Tuple[bytes, str]],
+        language: str,
+        debug: bool = False,
+        category_limit: int = 3,
+        vision_model_override: Optional[str] = None,
+        category_model_override: Optional[str] = None,
+        image_processing: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        if language not in SUPPORTED_LANGUAGES:
+            raise BadRequestError("Unsupported language.")
+        if not images:
+            raise BadRequestError("Image list is required.")
+        category_limit = max(1, min(int(category_limit), 3))
+        total_started = time.monotonic()
+        attempts_by_stage: Dict[str, List[AttemptRecord]] = {}
+
+        first_data_url = image_bytes_to_data_url(images[0][0], images[0][1])
+        ai_raw, vision_attempts = self._call_fast_classification_llm(
+            first_data_url,
+            language,
+            model_override=vision_model_override,
+        )
+        attempts_by_stage["fast_vision"] = vision_attempts
+
+        title = _clean_string(ai_raw.get("title", ""))
+        simple_description = _clean_string(ai_raw.get("simple_description", ""))
+        top_level_category = _clean_string(ai_raw.get("top_level_category", ""))
+        group_name = _map_top_level_category(top_level_category)
+
+        categories: List[Dict[str, Any]] = []
+        llm_category_raw: Optional[Dict[str, Any]] = None
+        if group_name:
+            categories, llm_category_raw, category_attempts = self._choose_categories(
+                title=title,
+                description=simple_description,
+                brand_for_prompt="",
+                group_name=group_name,
+                category_limit=category_limit,
+                model_override=category_model_override,
+            )
+            attempts_by_stage["category"] = category_attempts
+
+        classification_ms = round((time.monotonic() - total_started) * 1000, 2)
+        result: Dict[str, Any] = {
+            "status": "product_pending",
+            "categories": categories,
+            "timings": {
+                "total_ms": classification_ms,
+                "classification_ms": classification_ms,
+            },
+        }
+        if image_processing:
+            result["image_processing"] = image_processing
+        path_info = _paths_from_categories(categories, include_alternatives=False)
+        if path_info:
+            result.update(path_info)
+        if debug:
+            result["_debug"] = {
+                "fast_ai_raw": ai_raw,
+                "group_name": group_name,
+                "llm_category_raw": llm_category_raw,
+                "attempts": {
+                    stage: [a.__dict__ for a in attempts]
+                    for stage, attempts in attempts_by_stage.items()
+                },
+            }
+        return result
+
+    def generate_product_data(
+        self,
+        images: List[Tuple[bytes, str]],
+        language: str,
+        debug: bool = False,
+        model_override: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        if language not in SUPPORTED_LANGUAGES:
+            raise BadRequestError("Unsupported language.")
+        if not images:
+            raise BadRequestError("Image list is required.")
+        started = time.monotonic()
+        data_urls = [
+            image_bytes_to_data_url(image_bytes, mime_type)
+            for image_bytes, mime_type in images
+        ]
+        ai_raw, ai_full, attempts = self._call_product_data_llm(
+            data_urls, language, model_override=model_override
+        )
+
+        brand_raw = _clean_string(ai_raw.get("brand_name", ""))
+        brand_match = self.brand_store.match(brand_raw)
+        brand_name = brand_match["brand_name"] if brand_match else ""
+        brand_id_obj = dict(brand_match["brand_id_obj"]) if brand_match else empty_brand_id_obj()
+
+        result: Dict[str, Any] = {
+            "title": _clean_string(ai_raw.get("title", "")),
+            "description": _normalize_description(ai_raw.get("description")),
+            "brand_name": brand_name,
+            "brand_id_obj": brand_id_obj,
+            "timings": {
+                "product_data_ms": round((time.monotonic() - started) * 1000, 2),
+            },
+        }
+        if debug:
+            result["_debug"] = {
+                "product_data_ai_raw": ai_raw,
+                "product_data_ai_full": ai_full,
+                "attempts": {"product_data": [a.__dict__ for a in attempts]},
+            }
+        return result
 
     def analyze(
         self,
@@ -572,6 +698,98 @@ class MercariAnalyzer:
         self._log_raw("vision_attempts", [a.__dict__ for a in attempts])
         return parsed, raw_response, attempts
 
+    def _call_fast_classification_llm(
+        self,
+        image_data_url: str,
+        language: str,
+        model_override: Optional[str] = None,
+    ) -> Tuple[Dict[str, Any], List[AttemptRecord]]:
+        user_prompt = FAST_CLASSIFICATION_USER_PROMPT.format(
+            language_label=_language_label(language)
+        )
+        messages = [
+            {"role": "system", "content": FAST_CLASSIFICATION_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user_prompt},
+                    {"type": "image_url", "image_url": {"url": image_data_url}},
+                ],
+            },
+        ]
+        primary = model_override or self.settings.vision_model
+        fallbacks = self.settings.vision_fallback_models
+
+        try:
+            parsed, raw_response, attempts = self.vision_caller.call_and_parse(
+                stage="fast_vision",
+                primary_model=primary,
+                fallback_models=fallbacks,
+                messages=messages,
+                temperature=0.1,
+                max_tokens=2000,
+            )
+        except LLMAllAttemptsFailedError as exc:
+            self._log_raw("fast_vision_attempts", [a.__dict__ for a in exc.attempts])
+            raise
+        self._log_raw("fast_vision_parsed", parsed)
+        self._log_raw("fast_vision_raw_response", raw_response)
+        self._log_raw("fast_vision_attempts", [a.__dict__ for a in attempts])
+        return parsed, attempts
+
+    def _call_product_data_llm(
+        self,
+        image_data_urls: List[str],
+        language: str,
+        model_override: Optional[str] = None,
+    ) -> Tuple[Dict[str, Any], Dict[str, Any], List[AttemptRecord]]:
+        if not image_data_urls:
+            raise BadRequestError("Image list is empty.")
+        user_prompt = PRODUCT_DATA_USER_PROMPT.format(language_label=_language_label(language))
+        image_payloads: List[Dict[str, Any]] = []
+        image_count = len(image_data_urls)
+        for index, url in enumerate(image_data_urls, start=1):
+            image_payloads.append(
+                {
+                    "type": "text",
+                    "text": (
+                        f"Image {index} of {image_count}: inspect this image carefully. "
+                        "Extract unique evidence before merging it with the other images."
+                    ),
+                }
+            )
+            image_payloads.append({"type": "image_url", "image_url": {"url": url}})
+        messages = [
+            {"role": "system", "content": PRODUCT_DATA_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": user_prompt}] + image_payloads,
+            },
+        ]
+        if model_override:
+            primary = model_override
+            fallbacks: List[str] = []
+        else:
+            primary = getattr(self.settings, "product_data_model", "") or self.settings.vision_model
+            fallbacks = self.settings.vision_fallback_models
+
+        try:
+            parsed, raw_response, attempts = self.vision_caller.call_and_parse(
+                stage="product_data",
+                primary_model=primary,
+                fallback_models=fallbacks,
+                messages=messages,
+                temperature=0.2,
+                max_tokens=12000,
+            )
+        except LLMAllAttemptsFailedError as exc:
+            self._log_raw("product_data_attempts", [a.__dict__ for a in exc.attempts])
+            raise
+        self._log_raw("product_data_parsed", parsed)
+        self._log_raw("product_data_raw_response", raw_response)
+        self._log_raw("product_data_attempts", [a.__dict__ for a in attempts])
+        return parsed, raw_response, attempts
+
     def _call_title_category_llm(
         self,
         title: str,
@@ -668,10 +886,10 @@ class MercariAnalyzer:
         self._log_raw("category_raw_response", raw_response)
         self._log_raw("category_attempts", [a.__dict__ for a in attempts])
 
-        ordered_paths: List[str] = []
+        ordered_paths: List[Tuple[str, float]] = []
         best = parsed.get("best_target_path")
         if isinstance(best, str) and best.strip():
-            ordered_paths.append(best)
+            ordered_paths.append((best, _normalize_confidence(parsed.get("confidence"))))
 
         alternatives = parsed.get("alternatives", [])
         if isinstance(alternatives, list):
@@ -680,12 +898,12 @@ class MercariAnalyzer:
                     continue
                 path = alt.get("target_path")
                 if isinstance(path, str) and path.strip():
-                    ordered_paths.append(path)
+                    ordered_paths.append((path, _normalize_confidence(alt.get("confidence"))))
 
         category_limit = max(1, min(category_limit, 3))
         seen = set()
         results: List[Dict[str, str]] = []
-        for path in ordered_paths:
+        for path, confidence in ordered_paths:
             path_clean = compress_whitespace(path)
             key = (group_name, path_clean)
             if key in seen:
@@ -701,6 +919,7 @@ class MercariAnalyzer:
                         "meru_id": match.get("meru_id", ""),
                         "rakuma_id": match.get("rakuma_id", ""),
                         "zenplus_id": match.get("zenplus_id", ""),
+                        "confidence": confidence,
                     }
                 )
             if len(results) >= category_limit:

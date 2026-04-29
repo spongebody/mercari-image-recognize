@@ -1,4 +1,6 @@
 import time
+import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
@@ -15,6 +17,7 @@ from app.data.brands import BrandStore
 from app.data.categories import CategoryStore
 from app.errors import BadRequestError, LLMAllAttemptsFailedError
 from app.image_processing import compress_image_if_needed
+from app.jobs import AnalysisJobStore
 from app.llm.client import OpenRouterClient
 from app.request_logging import build_request_log, write_request_log
 from app.runtime_config import get_public_config, update_runtime_config
@@ -52,6 +55,8 @@ analyzer = MercariAnalyzer(
     vision_client=vision_client,
     category_client=category_client,
 )
+product_data_executor = ThreadPoolExecutor(max_workers=4)
+analysis_job_store = AnalysisJobStore()
 
 
 def _resolve_showcase_path(value: str) -> Path:
@@ -121,6 +126,125 @@ def _sync_runtime_clients() -> None:
     category_client.timeout = settings.request_timeout
     showcase_image_client.model = settings.showcase_model
     showcase_service.model = settings.showcase_model
+
+
+def _merge_analysis_payload(
+    classification: Dict[str, Any],
+    product_data: Dict[str, Any],
+) -> Dict[str, Any]:
+    payload = dict(classification)
+    payload.update(product_data)
+    if classification.get("image_processing") and "image_processing" not in product_data:
+        payload["image_processing"] = classification["image_processing"]
+    timings = dict(classification.get("timings") or {})
+    timings.update(product_data.get("timings") or {})
+    classification_ms = timings.get("classification_ms")
+    product_data_ms = timings.get("product_data_ms")
+    if isinstance(classification_ms, (int, float)) and isinstance(product_data_ms, (int, float)):
+        timings["total_ms"] = round(max(float(classification_ms), float(product_data_ms)), 2)
+    payload["timings"] = timings
+    if isinstance(classification.get("_debug"), dict) or isinstance(product_data.get("_debug"), dict):
+        debug_payload: Dict[str, Any] = {}
+        attempts: Dict[str, Any] = {}
+        if isinstance(classification.get("_debug"), dict):
+            debug_payload.update(classification["_debug"])
+            if isinstance(classification["_debug"].get("attempts"), dict):
+                attempts.update(classification["_debug"]["attempts"])
+        if isinstance(product_data.get("_debug"), dict):
+            debug_payload.update(product_data["_debug"])
+            if isinstance(product_data["_debug"].get("attempts"), dict):
+                attempts.update(product_data["_debug"]["attempts"])
+        if attempts:
+            debug_payload["attempts"] = attempts
+        payload["_debug"] = debug_payload
+    payload["status"] = "completed"
+    return payload
+
+
+def _pending_payload(job_id: str, classification: Dict[str, Any]) -> Dict[str, Any]:
+    payload = dict(classification)
+    payload["job_id"] = job_id
+    payload["status"] = "product_pending"
+    return payload
+
+
+def _resolve_product_source(
+    job: Dict[str, Any],
+    *,
+    raise_product_errors: bool,
+) -> Tuple[Optional[str], Optional[Dict[str, Any]], Optional[BaseException]]:
+    """Decide which product-data future (if any) should be used right now.
+
+    Returns ``(source, product_data, error)`` where:
+      * ``source`` is ``"primary"`` / ``"fallback"`` / ``None``;
+      * ``product_data`` is the parsed result dict when ``source`` is set;
+      * ``error`` carries an exception that should be raised by the caller
+        when both paths failed (only when ``raise_product_errors`` is True).
+    """
+    primary = job["future"]
+    fallback = job.get("fallback_future")
+    started_at = job.get("started_at")
+    fallback_timeout = job.get("fallback_timeout")
+
+    primary_done = primary.done()
+    primary_error = primary.exception() if primary_done else None
+    primary_ok = primary_done and primary_error is None
+
+    fallback_done = bool(fallback and fallback.done())
+    fallback_error = fallback.exception() if fallback_done else None
+    fallback_ok = fallback_done and fallback_error is None
+
+    if primary_ok:
+        return "primary", primary.result(), None
+
+    timed_out = False
+    if (
+        fallback is not None
+        and started_at is not None
+        and fallback_timeout is not None
+    ):
+        timed_out = (time.monotonic() - float(started_at)) >= float(fallback_timeout)
+
+    if fallback_ok and (primary_done or timed_out):
+        return "fallback", fallback.result(), None
+
+    if primary_done and primary_error is not None:
+        if fallback is None or fallback_done:
+            if raise_product_errors:
+                return None, None, primary_error
+            return None, None, None
+
+    return None, None, None
+
+
+def _job_payload(
+    job_id: str,
+    classification: Dict[str, Any],
+    future,
+    *,
+    raise_product_errors: bool = True,
+    fallback_future=None,
+    started_at: Optional[float] = None,
+    fallback_timeout: Optional[float] = None,
+) -> Dict[str, Any]:
+    job = {
+        "future": future,
+        "fallback_future": fallback_future,
+        "started_at": started_at,
+        "fallback_timeout": fallback_timeout,
+    }
+    source, product_data, error = _resolve_product_source(
+        job,
+        raise_product_errors=raise_product_errors,
+    )
+    if error is not None:
+        raise error
+    if source is None or product_data is None:
+        return _pending_payload(job_id, classification)
+    payload = _merge_analysis_payload(classification, product_data)
+    payload["job_id"] = job_id
+    payload["product_data_source"] = source
+    return payload
 
 
 @app.get("/config", response_class=HTMLResponse)
@@ -199,7 +323,7 @@ async def analyze_image(
     image_list: List[UploadFile] = File(...),
     language: str = Form(DEFAULT_LANGUAGE),
     debug: str = Form("false"),
-    category_count: int = Form(1),
+    category_count: int = Form(3),
     vision_model: str = Form(None),
     category_model: str = Form(None),
 ):
@@ -261,8 +385,27 @@ async def analyze_image(
     category_count = max(1, min(category_count, 3))
 
     try:
-        result = await run_in_threadpool(
-            analyzer.analyze,
+        job_id = uuid.uuid4().hex
+        request_started = time.monotonic()
+        product_future = product_data_executor.submit(
+            analyzer.generate_product_data,
+            images=image_payloads,
+            language=language,
+            debug=debug_enabled,
+        )
+        fallback_model = (settings.product_data_fallback_model or "").strip()
+        fallback_future = None
+        if fallback_model:
+            fallback_future = product_data_executor.submit(
+                analyzer.generate_product_data,
+                images=image_payloads,
+                language=language,
+                debug=debug_enabled,
+                model_override=fallback_model,
+            )
+        fallback_timeout = float(settings.product_data_fallback_timeout_seconds)
+        classification = await run_in_threadpool(
+            analyzer.classify_first_image_categories,
             images=image_payloads,
             language=language,
             debug=debug_enabled,
@@ -271,6 +414,23 @@ async def analyze_image(
             category_model_override=category_model,
             image_processing=image_processing,
         )
+        analysis_job_store.put(
+            job_id,
+            classification=classification,
+            future=product_future,
+            fallback_future=fallback_future,
+            started_at=request_started,
+            fallback_timeout=fallback_timeout,
+        )
+        result = _job_payload(
+            job_id,
+            classification,
+            product_future,
+            raise_product_errors=False,
+            fallback_future=fallback_future,
+            started_at=request_started,
+            fallback_timeout=fallback_timeout,
+        )
     except BadRequestError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except LLMAllAttemptsFailedError as exc:
@@ -278,6 +438,30 @@ async def analyze_image(
     except Exception as exc:
         raise HTTPException(status_code=500, detail="Internal server error.") from exc
 
+    return JSONResponse(result)
+
+
+@app.get("/api/v1/mercari/image/analyze/{job_id}")
+async def poll_image_analysis(job_id: str):
+    job = analysis_job_store.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Analysis job not found.")
+    try:
+        result = await run_in_threadpool(
+            _job_payload,
+            job_id,
+            job["classification"],
+            job["future"],
+            fallback_future=job.get("fallback_future"),
+            started_at=job.get("started_at"),
+            fallback_timeout=job.get("fallback_timeout"),
+        )
+    except BadRequestError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except LLMAllAttemptsFailedError as exc:
+        raise HTTPException(status_code=502, detail=_format_attempts_error(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Internal server error.") from exc
     return JSONResponse(result)
 
 

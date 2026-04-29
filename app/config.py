@@ -35,6 +35,21 @@ def _env_int_min(name: str, default: int, minimum: int) -> int:
     return value if value >= minimum else default
 
 
+def _env_float(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+def _env_float_min(name: str, default: float, minimum: float) -> float:
+    value = _env_float(name, default)
+    return value if value >= minimum else default
+
+
 def _env_optional_bool(name: str) -> Optional[bool]:
     raw = os.getenv(name)
     if raw is None:
@@ -86,6 +101,13 @@ class Settings:
     openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "")
     vision_model: str = os.getenv("VISION_MODEL", "")
     category_model: str = os.getenv("CATEGORY_MODEL", "")
+    product_data_model: str = os.getenv("PRODUCT_DATA_MODEL", "google/gemini-2.5-flash")
+    product_data_fallback_model: str = os.getenv(
+        "PRODUCT_DATA_FALLBACK_MODEL", "openai/gpt-4o-mini"
+    )
+    product_data_fallback_timeout_seconds: float = _env_float_min(
+        "PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS", 10.0, 0.1
+    )
     brand_csv_path: str = os.getenv("BRAND_CSV_PATH", "data/mercari_brand.csv")
     category_csv_path: str = os.getenv("CATEGORY_CSV_PATH", "data/category_rakuten.csv")
     openrouter_base_url: str = os.getenv(

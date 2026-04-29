@@ -45,6 +45,7 @@
 - `tax_excluded` 表示图片里直接读到的商品价格；`tax_included` 表示图片里直接读到的税后价格，没有则为 `null`。
 - 如果识别到 `tax_excluded`，`prices` 返回空数组；如果没有明显标价，则 `tax_excluded` / `tax_included` 为 `null`，`prices` 返回 3 个日元参考价格。
 - 价格仅作为 LLM 初步预测，不使用在线搜索，也不再调用独立价格模型。
+- 当前图片识别主接口已不再返回价格相关字段；价格由用户手动填写。上述字段仅适用于仍使用旧同步识别结果的兼容说明。
 
 ## 接口列表
 
@@ -65,6 +66,7 @@
 {
   "VISION_MODEL": "...",
   "CATEGORY_MODEL": "...",
+  "PRODUCT_DATA_MODEL": "google/gemini-2.5-flash",
   "SHOWCASE_MODEL": "google/gemini-3.1-flash-image-preview",
   "LOG_LLM_RAW": false,
   "LOG_REQUESTS": true,
@@ -79,6 +81,7 @@
 ```
 
 字段说明：
+- `PRODUCT_DATA_MODEL`：商品数据生成模型，用于多图生成标题、描述和品牌信息，默认 `google/gemini-2.5-flash`。
 - `SHOWCASE_MODEL`：`POST /api/v1/showcase/generate` 在请求未传 `model` 时使用的默认图生图模型。
 
 ### PUT /api/v1/config
@@ -90,6 +93,7 @@
 {
   "VISION_MODEL": "openai/gpt-4.1-mini",
   "CATEGORY_MODEL": "openai/gpt-4.1-mini",
+  "PRODUCT_DATA_MODEL": "google/gemini-2.5-flash",
   "SHOWCASE_MODEL": "google/gemini-3.1-flash-image-preview",
   "LOG_REQUESTS": true
 }
@@ -103,14 +107,14 @@
 - 修改 `SHOWCASE_MODEL` 后，进程内的 showcase 客户端 / 服务实例会同步更新，下一次 `POST /api/v1/showcase/generate` 立即使用新默认值。
 
 ### POST /api/v1/mercari/image/analyze
-上传并解析商品图片。
+上传并解析商品图片。接口会并行启动“第一张图快分类”和“多图商品数据生成”两条链路，优先返回分类结果和轮询 `job_id`。
 
 #### 请求（multipart/form-data）
 字段：
 - `image_list`（文件，必填，可多次上传）：商品图片列表（支持多张，如正面/背面/包装/标签；JPG/PNG/GIF 等）。
 - `language`（字符串，可选）：`ja` / `en` / `zh`，默认 `ja`。
 - `debug`（字符串，可选）：`true` / `1` / `yes` 等，默认 `false`。
-- `category_count`（整数，可选）：返回类别数量（1-3），默认 `1`。
+- `category_count`（整数，可选）：返回类别数量（1-3），默认 `3`。
 - `vision_model`（字符串，可选）：视觉模型覆盖。
 - `category_model`（字符串，可选）：分类模型覆盖。
 
@@ -140,25 +144,8 @@ files.forEach((file) => {
 
 ```json
 {
-  "title": "...",
-  "description": {
-    "product_details": {
-      "brand": "...",
-      "product_name": "...",
-      "model_number": "...",
-      "target": "...",
-      "color": "...",
-      "size": "...",
-      "weight": "...",
-      "condition": "..."
-    },
-    "product_intro": "...",
-    "recommendation": "...",
-    "search_keywords": ["..."]
-  },
-  "tax_excluded": 980,
-  "tax_included": 1078,
-  "prices": [],
+  "job_id": "8d65f5c2...",
+  "status": "product_pending",
   "categories": [
     {
       "id": "123",
@@ -166,32 +153,21 @@ files.forEach((file) => {
       "name": "カテゴリ/パス",
       "meru_id": "...",
       "rakuma_id": "...",
-      "zenplus_id": "..."
+      "zenplus_id": "...",
+      "confidence": 0.92
     }
   ],
-  "brand_name": "...",
-  "brand_id_obj": {
-    "rakuten_brand_id": "...",
-    "yshop_brand_id": "...",
-    "yauc_brand_id": "...",
-    "meru_brand_id": "...",
-    "ebay_brand_id": "...",
-    "rakuma_brand_id": "...",
-    "amazon_brand_id": "...",
-    "qoo10_brand_id": "..."
-  },
   "timings": {
-    "total_ms": 2345.67,
-    "vision_ms": 1234.56,
-    "category_ms": 789.01
+    "total_ms": 900.12,
+    "classification_ms": 900.12
   },
   "image_processing": [
     {
       "index": 1,
-      "filename": "front.jpg",
+      "filename": "front.png",
       "compressed": true,
-      "original_bytes": 2457600,
-      "processed_bytes": 524288
+      "original_bytes": 2000000,
+      "processed_bytes": 500000
     }
   ],
   "best_target_path": "...",
@@ -211,7 +187,7 @@ files.forEach((file) => {
     }
   ],
   "_debug": {
-    "ai_raw": {"...": "..."},
+    "fast_ai_raw": {"...": "..."},
     "group_name": "...",
     "llm_category_raw": {"...": "..."}
   }
@@ -219,12 +195,103 @@ files.forEach((file) => {
 ```
 
 说明：
+- `status=product_pending` 表示商品数据仍在后台生成；使用 `job_id` 调用轮询接口获取完整商品数据。
+- 如果商品数据在首接口返回前已经完成，首接口会直接返回 `status=completed`，并合并 `title`、`description`、`brand_name`、`brand_id_obj`。
 - `_debug` 仅在 `debug=true` 且服务端允许调试时返回。
-- `tax_excluded` / `tax_included` 只表示图片中直接读到的价格。
-- `prices` 为视觉模型给出的初步价格预测；当 `tax_excluded` 有值时必须为空数组。
+- 主接口不再返回价格相关字段。
 - `best_target_path` / `alternatives` 在成功匹配分类路径时返回。
-- `timings.total_ms` 表示服务端分析处理总耗时；`timings.vision_ms` 表示图片识别 LLM 调用耗时；`timings.category_ms` 表示分类 LLM 调用耗时，单位均为毫秒。
-- `image_processing` 表示后端图片预处理结果；当单张图片超过服务端 `IMAGE_COMPRESSION_THRESHOLD_MB` 阈值并成功压缩时，`compressed=true` 且包含压缩前后的字节数。
+- `timings.total_ms` 表示从请求开始到当前响应时刻的实际墙钟耗时；`timings.classification_ms` 表示首接口分类链路耗时，单位均为毫秒。由于分类与商品数据并行执行，完成态的 `total_ms ≈ max(classification_ms, product_data_ms)`，而非两者相加。
+- `image_processing` 字段返回每张上传图片的压缩处理结果（是否压缩、原始/处理后字节数等）。
+
+### GET /api/v1/mercari/image/analyze/{job_id}
+轮询商品数据生成结果。
+
+#### 响应（200，生成中）
+
+```json
+{
+  "job_id": "8d65f5c2...",
+  "status": "product_pending",
+  "categories": [
+    {
+      "id": "123",
+      "rakuten_id": "123",
+      "name": "カテゴリ/パス",
+      "confidence": 0.92
+    }
+  ],
+  "best_target_path": "...",
+  "best_category_id": "...",
+  "rakuten_id": "..."
+}
+```
+
+#### 响应（200，已完成）
+
+```json
+{
+  "job_id": "8d65f5c2...",
+  "status": "completed",
+  "title": "...",
+  "description": {
+    "product_details": {
+      "brand": "...",
+      "product_name": "...",
+      "model_number": "...",
+      "target": "...",
+      "color": "...",
+      "size": "...",
+      "weight": "...",
+      "condition": "..."
+    },
+    "product_intro": "...",
+    "recommendation": "...",
+    "search_keywords": ["..."]
+  },
+  "categories": [
+    {
+      "id": "123",
+      "rakuten_id": "123",
+      "name": "カテゴリ/パス",
+      "confidence": 0.92
+    }
+  ],
+  "brand_name": "...",
+  "brand_id_obj": {
+    "rakuten_brand_id": "...",
+    "yshop_brand_id": "...",
+    "yauc_brand_id": "...",
+    "meru_brand_id": "...",
+    "ebay_brand_id": "...",
+    "rakuma_brand_id": "...",
+    "amazon_brand_id": "...",
+    "qoo10_brand_id": "..."
+  },
+  "timings": {
+    "total_ms": 1800.34,
+    "classification_ms": 900.12,
+    "product_data_ms": 1800.34
+  },
+  "product_data_source": "primary",
+  "image_processing": [
+    {
+      "index": 1,
+      "filename": "front.png",
+      "compressed": true,
+      "original_bytes": 2000000,
+      "processed_bytes": 500000
+    }
+  ]
+}
+```
+
+说明：
+- `brand_name` / `brand_id_obj` 只在商品数据完成后返回。
+- 商品数据生成结果不包含 `tax_excluded`、`tax_included`、`prices`。
+- 由于分类与商品数据在服务端并行执行，完成态 `timings.total_ms = max(classification_ms, product_data_ms)`，反映两个 LLM 链路重叠后的实际耗时；`classification_ms` 表示首接口分类耗时，`product_data_ms` 表示轮询侧商品数据生成耗时。
+- `image_processing` 与首接口保持一致，标记每张图片是否被压缩。
+- `product_data_source` 标识商品数据来自哪个 LLM：`"primary"` 表示主模型（`PRODUCT_DATA_MODEL`），`"fallback"` 表示保底小模型（`PRODUCT_DATA_FALLBACK_MODEL`）。当主模型超过 `PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS` 仍未返回，或主模型失败时，保底模型结果会被采用；`PRODUCT_DATA_FALLBACK_MODEL` 留空可关闭保底。
+- 内存任务默认只保存在当前 API 进程中；服务重启后未完成的 `job_id` 会失效。
 
 #### 错误
 - `400`：请求无效（图片格式/参数错误、参数校验失败）。`detail` 为字符串。
@@ -261,7 +328,7 @@ files.forEach((file) => {
   ```
 
   字段约束：
-  - `stage` ∈ `"vision"`, `"category"`, `"title_category"`。
+  - `stage` ∈ `"fast_vision"`, `"product_data"`, `"vision"`, `"category"`, `"title_category"`。
   - `kind` 当前固定为 `"all_attempts_failed"`，保留供未来扩展。
   - `attempts[].error_kind` ∈ `"request_failed"`, `"parse_failed"`, `"budget_exhausted"`。
   - `attempts[].status_code` 在 `parse_failed` 时为 200；`request_failed` 时尽力从上游消息中解析整数 HTTP 状态码，否则 `null`。

@@ -26,7 +26,7 @@ class MainErrorResponseTest(unittest.TestCase):
                 latency_ms=42.0, status_code=200,
             ),
         ]
-        analyzer.analyze.side_effect = LLMAllAttemptsFailedError("vision", attempts)
+        analyzer.classify_first_image_categories.side_effect = LLMAllAttemptsFailedError("fast_vision", attempts)
 
         resp = self.client.post(
             "/api/v1/mercari/image/analyze",
@@ -38,7 +38,7 @@ class MainErrorResponseTest(unittest.TestCase):
         body = resp.json()
         detail = body["detail"]
         self.assertIsInstance(detail, dict)
-        self.assertEqual(detail["stage"], "vision")
+        self.assertEqual(detail["stage"], "fast_vision")
         self.assertEqual(detail["kind"], "all_attempts_failed")
         self.assertEqual(len(detail["attempts"]), 2)
         self.assertEqual(detail["attempts"][0]["error_kind"], "request_failed")
@@ -47,7 +47,7 @@ class MainErrorResponseTest(unittest.TestCase):
 
     @patch.object(main_module, "analyzer")
     def test_bad_request_returns_string_400(self, analyzer):
-        analyzer.analyze.side_effect = BadRequestError("Image list is required.")
+        analyzer.classify_first_image_categories.side_effect = BadRequestError("Image list is required.")
 
         resp = self.client.post(
             "/api/v1/mercari/image/analyze",

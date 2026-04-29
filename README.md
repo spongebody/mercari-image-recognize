@@ -22,24 +22,34 @@ requests immediately.
 
 ## Image analysis flow
 
-Image analysis uses one vision LLM call followed by one category selection call:
+Image analysis now runs a fast category path and a product-data path in parallel:
 
-1. `VISION_SYSTEM_PROMPT_WITH_PRICE` + `VISION_USER_PROMPT_WITH_PRICE`
-   - Generates title, structured description, brand, top-level category, direct image price fields, and optional preliminary JPY price predictions.
-   - If a visible product price is found in the image, `tax_excluded` / `tax_included` are returned and `prices` is empty.
-   - If no visible product price is found, direct price fields are `null` and `prices` contains 3 inferred condition-based values.
-   - Pricing is image-only. The app does not use online search or a separate price model.
-2. `CATEGORY_SYSTEM_PROMPT` + `CATEGORY_USER_PROMPT_TEMPLATE`
-   - Chooses the best category path from local CSV-backed candidates under the detected top-level category.
+1. Fast classification path:
+   - Uses only the first uploaded image with `FAST_CLASSIFICATION_SYSTEM_PROMPT` + `FAST_CLASSIFICATION_USER_PROMPT`.
+   - Extracts only top-level category, title, and simple description.
+   - Calls `CATEGORY_SYSTEM_PROMPT` + `CATEGORY_USER_PROMPT_TEMPLATE` to choose up to 3 CSV-backed category paths with confidence scores.
+   - The first API response returns these categories plus a `job_id` as soon as this path completes.
+2. Product data path:
+   - Uses all uploaded images with `PRODUCT_DATA_SYSTEM_PROMPT` + `PRODUCT_DATA_USER_PROMPT`.
+   - Generates title, structured description, and brand information.
+   - Does not generate `tax_excluded`, `tax_included`, or `prices`; price entry is handled manually by the client.
+   - Uses `PRODUCT_DATA_MODEL` by default (`google/gemini-2.5-flash` unless configured).
+   - In parallel, a smaller fallback model `PRODUCT_DATA_FALLBACK_MODEL` (default `openai/gpt-4o-mini`) runs the same prompt. If the primary model has not produced a result within `PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS` (default `10`), the polling endpoint returns the fallback result so callers always get bounded-latency data. The completed payload includes `product_data_source` (`"primary"` or `"fallback"`) so clients can tell which model produced the data.
 
-The image analysis response includes backend timings in milliseconds: `timings.total_ms` for service-side analysis time, `timings.vision_ms` for the image recognition call, and `timings.category_ms` for the category selection call. The test page displays these backend timings instead of browser-measured request time.
+If the product-data path finishes before the first response is sent, the response is returned as `status=completed` with the full product data. Otherwise the client polls `GET /api/v1/mercari/image/analyze/{job_id}` until it returns `status=completed`. In-memory jobs live only in the current API process.
+
+The image analysis response includes backend timings in milliseconds: `timings.classification_ms` for the first API response's category path, `timings.product_data_ms` for the polling-side product data generation path once complete, and `timings.total_ms` for the wall-clock duration. Because the two paths run in parallel, the completed `total_ms ≈ max(classification_ms, product_data_ms)` rather than their sum. The response also includes `image_processing`, which lists each uploaded image's compression status (whether it was compressed and the original/processed byte sizes).
 
 ## Prompt overview
 
 All prompts live in `app/llm/prompts.py`.
 
-- Image recognition with pricing: `VISION_SYSTEM_PROMPT_WITH_PRICE` + `VISION_USER_PROMPT_WITH_PRICE`
-  - Generates title, description, top-level category, brand, visible image prices, and fallback inferred price points.
+- Fast image classification: `FAST_CLASSIFICATION_SYSTEM_PROMPT` + `FAST_CLASSIFICATION_USER_PROMPT`
+  - Uses the first image to generate only the minimal classification evidence, without brand or price fields.
+- Product data generation: `PRODUCT_DATA_SYSTEM_PROMPT` + `PRODUCT_DATA_USER_PROMPT`
+  - Uses all images to generate title, description, and brand fields without price fields.
+- Legacy/title fallback image recognition: `VISION_SYSTEM_PROMPT_WITH_PRICE` + `VISION_USER_PROMPT_WITH_PRICE`
+  - Still used by title fallback image classification.
 - Title-only category: `PRODUCT_TITLE_CATEGORY_SYSTEM_PROMPT` + `PRODUCT_TITLE_CATEGORY_USER_PROMPT`
   - Classifies a title to a top-level category.
 - Category selection: `CATEGORY_SYSTEM_PROMPT` + `CATEGORY_USER_PROMPT_TEMPLATE`
@@ -52,6 +62,9 @@ Booleans accept `1`, `true`, `yes`, or `on`.
 - `OPENROUTER_API_KEY` (required): OpenRouter API key.
 - `VISION_MODEL` (default: empty): model for image understanding.
 - `CATEGORY_MODEL` (default: empty): model for category selection.
+- `PRODUCT_DATA_MODEL` (default: `google/gemini-2.5-flash`): model for all-image product data generation.
+- `PRODUCT_DATA_FALLBACK_MODEL` (default: `openai/gpt-4o-mini`): smaller model that runs in parallel with the primary product-data call. Set to empty to disable the fallback.
+- `PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS` (default: `10`): if the primary product-data call has not completed after this many seconds, the polling endpoint returns the fallback result instead. Accepts decimals (e.g., `7.5`).
 - `BRAND_CSV_PATH` (default: `data/mercari_brand.csv`): brand data CSV path.
 - `CATEGORY_CSV_PATH` (default: `data/category_rakuten.csv`): category data CSV path.
 - `OPENROUTER_BASE_URL` (default: `https://openrouter.ai/api/v1/chat/completions`): API base URL.
@@ -96,6 +109,9 @@ manually changing `.env`. The page can update:
 
 - `VISION_MODEL`
 - `CATEGORY_MODEL`
+- `PRODUCT_DATA_MODEL`
+- `PRODUCT_DATA_FALLBACK_MODEL`
+- `PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS`
 - `SHOWCASE_MODEL`
 - `LOG_LLM_RAW`
 - `LOG_REQUESTS`

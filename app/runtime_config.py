@@ -11,13 +11,21 @@ from .config import BASE_DIR
 class ConfigField:
     env_name: str
     settings_attr: str
-    value_type: str  # "str" | "int" | "bool" | "multiline_str"
-    min_value: int | None = None
+    value_type: str  # "str" | "int" | "bool" | "multiline_str" | "float"
+    min_value: float | None = None
 
 
 CONFIG_FIELDS = (
     ConfigField("VISION_MODEL", "vision_model", "str"),
     ConfigField("CATEGORY_MODEL", "category_model", "str"),
+    ConfigField("PRODUCT_DATA_MODEL", "product_data_model", "str"),
+    ConfigField("PRODUCT_DATA_FALLBACK_MODEL", "product_data_fallback_model", "str"),
+    ConfigField(
+        "PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS",
+        "product_data_fallback_timeout_seconds",
+        "float",
+        min_value=0.1,
+    ),
     ConfigField("SHOWCASE_MODEL", "showcase_model", "str"),
     ConfigField("LOG_LLM_RAW", "log_llm_raw", "bool"),
     ConfigField("LOG_REQUESTS", "log_requests", "bool"),
@@ -63,6 +71,20 @@ def _parse_int(value: Any, field: ConfigField) -> int:
     return parsed
 
 
+def _parse_float(value: Any, field: ConfigField) -> float:
+    if isinstance(value, bool):
+        raise ValueError("Expected a numeric value.")
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Expected a numeric value.") from exc
+    if parsed < 0:
+        raise ValueError("Expected a non-negative numeric value.")
+    if field.min_value is not None and parsed < field.min_value:
+        raise ValueError(f"{field.env_name} must be at least {field.min_value}.")
+    return parsed
+
+
 def _parse_multiline_str(value: Any, field: ConfigField) -> List[str]:
     if isinstance(value, list):
         items = [str(v).strip() for v in value]
@@ -81,6 +103,8 @@ def _parse_value(field: ConfigField, value: Any) -> Any:
         return _parse_bool(value)
     if field.value_type == "int":
         return _parse_int(value, field)
+    if field.value_type == "float":
+        return _parse_float(value, field)
     if field.value_type == "multiline_str":
         return _parse_multiline_str(value, field)
     if value is None:
@@ -96,6 +120,9 @@ def _serialize_value(field: ConfigField, value: Any) -> str:
         return "true" if bool(value) else "false"
     if field.value_type == "multiline_str":
         return ",".join(value)
+    if field.value_type == "float":
+        text = ("%g" % float(value))
+        return text
     return str(value)
 
 
