@@ -108,20 +108,10 @@ def fetch_image_from_url(
 
 
 def safe_json_loads(raw: str) -> Any:
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.strip("`")
-    cleaned = cleaned.strip()
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError:
-        # Try to remove leading/trailing text before/after braces
-        start = cleaned.find("{")
-        end = cleaned.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            snippet = cleaned[start : end + 1]
-            return json.loads(snippet)
-        raise
+    """Backward-compatible alias for parse_llm_json (raises LLMParseError)."""
+    from .llm.json_parser import parse_llm_json
+
+    return parse_llm_json(raw)
 
 
 def _coerce_price(value: Any) -> Optional[int]:
