@@ -7,7 +7,7 @@ cd "$ROOT_DIR"
 API_HOST="${API_HOST:-0.0.0.0}"
 API_PORT="${API_PORT:-8000}"
 UI_HOST="${UI_HOST:-0.0.0.0}"
-UI_PORT="${UI_PORT:-8001}"
+UI_PORT="${UI_PORT:-8002}"
 
 cleanup() {
   if [[ -n "${API_PID:-}" ]] && kill -0 "$API_PID" >/dev/null 2>&1; then
