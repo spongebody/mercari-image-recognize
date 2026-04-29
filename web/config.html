@@ -227,6 +227,14 @@
 
         <div class="controls-row">
           <div>
+            <label for="SHOWCASE_MODEL">图片合成默认模型</label>
+            <input id="SHOWCASE_MODEL" type="text" placeholder="例如 google/gemini-3.1-flash-image-preview" />
+            <div class="hint">用于 /api/v1/showcase/generate；必须支持 OpenRouter 图生图（image+text → image）modalities。请求中 model 字段为空时使用该默认值。</div>
+          </div>
+        </div>
+
+        <div class="controls-row">
+          <div>
             <label for="LOG_LLM_RAW">打印 LLM 原始日志</label>
             <select id="LOG_LLM_RAW">
               <option value="true">开启</option>
@@ -305,6 +313,7 @@
       const fields = [
         "VISION_MODEL",
         "CATEGORY_MODEL",
+        "SHOWCASE_MODEL",
         "LOG_LLM_RAW",
         "LOG_REQUESTS",
         "ENABLE_DEBUG",

@@ -627,6 +627,87 @@
         display: block;
       }
 
+      /* 文本域（合成 tab 使用） */
+      textarea {
+        width: 100%;
+        padding: 10px 12px;
+        font-size: 14px;
+        font-family: inherit;
+        color: var(--text);
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        resize: vertical;
+        line-height: 1.5;
+      }
+
+      textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(47, 128, 237, 0.15);
+      }
+
+      /* 合成结果对比布局 */
+      .showcase-compare {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      @media (max-width: 720px) {
+        .showcase-compare {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .showcase-compare-tile {
+        background: #f8fafc;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        text-align: center;
+      }
+
+      .showcase-compare-tile .label {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+      }
+
+      .showcase-compare-tile img {
+        max-width: 100%;
+        max-height: 380px;
+        border-radius: 8px;
+        background: white;
+        border: 1px solid var(--border);
+      }
+
+      .showcase-compare-tile .download-link {
+        display: inline-block;
+        margin-top: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--accent);
+        text-decoration: none;
+        padding: 6px 12px;
+        border: 1px solid var(--accent);
+        border-radius: 6px;
+      }
+
+      .showcase-compare-tile .download-link:hover {
+        background: #eff6ff;
+      }
+
+      .showcase-meta-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 12px;
+      }
+
       /* 评价按钮组 */
       .rating-section {
         border-top: 1px solid var(--border);
@@ -789,6 +870,7 @@
           <div class="tab-bar">
             <button class="tab-btn active" id="tab-image">图片识别</button>
             <button class="tab-btn" id="tab-title">标题分类</button>
+            <button class="tab-btn" id="tab-showcase">图片合成</button>
           </div>
 
           <div class="card grid" id="image-card">
@@ -908,6 +990,56 @@
             <div class="results-section" style="margin-top: 10px;">
               <h3 id="title-result-heading" style="margin: 0 0 8px 0;">分类结果</h3>
               <div id="title-result"></div>
+            </div>
+          </div>
+
+          <div class="card grid hidden" id="showcase-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+              <h2 id="showcase-card-heading" style="margin: 0; font-size: 18px;">商品效果展示图生成</h2>
+              <span class="pill" id="showcase-card-pill">图生图</span>
+            </div>
+
+            <div>
+              <label id="showcase-upload-label">商品原图（单张）</label>
+              <div class="upload-area" id="showcase-upload-area">
+                <div class="upload-icon">🎨</div>
+                <div class="upload-text" id="showcase-upload-text">点击或拖拽商品图到此处</div>
+                <div class="upload-hint" id="showcase-upload-hint">仅支持单张图片，JPG/PNG/WEBP</div>
+                <input type="file" id="showcase-image" accept="image/*" />
+              </div>
+            </div>
+
+            <div id="showcase-preview-container" style="display: none">
+              <label id="showcase-preview-label">原图预览</label>
+              <div class="preview-grid" id="showcase-preview-grid" style="grid-template-columns: 200px;"></div>
+            </div>
+
+            <div>
+              <label for="showcase-prompt-hint" id="showcase-prompt-hint-label">提示词补充（可选）</label>
+              <textarea id="showcase-prompt-hint" rows="3" placeholder="例如：sunlit Tokyo street, golden hour"></textarea>
+            </div>
+
+            <div class="controls-row">
+              <div>
+                <label for="showcase-api-endpoint" id="showcase-api-label">接口地址</label>
+                <input type="text" id="showcase-api-endpoint" value="" placeholder="默认 /api/v1/showcase/generate" />
+              </div>
+              <div>
+                <label for="showcase-model-input" id="showcase-model-input-label">合成模型（留空使用默认）</label>
+                <input type="text" id="showcase-model-input" placeholder="留空使用服务端默认模型" />
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <button id="showcase-submit-btn">
+                <span id="showcase-button-text">开始生成</span>
+              </button>
+              <button class="secondary" id="showcase-clear-btn">重置</button>
+            </div>
+
+            <div class="results-section" style="margin-top: 10px;">
+              <h3 id="showcase-result-heading" style="margin: 0 0 8px 0;">合成结果</h3>
+              <div id="showcase-result"></div>
             </div>
           </div>
 
@@ -1092,7 +1224,43 @@
           titleAlternatives: "候选分类路径",
           titleNoAlternatives: "暂无候选",
           alertNoTitle: "请填写商品标题",
-          titleError: "请求失败"
+          titleError: "请求失败",
+          tabShowcase: "图片合成",
+          showcaseCardHeading: "商品效果展示图生成",
+          showcaseCardPill: "图生图",
+          showcaseUploadLabel: "商品原图（单张）",
+          showcaseUploadText: "点击或拖拽商品图到此处",
+          showcaseUploadHint: "仅支持单张图片，JPG/PNG/WEBP",
+          showcasePreviewLabel: "原图预览",
+          showcasePromptHintLabel: "提示词补充（可选）",
+          showcasePromptHintPlaceholder: "例如：sunlit Tokyo street, golden hour",
+          showcaseApiLabel: "接口地址",
+          showcaseApiPlaceholder: "默认 /api/v1/showcase/generate",
+          showcaseModelLabel: "合成模型（留空使用默认）",
+          showcaseModelPlaceholder: "留空使用服务端默认模型",
+          showcaseSubmitButton: "开始生成",
+          showcaseProcessingButton: "生成中...",
+          showcaseClearButton: "重置",
+          showcaseResultHeading: "合成结果",
+          showcaseAlertNoFile: "请先选择一张商品图",
+          showcaseLabelOriginal: "原图",
+          showcaseLabelGenerated: "合成图",
+          showcaseDownload: "下载合成图",
+          showcaseFieldRequestId: "请求 ID",
+          showcaseFieldModel: "模型",
+          showcaseFieldLatency: "耗时",
+          showcaseFieldRetry: "重试次数",
+          showcaseFieldMimeType: "图片类型",
+          showcaseFieldOutputSize: "图片大小",
+          showcaseFieldCreatedAt: "创建时间",
+          showcaseFieldPromptHint: "提示词补充",
+          showcaseShowFinalPrompt: "查看完整提示词",
+          showcaseHideFinalPrompt: "隐藏完整提示词",
+          showcaseFinalPrompt: "完整提示词",
+          showcaseEmptyResult: "暂无生成结果，请上传图片后点击开始生成",
+          showcaseFailureTitle: "生成失败",
+          showcaseFieldErrorCode: "错误码",
+          showcaseFieldErrorMessage: "错误信息"
         },
         ja: {
           documentTitle: "メルカリ商品画像識別テスター",
@@ -1208,7 +1376,43 @@
           titleAlternatives: "代替カテゴリ",
           titleNoAlternatives: "代替カテゴリなし",
           alertNoTitle: "商品タイトルを入力してください",
-          titleError: "リクエストに失敗しました"
+          titleError: "リクエストに失敗しました",
+          tabShowcase: "画像合成",
+          showcaseCardHeading: "商品ヒーロー画像の生成",
+          showcaseCardPill: "画像→画像",
+          showcaseUploadLabel: "商品の元画像（1枚）",
+          showcaseUploadText: "ここをクリックまたはドラッグ＆ドロップ",
+          showcaseUploadHint: "1枚のみ。JPG/PNG/WEBP に対応",
+          showcasePreviewLabel: "元画像プレビュー",
+          showcasePromptHintLabel: "追加プロンプト（任意）",
+          showcasePromptHintPlaceholder: "例：sunlit Tokyo street, golden hour",
+          showcaseApiLabel: "API エンドポイント",
+          showcaseApiPlaceholder: "既定 /api/v1/showcase/generate",
+          showcaseModelLabel: "合成モデル（空欄なら既定）",
+          showcaseModelPlaceholder: "空欄ならサーバー既定モデルを使用",
+          showcaseSubmitButton: "生成を開始",
+          showcaseProcessingButton: "生成中...",
+          showcaseClearButton: "リセット",
+          showcaseResultHeading: "生成結果",
+          showcaseAlertNoFile: "商品画像を1枚選択してください",
+          showcaseLabelOriginal: "元画像",
+          showcaseLabelGenerated: "合成画像",
+          showcaseDownload: "合成画像をダウンロード",
+          showcaseFieldRequestId: "リクエスト ID",
+          showcaseFieldModel: "モデル",
+          showcaseFieldLatency: "所要時間",
+          showcaseFieldRetry: "リトライ回数",
+          showcaseFieldMimeType: "画像タイプ",
+          showcaseFieldOutputSize: "画像サイズ",
+          showcaseFieldCreatedAt: "作成時刻",
+          showcaseFieldPromptHint: "追加プロンプト",
+          showcaseShowFinalPrompt: "完全なプロンプトを表示",
+          showcaseHideFinalPrompt: "プロンプトを隠す",
+          showcaseFinalPrompt: "完全なプロンプト",
+          showcaseEmptyResult: "まだ結果がありません。画像をアップロードして生成を開始してください。",
+          showcaseFailureTitle: "生成失敗",
+          showcaseFieldErrorCode: "エラーコード",
+          showcaseFieldErrorMessage: "エラーメッセージ"
         }
       };
 
@@ -1241,6 +1445,10 @@
       let processing = false;
       let resultRatings = {}; // 跟踪每个结果的评价状态 { resultId: 'accurate' | 'moderate' | 'inaccurate' | null }
       let titleProcessing = false;
+      let showcaseProcessing = false;
+      let showcaseSelectedFile = null; // { file, url } | null
+      let showcaseLastResult = null; // { payload, success } | null
+      let showcaseFinalPromptShown = false;
       let activeTab = "image";
 
       // DOM 元素
@@ -1322,6 +1530,31 @@
       const titleResultHeading = document.getElementById("title-result-heading");
       const titleResult = document.getElementById("title-result");
 
+      // Showcase tab elements
+      const tabShowcaseBtn = document.getElementById("tab-showcase");
+      const showcaseCard = document.getElementById("showcase-card");
+      const showcaseCardHeading = document.getElementById("showcase-card-heading");
+      const showcaseCardPill = document.getElementById("showcase-card-pill");
+      const showcaseUploadArea = document.getElementById("showcase-upload-area");
+      const showcaseUploadLabel = document.getElementById("showcase-upload-label");
+      const showcaseUploadText = document.getElementById("showcase-upload-text");
+      const showcaseUploadHint = document.getElementById("showcase-upload-hint");
+      const showcaseImageInput = document.getElementById("showcase-image");
+      const showcasePreviewContainer = document.getElementById("showcase-preview-container");
+      const showcasePreviewLabel = document.getElementById("showcase-preview-label");
+      const showcasePreviewGrid = document.getElementById("showcase-preview-grid");
+      const showcasePromptHintLabel = document.getElementById("showcase-prompt-hint-label");
+      const showcasePromptHintInput = document.getElementById("showcase-prompt-hint");
+      const showcaseApiLabel = document.getElementById("showcase-api-label");
+      const showcaseApiInput = document.getElementById("showcase-api-endpoint");
+      const showcaseModelInputLabel = document.getElementById("showcase-model-input-label");
+      const showcaseModelInput = document.getElementById("showcase-model-input");
+      const showcaseSubmitBtn = document.getElementById("showcase-submit-btn");
+      const showcaseButtonText = document.getElementById("showcase-button-text");
+      const showcaseClearBtn = document.getElementById("showcase-clear-btn");
+      const showcaseResultHeading = document.getElementById("showcase-result-heading");
+      const showcaseResult = document.getElementById("showcase-result");
+
       // LocalStorage 管理
       const STORAGE_KEY = "mercari_test_stats";
 
@@ -1389,9 +1622,29 @@
         titleClearBtn.textContent = t("titleClearButton");
         titleResultHeading.textContent = t("titleResultHeading");
 
+        tabShowcaseBtn.textContent = t("tabShowcase");
+        showcaseCardHeading.textContent = t("showcaseCardHeading");
+        showcaseCardPill.textContent = t("showcaseCardPill");
+        showcaseUploadLabel.textContent = t("showcaseUploadLabel");
+        showcaseUploadText.textContent = t("showcaseUploadText");
+        showcaseUploadHint.textContent = t("showcaseUploadHint");
+        showcasePreviewLabel.textContent = t("showcasePreviewLabel");
+        showcasePromptHintLabel.textContent = t("showcasePromptHintLabel");
+        showcasePromptHintInput.placeholder = t("showcasePromptHintPlaceholder");
+        showcaseApiLabel.textContent = t("showcaseApiLabel");
+        showcaseApiInput.placeholder = t("showcaseApiPlaceholder");
+        showcaseModelInputLabel.textContent = t("showcaseModelLabel");
+        showcaseModelInput.placeholder = t("showcaseModelPlaceholder");
+        showcaseButtonText.textContent = showcaseProcessing
+          ? t("showcaseProcessingButton")
+          : t("showcaseSubmitButton");
+        showcaseClearBtn.textContent = t("showcaseClearButton");
+        showcaseResultHeading.textContent = t("showcaseResultHeading");
+
         setStatus(statusState);
         setActiveTab(activeTab);
         renderResults();
+        renderShowcaseResult();
       }
 
       function loadStats() {
@@ -1842,12 +2095,20 @@
       }
 
       function setActiveTab(tab) {
-        activeTab = tab === "title" ? "title" : "image";
+        if (tab === "title") {
+          activeTab = "title";
+        } else if (tab === "showcase") {
+          activeTab = "showcase";
+        } else {
+          activeTab = "image";
+        }
         tabImageBtn.classList.toggle("active", activeTab === "image");
         tabTitleBtn.classList.toggle("active", activeTab === "title");
+        tabShowcaseBtn.classList.toggle("active", activeTab === "showcase");
         imageCard.classList.toggle("hidden", activeTab !== "image");
         imageResultsSection.classList.toggle("hidden", activeTab !== "image");
         titleCard.classList.toggle("hidden", activeTab !== "title");
+        showcaseCard.classList.toggle("hidden", activeTab !== "showcase");
       }
 
       function renderTitleResult(payload, success) {
@@ -2285,10 +2546,254 @@
           const models = data.models || {};
           if (models.vision_model) visionModelInput.value = models.vision_model;
           if (models.category_model) categoryModelInput.value = models.category_model;
+          if (models.showcase_model) showcaseModelInput.value = models.showcase_model;
         } catch (e) {
           console.warn(t("warnDefaults"), e);
         }
       }
+
+      // ========== 图片合成 tab ==========
+      function escapeForAttr(value) {
+        const div = document.createElement('div');
+        div.textContent = String(value);
+        return div.innerHTML.replace(/"/g, '&quot;');
+      }
+
+      function handleShowcaseFile(files) {
+        const list = Array.from(files || []).filter((f) => f.type && f.type.startsWith("image/"));
+        if (!list.length) return;
+        const file = list[0]; // 仅取首张
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          showcaseSelectedFile = { file, url: e.target.result };
+          updateShowcasePreview();
+        };
+        reader.readAsDataURL(file);
+      }
+
+      function updateShowcasePreview() {
+        showcasePreviewGrid.innerHTML = "";
+        if (!showcaseSelectedFile) {
+          showcasePreviewContainer.style.display = "none";
+          return;
+        }
+        showcasePreviewContainer.style.display = "block";
+
+        const item = document.createElement("div");
+        item.className = "preview-item";
+
+        const img = document.createElement("img");
+        img.src = showcaseSelectedFile.url;
+
+        const info = document.createElement("div");
+        info.className = "info";
+        info.textContent = `${showcaseSelectedFile.file.name} (${formatBytes(showcaseSelectedFile.file.size)})`;
+
+        const removeBtn = document.createElement("button");
+        removeBtn.className = "remove-btn";
+        removeBtn.innerHTML = "×";
+        removeBtn.onclick = (e) => {
+          e.stopPropagation();
+          showcaseSelectedFile = null;
+          showcaseImageInput.value = "";
+          updateShowcasePreview();
+        };
+
+        item.appendChild(img);
+        item.appendChild(info);
+        item.appendChild(removeBtn);
+        showcasePreviewGrid.appendChild(item);
+      }
+
+      function renderShowcaseResult() {
+        if (!showcaseLastResult) {
+          showcaseResult.innerHTML = `<div class="field-value" style="color: var(--muted);">${t("showcaseEmptyResult")}</div>`;
+          return;
+        }
+        const { payload, success, originalUrl } = showcaseLastResult;
+        if (!success) {
+          const errorCode = payload?.error_code || "";
+          const errorMessage = (payload?.error_message)
+            || (typeof payload?.detail === "string" && payload.detail)
+            || payload?.error
+            || "";
+          showcaseResult.innerHTML = `
+            <div class="field-group">
+              <div class="field-label" style="color: var(--danger);">${t("showcaseFailureTitle")}</div>
+              ${errorCode ? `<div class="field-value"><strong>${t("showcaseFieldErrorCode")}：</strong>${escapeHtml(String(errorCode))}</div>` : ""}
+              ${errorMessage ? `<div class="field-value multiline" style="margin-top: 6px;">${escapeHtml(String(errorMessage))}</div>` : ""}
+            </div>
+            <button class="toggle-json" onclick="toggleShowcaseJson(event)">
+              <span>📋</span><span class="toggle-text">${t("toggleShowJson")}</span>
+            </button>
+            <pre class="raw-json" id="showcase-raw-json">${escapeHtml(JSON.stringify(payload, null, 2))}</pre>
+          `;
+          return;
+        }
+
+        const generatedMime = payload.image_mime_type || "image/png";
+        const generatedDataUrl = payload.image_base64
+          ? `data:${generatedMime};base64,${payload.image_base64}`
+          : "";
+        const downloadName = `${payload.request_id || "showcase"}.${generatedMime.split("/")[1] || "png"}`;
+        const generatedSizeKb = payload.image_base64
+          ? `${Math.round((payload.image_base64.length * 3) / 4 / 1024)} KB (base64-decoded)`
+          : "—";
+
+        const metaTags = [
+          [t("showcaseFieldRequestId"), payload.request_id || ""],
+          [t("showcaseFieldModel"), payload.model || ""],
+          [t("showcaseFieldLatency"), typeof payload.latency_ms === "number" ? `${payload.latency_ms} ms` : ""],
+          [t("showcaseFieldMimeType"), generatedMime],
+          [t("showcaseFieldOutputSize"), generatedSizeKb],
+          [t("showcaseFieldCreatedAt"), payload.created_at || ""],
+        ];
+        const tagsHtml = metaTags
+          .filter(([, v]) => v !== "" && v !== null && v !== undefined)
+          .map(([k, v]) => `<span class="tag">${escapeHtml(k)}: ${escapeHtml(String(v))}</span>`)
+          .join("");
+
+        const promptHintHtml = payload.prompt_hint
+          ? `<div class="field-group">
+              <div class="field-label">${t("showcaseFieldPromptHint")}</div>
+              <div class="field-value multiline">${escapeHtml(String(payload.prompt_hint))}</div>
+             </div>`
+          : "";
+
+        const finalPromptText = payload.final_prompt || "";
+        const finalPromptHtml = finalPromptText
+          ? `<button class="toggle-json" onclick="toggleShowcaseFinalPrompt(event)">
+              <span>📝</span>
+              <span class="toggle-text">${showcaseFinalPromptShown ? t("showcaseHideFinalPrompt") : t("showcaseShowFinalPrompt")}</span>
+             </button>
+             <pre class="raw-json${showcaseFinalPromptShown ? " show" : ""}" id="showcase-final-prompt">${escapeHtml(finalPromptText)}</pre>`
+          : "";
+
+        showcaseResult.innerHTML = `
+          <div class="showcase-compare">
+            <div class="showcase-compare-tile">
+              <div class="label">${t("showcaseLabelOriginal")}</div>
+              ${originalUrl ? `<img src="${escapeForAttr(originalUrl)}" alt="original">` : ""}
+            </div>
+            <div class="showcase-compare-tile">
+              <div class="label">${t("showcaseLabelGenerated")}</div>
+              ${generatedDataUrl ? `<img src="${escapeForAttr(generatedDataUrl)}" alt="generated">` : ""}
+              ${generatedDataUrl ? `<div><a class="download-link" href="${escapeForAttr(generatedDataUrl)}" download="${escapeForAttr(downloadName)}">⬇ ${t("showcaseDownload")}</a></div>` : ""}
+            </div>
+          </div>
+
+          <div class="showcase-meta-tags">${tagsHtml}</div>
+
+          ${promptHintHtml}
+
+          ${finalPromptHtml}
+
+          <button class="toggle-json" style="margin-top: 12px;" onclick="toggleShowcaseJson(event)">
+            <span>📋</span><span class="toggle-text">${t("toggleShowJson")}</span>
+          </button>
+          <pre class="raw-json" id="showcase-raw-json">${escapeHtml(JSON.stringify(payload, null, 2))}</pre>
+        `;
+      }
+
+      window.toggleShowcaseJson = function (ev) {
+        const el = document.getElementById("showcase-raw-json");
+        if (!el) return;
+        const btn = ev && ev.currentTarget;
+        const text = btn ? btn.querySelector(".toggle-text") : null;
+        if (el.classList.contains("show")) {
+          el.classList.remove("show");
+          if (text) text.textContent = t("toggleShowJson");
+        } else {
+          el.classList.add("show");
+          if (text) text.textContent = t("toggleHideJson");
+        }
+      };
+
+      window.toggleShowcaseFinalPrompt = function (ev) {
+        const el = document.getElementById("showcase-final-prompt");
+        if (!el) return;
+        showcaseFinalPromptShown = !showcaseFinalPromptShown;
+        el.classList.toggle("show", showcaseFinalPromptShown);
+        const btn = ev && ev.currentTarget;
+        const text = btn ? btn.querySelector(".toggle-text") : null;
+        if (text) {
+          text.textContent = showcaseFinalPromptShown
+            ? t("showcaseHideFinalPrompt")
+            : t("showcaseShowFinalPrompt");
+        }
+      };
+
+      async function submitShowcaseRequest() {
+        if (!showcaseSelectedFile) {
+          alert(t("showcaseAlertNoFile"));
+          return;
+        }
+        const endpoint = showcaseApiInput.value.trim() || "/api/v1/showcase/generate";
+        showcaseProcessing = true;
+        showcaseSubmitBtn.disabled = true;
+        showcaseButtonText.innerHTML = `<span class="spinner"></span> ${t("showcaseProcessingButton")}`;
+        setStatus("processing");
+
+        const originalUrl = showcaseSelectedFile.url;
+        const formData = new FormData();
+        formData.append("file", showcaseSelectedFile.file);
+        const promptHint = showcasePromptHintInput.value.trim();
+        if (promptHint) formData.append("prompt_hint", promptHint);
+        const modelOverride = showcaseModelInput.value.trim();
+        if (modelOverride) formData.append("model", modelOverride);
+
+        try {
+          const resp = await fetch(endpoint, { method: "POST", body: formData });
+          const text = await resp.text();
+          let payload;
+          try {
+            payload = JSON.parse(text);
+          } catch (err) {
+            payload = { error: t("jsonParseFailed"), raw: text };
+          }
+          showcaseLastResult = { payload, success: resp.ok, originalUrl };
+        } catch (err) {
+          showcaseLastResult = {
+            payload: { error: String(err?.message || err) },
+            success: false,
+            originalUrl,
+          };
+        } finally {
+          showcaseProcessing = false;
+          showcaseSubmitBtn.disabled = false;
+          showcaseButtonText.textContent = t("showcaseSubmitButton");
+          setStatus("done");
+          showcaseFinalPromptShown = false;
+          renderShowcaseResult();
+        }
+      }
+
+      // showcase 上传 / 拖拽 / 重置 / 提交
+      showcaseImageInput.addEventListener("change", (e) => {
+        handleShowcaseFile(e.target.files);
+      });
+      showcaseUploadArea.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        showcaseUploadArea.classList.add("drag-over");
+      });
+      showcaseUploadArea.addEventListener("dragleave", () => {
+        showcaseUploadArea.classList.remove("drag-over");
+      });
+      showcaseUploadArea.addEventListener("drop", (e) => {
+        e.preventDefault();
+        showcaseUploadArea.classList.remove("drag-over");
+        handleShowcaseFile(e.dataTransfer.files);
+      });
+      showcaseSubmitBtn.addEventListener("click", submitShowcaseRequest);
+      showcaseClearBtn.addEventListener("click", () => {
+        showcaseSelectedFile = null;
+        showcaseImageInput.value = "";
+        showcasePromptHintInput.value = "";
+        showcaseLastResult = null;
+        showcaseFinalPromptShown = false;
+        updateShowcasePreview();
+        renderShowcaseResult();
+      });
 
       // 提交处理
       submitBtn.addEventListener("click", processFiles);
@@ -2300,6 +2805,7 @@
       });
       tabImageBtn.addEventListener("click", () => setActiveTab("image"));
       tabTitleBtn.addEventListener("click", () => setActiveTab("title"));
+      tabShowcaseBtn.addEventListener("click", () => setActiveTab("showcase"));
 
       // 初始化
       applyTranslations();
@@ -2307,6 +2813,7 @@
       updateStatsDisplay();
       fetchDefaults();
       renderTitleResult(null, true);
+      renderShowcaseResult();
     </script>
   </body>
 </html>

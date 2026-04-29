@@ -1,4 +1,5 @@
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
@@ -18,6 +19,10 @@ from app.llm.client import OpenRouterClient
 from app.request_logging import build_request_log, write_request_log
 from app.runtime_config import get_public_config, update_runtime_config
 from app.service import MercariAnalyzer
+from app.showcase.archive import ArchiveWriter as ShowcaseArchiveWriter
+from app.showcase.openrouter_image_client import OpenRouterImageClient
+from app.showcase.service import ShowcaseService
+from app.showcase.storage import StorageManager as ShowcaseStorageManager
 from app.utils import parse_bool_param
 
 settings = load_settings()
@@ -46,6 +51,35 @@ analyzer = MercariAnalyzer(
     category_store=category_store,
     vision_client=vision_client,
     category_client=category_client,
+)
+
+
+def _resolve_showcase_path(value: str) -> Path:
+    candidate = Path(value)
+    return candidate if candidate.is_absolute() else BASE_DIR / candidate
+
+
+showcase_storage_manager = ShowcaseStorageManager(
+    _resolve_showcase_path(settings.showcase_storage_root),
+    retain_input_files=settings.showcase_retain_input_files,
+    retain_output_files=settings.showcase_retain_output_files,
+)
+showcase_archive_writer = ShowcaseArchiveWriter(BASE_DIR / "logs" / "showcase")
+showcase_image_client = OpenRouterImageClient(
+    api_key=settings.openrouter_api_key,
+    base_url=settings.openrouter_base_url,
+    model=settings.showcase_model,
+    timeout=settings.showcase_request_timeout,
+    max_retries=settings.showcase_max_retries,
+    referer=settings.openrouter_referer,
+    app_name=settings.openrouter_app_name,
+)
+showcase_service = ShowcaseService(
+    model=settings.showcase_model,
+    storage_manager=showcase_storage_manager,
+    archive_writer=showcase_archive_writer,
+    client=showcase_image_client,
+    timezone_name=settings.showcase_timezone,
 )
 
 def _format_attempts_error(exc: LLMAllAttemptsFailedError) -> Dict[str, Any]:
@@ -85,6 +119,8 @@ app.add_middleware(
 def _sync_runtime_clients() -> None:
     vision_client.timeout = settings.request_timeout
     category_client.timeout = settings.request_timeout
+    showcase_image_client.model = settings.showcase_model
+    showcase_service.model = settings.showcase_model
 
 
 @app.get("/config", response_class=HTMLResponse)
@@ -274,6 +310,35 @@ async def analyze_title(request: TitleCategoryRequest):
     return JSONResponse(result)
 
 
+@app.post("/api/v1/showcase/generate")
+async def generate_showcase(
+    file: UploadFile = File(...),
+    prompt_hint: Optional[str] = Form(default=None),
+    model: Optional[str] = Form(default=None),
+):
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image uploads are supported.")
+
+    try:
+        image_bytes = await file.read()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Failed to read uploaded file.")
+
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    payload = await run_in_threadpool(
+        showcase_service.generate_showcase,
+        upload_filename=file.filename or "upload.bin",
+        content_type=file.content_type,
+        image_bytes=image_bytes,
+        prompt_hint=prompt_hint,
+        model_override=model,
+    )
+    status_code = 200 if payload.get("status") == "succeeded" else 502
+    return JSONResponse(status_code=status_code, content=payload)
+
+
 @app.get("/health")
 def health() -> dict:
     return {
@@ -281,5 +346,6 @@ def health() -> dict:
         "models": {
             "vision_model": settings.vision_model,
             "category_model": settings.category_model,
+            "showcase_model": settings.showcase_model,
         },
     }

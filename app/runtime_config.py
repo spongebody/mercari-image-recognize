@@ -18,6 +18,7 @@ class ConfigField:
 CONFIG_FIELDS = (
     ConfigField("VISION_MODEL", "vision_model", "str"),
     ConfigField("CATEGORY_MODEL", "category_model", "str"),
+    ConfigField("SHOWCASE_MODEL", "showcase_model", "str"),
     ConfigField("LOG_LLM_RAW", "log_llm_raw", "bool"),
     ConfigField("LOG_REQUESTS", "log_requests", "bool"),
     ConfigField("ENABLE_DEBUG", "enable_debug_param", "bool"),

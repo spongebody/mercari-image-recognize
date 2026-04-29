@@ -96,6 +96,7 @@ manually changing `.env`. The page can update:
 
 - `VISION_MODEL`
 - `CATEGORY_MODEL`
+- `SHOWCASE_MODEL`
 - `LOG_LLM_RAW`
 - `LOG_REQUESTS`
 - `ENABLE_DEBUG`

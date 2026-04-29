@@ -12,3 +12,5 @@ wheels/
 logs/
 ready/*
 perf_results/
+storage/
+.playwright-cli/

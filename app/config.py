@@ -114,6 +114,17 @@ class Settings:
         "MODEL_CALL_TOTAL_BUDGET_SECONDS", 120, 1
     )
 
+    # Showcase image generation
+    showcase_model: str = os.getenv(
+        "SHOWCASE_MODEL", "google/gemini-3.1-flash-image-preview"
+    )
+    showcase_storage_root: str = os.getenv("SHOWCASE_STORAGE_ROOT", "storage")
+    showcase_retain_input_files: bool = _env_bool("SHOWCASE_RETAIN_INPUT_FILES", False)
+    showcase_retain_output_files: bool = _env_bool("SHOWCASE_RETAIN_OUTPUT_FILES", False)
+    showcase_request_timeout: int = _env_int_min("SHOWCASE_REQUEST_TIMEOUT", 120, 1)
+    showcase_max_retries: int = _env_int_min("SHOWCASE_MAX_RETRIES", 3, 1)
+    showcase_timezone: str = os.getenv("SHOWCASE_TIMEZONE", "Asia/Shanghai")
+
     reasoning_enabled: Optional[bool] = field(default_factory=lambda: _env_optional_bool("REASONING_ENABLED"))
     reasoning_effort: Optional[str] = field(
         default_factory=lambda: _env_optional_enum(

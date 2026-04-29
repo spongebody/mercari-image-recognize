@@ -10,6 +10,7 @@ def _fake_settings(**overrides):
     base = dict(
         vision_model="old-vision",
         category_model="old-category",
+        showcase_model="old-showcase",
         log_llm_raw=False,
         log_requests=False,
         enable_debug_param=True,
@@ -113,6 +114,32 @@ class RuntimeConfigTest(unittest.TestCase):
     def test_update_rejects_zero_request_timeout(self):
         with self.assertRaises(ValueError):
             update_runtime_config(_fake_settings(), {"REQUEST_TIMEOUT": 0})
+
+    def test_showcase_model_round_trip(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_path = Path(tmpdir) / ".env"
+            env_path.write_text(
+                "OPENROUTER_API_KEY=secret\nSHOWCASE_MODEL=old-showcase\n",
+                encoding="utf-8",
+            )
+            settings = _fake_settings()
+
+            result = update_runtime_config(
+                settings,
+                {"SHOWCASE_MODEL": "openai/gpt-image-1"},
+                env_path=env_path,
+            )
+
+            self.assertEqual(result["SHOWCASE_MODEL"], "openai/gpt-image-1")
+            self.assertEqual(settings.showcase_model, "openai/gpt-image-1")
+            env_text = env_path.read_text(encoding="utf-8")
+            self.assertIn("SHOWCASE_MODEL=openai/gpt-image-1", env_text)
+            self.assertIn("OPENROUTER_API_KEY=secret", env_text)
+
+    def test_get_public_config_includes_showcase_model(self):
+        settings = _fake_settings(showcase_model="custom/showcase")
+        result = get_public_config(settings)
+        self.assertEqual(result["SHOWCASE_MODEL"], "custom/showcase")
 
     def test_multiline_str_value_must_be_list_or_string(self):
         with self.assertRaises(ValueError):
