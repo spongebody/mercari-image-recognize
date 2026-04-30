@@ -18,6 +18,8 @@ from .llm.prompts import (
     CATEGORY_USER_PROMPT_TEMPLATE,
     FAST_CLASSIFICATION_SYSTEM_PROMPT,
     FAST_CLASSIFICATION_USER_PROMPT,
+    PRODUCT_DATA_FALLBACK_SYSTEM_PROMPT,
+    PRODUCT_DATA_FALLBACK_USER_PROMPT,
     PRODUCT_DATA_SYSTEM_PROMPT,
     PRODUCT_DATA_USER_PROMPT,
     PRODUCT_TITLE_CATEGORY_SYSTEM_PROMPT,
@@ -435,6 +437,7 @@ class MercariAnalyzer:
         language: str,
         debug: bool = False,
         model_override: Optional[str] = None,
+        use_fallback_prompt: bool = False,
     ) -> Dict[str, Any]:
         if language not in SUPPORTED_LANGUAGES:
             raise BadRequestError("Unsupported language.")
@@ -446,7 +449,10 @@ class MercariAnalyzer:
             for image_bytes, mime_type in images
         ]
         ai_raw, ai_full, attempts = self._call_product_data_llm(
-            data_urls, language, model_override=model_override
+            data_urls,
+            language,
+            model_override=model_override,
+            use_fallback_prompt=use_fallback_prompt,
         )
 
         brand_raw = _clean_string(ai_raw.get("brand_name", ""))
@@ -742,10 +748,22 @@ class MercariAnalyzer:
         image_data_urls: List[str],
         language: str,
         model_override: Optional[str] = None,
+        use_fallback_prompt: bool = False,
     ) -> Tuple[Dict[str, Any], Dict[str, Any], List[AttemptRecord]]:
         if not image_data_urls:
             raise BadRequestError("Image list is empty.")
-        user_prompt = PRODUCT_DATA_USER_PROMPT.format(language_label=_language_label(language))
+        if use_fallback_prompt:
+            system_prompt = PRODUCT_DATA_FALLBACK_SYSTEM_PROMPT
+            user_prompt = PRODUCT_DATA_FALLBACK_USER_PROMPT.format(
+                language_label=_language_label(language)
+            )
+            stage = "product_data_fallback"
+        else:
+            system_prompt = PRODUCT_DATA_SYSTEM_PROMPT
+            user_prompt = PRODUCT_DATA_USER_PROMPT.format(
+                language_label=_language_label(language)
+            )
+            stage = "product_data"
         image_payloads: List[Dict[str, Any]] = []
         image_count = len(image_data_urls)
         for index, url in enumerate(image_data_urls, start=1):
@@ -760,7 +778,7 @@ class MercariAnalyzer:
             )
             image_payloads.append({"type": "image_url", "image_url": {"url": url}})
         messages = [
-            {"role": "system", "content": PRODUCT_DATA_SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {
                 "role": "user",
                 "content": [{"type": "text", "text": user_prompt}] + image_payloads,
@@ -768,14 +786,18 @@ class MercariAnalyzer:
         ]
         if model_override:
             primary = model_override
-            fallbacks: List[str] = []
+            # Even the explicit fallback model is allowed to retry+fall back to
+            # other models if it fails outright. Prefer a dedicated chain
+            # (PRODUCT_DATA_FALLBACK_MODELS) and gracefully degrade to the
+            # vision fallback chain otherwise.
+            fallbacks = self._product_data_fallback_chain(model_override)
         else:
             primary = getattr(self.settings, "product_data_model", "") or self.settings.vision_model
-            fallbacks = self.settings.vision_fallback_models
+            fallbacks = self._product_data_primary_chain(primary)
 
         try:
             parsed, raw_response, attempts = self.vision_caller.call_and_parse(
-                stage="product_data",
+                stage=stage,
                 primary_model=primary,
                 fallback_models=fallbacks,
                 messages=messages,
@@ -783,12 +805,31 @@ class MercariAnalyzer:
                 max_tokens=12000,
             )
         except LLMAllAttemptsFailedError as exc:
-            self._log_raw("product_data_attempts", [a.__dict__ for a in exc.attempts])
+            self._log_raw(f"{stage}_attempts", [a.__dict__ for a in exc.attempts])
             raise
-        self._log_raw("product_data_parsed", parsed)
-        self._log_raw("product_data_raw_response", raw_response)
-        self._log_raw("product_data_attempts", [a.__dict__ for a in attempts])
+        self._log_raw(f"{stage}_parsed", parsed)
+        self._log_raw(f"{stage}_raw_response", raw_response)
+        self._log_raw(f"{stage}_attempts", [a.__dict__ for a in attempts])
         return parsed, raw_response, attempts
+
+    def _product_data_primary_chain(self, primary_model: str) -> List[str]:
+        configured = list(getattr(self.settings, "product_data_fallback_models", []) or [])
+        if not configured:
+            configured = list(self.settings.vision_fallback_models or [])
+        explicit_fallback = (
+            getattr(self.settings, "product_data_fallback_model", "") or ""
+        ).strip()
+        if explicit_fallback and explicit_fallback != primary_model:
+            configured = [explicit_fallback] + [
+                m for m in configured if m and m != explicit_fallback
+            ]
+        return [m for m in configured if m and m != primary_model]
+
+    def _product_data_fallback_chain(self, fallback_model: str) -> List[str]:
+        configured = list(getattr(self.settings, "product_data_fallback_models", []) or [])
+        if not configured:
+            configured = list(self.settings.vision_fallback_models or [])
+        return [m for m in configured if m and m != fallback_model]
 
     def _call_title_category_llm(
         self,

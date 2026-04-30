@@ -131,6 +131,11 @@ class Settings:
     category_fallback_models: List[str] = field(
         default_factory=lambda: _env_str_list("CATEGORY_FALLBACK_MODELS", DEFAULT_FALLBACK_MODELS)
     )
+    product_data_fallback_models: List[str] = field(
+        default_factory=lambda: _env_str_list(
+            "PRODUCT_DATA_FALLBACK_MODELS", DEFAULT_FALLBACK_MODELS
+        )
+    )
     model_call_max_retries: int = _env_int_min("MODEL_CALL_MAX_RETRIES", 3, 0)
     model_call_total_budget_seconds: int = _env_int_min(
         "MODEL_CALL_TOTAL_BUDGET_SECONDS", 120, 1
@@ -145,6 +150,9 @@ class Settings:
     showcase_retain_output_files: bool = _env_bool("SHOWCASE_RETAIN_OUTPUT_FILES", False)
     showcase_request_timeout: int = _env_int_min("SHOWCASE_REQUEST_TIMEOUT", 120, 1)
     showcase_max_retries: int = _env_int_min("SHOWCASE_MAX_RETRIES", 3, 1)
+    showcase_fallback_models: List[str] = field(
+        default_factory=lambda: _env_str_list("SHOWCASE_FALLBACK_MODELS", ())
+    )
     showcase_timezone: str = os.getenv("SHOWCASE_TIMEZONE", "Asia/Shanghai")
 
     reasoning_enabled: Optional[bool] = field(default_factory=lambda: _env_optional_bool("REASONING_ENABLED"))

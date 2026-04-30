@@ -240,6 +240,122 @@ class OpenRouterImageClientTest(unittest.TestCase):
         )
         self.assertEqual(result.attempts, 2)
 
+    def test_falls_back_to_secondary_model_after_primary_exhausted(self):
+        """Issue #3: the showcase client retries the primary model up to
+        max_retries times and then advances to each configured fallback model."""
+        encoded = base64.b64encode(b"ok").decode("utf-8")
+        client = OpenRouterImageClient(
+            api_key="key",
+            base_url="https://openrouter.ai/api/v1/chat/completions",
+            model="primary-image-model",
+            timeout=10,
+            max_retries=2,
+            fallback_models=["fallback-image-model-a", "fallback-image-model-b"],
+        )
+        client._sleep = lambda _delay: None
+
+        sent_models: list[str] = []
+        # Pattern: primary fails twice (max_retries=2), fallback-a fails twice,
+        # fallback-b succeeds on the first try.
+        responses = [
+            (503, None),
+            (503, None),
+            (503, None),
+            (503, None),
+            (200, _success_payload(encoded)),
+        ]
+        idx = {"i": 0}
+
+        def fake_post(url, headers, data, timeout):
+            sent_payload = json.loads(data)
+            sent_models.append(sent_payload["model"])
+            status, payload = responses[idx["i"]]
+            idx["i"] += 1
+            return _FakeResponse(status, payload or {}, text="upstream")
+
+        client.session.post = fake_post
+
+        result = client.generate_image(
+            prompt="hi",
+            image_bytes=b"x",
+            content_type="image/png",
+            request_id="req-1",
+        )
+
+        self.assertEqual(result.model, "fallback-image-model-b")
+        self.assertEqual(sent_models[:2], ["primary-image-model", "primary-image-model"])
+        self.assertEqual(sent_models[2:4], ["fallback-image-model-a", "fallback-image-model-a"])
+        self.assertEqual(sent_models[4], "fallback-image-model-b")
+        # attempt_records should track the entire schedule; last one is "ok".
+        self.assertEqual(result.attempt_records[-1].error_kind, "ok")
+        self.assertEqual(len(result.attempt_records), 5)
+
+    def test_per_call_fallback_models_override_default(self):
+        encoded = base64.b64encode(b"ok").decode("utf-8")
+        client = OpenRouterImageClient(
+            api_key="key",
+            base_url="https://openrouter.ai/api/v1/chat/completions",
+            model="primary",
+            timeout=10,
+            max_retries=1,
+            fallback_models=["default-fallback"],
+        )
+        client._sleep = lambda _delay: None
+
+        sent_models: list[str] = []
+        responses = [(503, None), (200, _success_payload(encoded))]
+        idx = {"i": 0}
+
+        def fake_post(url, headers, data, timeout):
+            sent_models.append(json.loads(data)["model"])
+            status, payload = responses[idx["i"]]
+            idx["i"] += 1
+            return _FakeResponse(status, payload or {}, text="upstream")
+
+        client.session.post = fake_post
+
+        client.generate_image(
+            prompt="hi",
+            image_bytes=b"x",
+            content_type="image/png",
+            request_id="req-1",
+            fallback_models=["per-call-fallback"],
+        )
+
+        # The per-call list overrides the default, so default-fallback must
+        # not appear in the schedule.
+        self.assertNotIn("default-fallback", sent_models)
+        self.assertEqual(sent_models, ["primary", "per-call-fallback"])
+
+    def test_no_fallbacks_preserves_legacy_behavior(self):
+        """When no fallback models are configured, behaviour matches the old
+        single-model retry loop."""
+        client = OpenRouterImageClient(
+            api_key="key",
+            base_url="https://openrouter.ai/api/v1/chat/completions",
+            model="solo",
+            timeout=10,
+            max_retries=2,
+        )
+        client._sleep = lambda _delay: None
+
+        attempts = {"n": 0}
+
+        def fake_post(url, headers, data, timeout):
+            attempts["n"] += 1
+            return _FakeResponse(503, {}, text="busy")
+
+        client.session.post = fake_post
+
+        with self.assertRaises(OpenRouterImageClientError):
+            client.generate_image(
+                prompt="hi",
+                image_bytes=b"x",
+                content_type="image/png",
+                request_id="req-1",
+            )
+        self.assertEqual(attempts["n"], 2)
+
     def test_missing_api_key_raises_before_request(self):
         client = OpenRouterImageClient(
             api_key="",

@@ -222,6 +222,86 @@ Multi-image requirements:
 
 Return JSON only with title, description, and brand_name."""
 
+
+# A more explicit / verbose system prompt aimed at smaller / faster fallback
+# models (e.g. gpt-4o-mini, gemini-flash). Smaller models tend to produce
+# overly terse descriptions when given the lean primary prompt above; the
+# fallback prompt explicitly enumerates length targets, structure cues and
+# style requirements so the result is comparably rich even when the primary
+# model is unavailable.
+PRODUCT_DATA_FALLBACK_SYSTEM_PROMPT = """You are an expert e-commerce listing copywriter producing rich, persuasive Japanese-marketplace listing data.
+
+You are the FALLBACK pipeline: the primary model has been slow or unavailable, so the listing quality depends entirely on your output. Match the depth and persuasiveness a senior listing editor would deliver — DO NOT respond with bare/terse one-liners.
+
+Given one or more images of the same product, inspect every image independently, then merge the evidence into one product listing payload.
+
+Generate:
+1. title — a short, clear, buyer-friendly listing title suitable for a Japanese marketplace. Use the language requested by the user. Aim for ~20–35 characters in Japanese, ~6–12 words otherwise. Keep brand/model/key attribute up front.
+2. description — a JSON object with the following fields (English keys only):
+   - product_details: object with brand, product_name, model_number, target, color, size, weight, condition. Every field MUST be present; use "" if unknown. Do NOT guess values. Be specific and concise (e.g., "Apple", "Magic Keyboard", "A1843", "Unisex", "Silver / White", "W41.89cm x D11.49cm x H1.09cm", "390g", "Used – minor wear").
+   - product_intro: a multi-paragraph professional introduction. REQUIREMENTS:
+       * 3–5 paragraphs, each focusing on one angle (overview, key feature, secondary feature/usage scenario, materials/build, included items or compatibility).
+       * Insert "\\n\\n" between paragraphs (literal characters in the JSON string).
+       * Cover: what the product is, who it is for, headline functions/features, materials or build quality, advantages over similar items, typical usage scenarios, and any included items / compatibility.
+       * Ground every claim in what is visible in the images. Never fabricate certifications, sizes, or specs you cannot see.
+       * Length target: 250–500 Japanese characters, or 120–220 English words.
+   - recommendation: 2–3 short, punchy selling-point lines. Each line is one persuasive sentence (≤ 60 Japanese characters / ≤ 20 English words). Separate lines with "\\n". Use buyer-facing benefit language ("毎日のデスクワークが快適に", "premium feel out of the box"), not generic praise.
+   - search_keywords: an array of 8–15 distinct keywords. Include brand, brand variants (Japanese/English), product name, model number, product type, common synonyms, and 1–2 audience/use-case tags. Strings only — do NOT prefix with "#".
+3. brand_name — the visible brand exactly as printed (e.g., "Nintendo", "UNIQLO"). Return "" if no brand is clearly visible. Do NOT guess.
+
+Do NOT return any price fields. Do NOT infer prices. Do NOT use web search or browsing.
+
+QUALITY CHECKLIST before responding:
+- Did you populate every product_details field (using "" only when truly unknown)?
+- Is product_intro 3–5 paragraphs and within the length target?
+- Are recommendation lines benefit-driven, not generic?
+- Does search_keywords contain 8–15 distinct, relevant entries with no leading "#"?
+- Did you avoid inventing facts you cannot verify from the images?
+
+You MUST respond with pure JSON only — no explanations, no markdown fences, no comments.
+
+The JSON schema is:
+
+{
+  "title": "string",
+  "description": {
+    "product_details": {
+      "brand": "string",
+      "product_name": "string",
+      "model_number": "string",
+      "target": "string",
+      "color": "string",
+      "size": "string",
+      "weight": "string",
+      "condition": "string"
+    },
+    "product_intro": "string",
+    "recommendation": "string",
+    "search_keywords": ["string"]
+  },
+  "brand_name": "string"
+}
+"""
+
+PRODUCT_DATA_FALLBACK_USER_PROMPT = """Generate the rich listing payload for these product images.
+
+Language for title and all description text: {language_label}.
+
+Multi-image requirements:
+- Treat all images as evidence for the SAME product.
+- Inspect each labelled image (Image 1 of N, Image 2 of N, …) in order and merge complementary details. Do NOT discard later images.
+- Extract precise visible details such as model number, brand, color, size, weight, condition cues, packaging, labels, and included items.
+
+Description requirements (must follow):
+- product_details: include every required field; use "" when unknown.
+- product_intro: 3–5 paragraphs separated by "\\n\\n"; cover overview, key features, advantages, usage scenarios, included items / compatibility. Ground claims in the images.
+- recommendation: 2–3 short benefit-driven lines separated by "\\n".
+- search_keywords: 8–15 distinct strings, no leading "#".
+
+If the brand is not clearly visible, set "brand_name" to "".
+
+Return JSON only with title, description, and brand_name. Do NOT wrap the response in markdown or commentary."""
+
 CATEGORY_SYSTEM_PROMPT = """You are an e-commerce taxonomy specialist working with a Japanese marketplace taxonomy based on Rakuten categories.
 
 Task:

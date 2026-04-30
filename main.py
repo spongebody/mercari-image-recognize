@@ -78,6 +78,7 @@ showcase_image_client = OpenRouterImageClient(
     max_retries=settings.showcase_max_retries,
     referer=settings.openrouter_referer,
     app_name=settings.openrouter_app_name,
+    fallback_models=settings.showcase_fallback_models,
 )
 showcase_service = ShowcaseService(
     model=settings.showcase_model,
@@ -125,6 +126,7 @@ def _sync_runtime_clients() -> None:
     vision_client.timeout = settings.request_timeout
     category_client.timeout = settings.request_timeout
     showcase_image_client.model = settings.showcase_model
+    showcase_image_client.fallback_models = list(settings.showcase_fallback_models or [])
     showcase_service.model = settings.showcase_model
 
 
@@ -386,12 +388,12 @@ async def analyze_image(
 
     try:
         job_id = uuid.uuid4().hex
-        request_started = time.monotonic()
         product_future = product_data_executor.submit(
             analyzer.generate_product_data,
             images=image_payloads,
             language=language,
             debug=debug_enabled,
+            use_fallback_prompt=False,
         )
         fallback_model = (settings.product_data_fallback_model or "").strip()
         fallback_future = None
@@ -402,6 +404,7 @@ async def analyze_image(
                 language=language,
                 debug=debug_enabled,
                 model_override=fallback_model,
+                use_fallback_prompt=True,
             )
         fallback_timeout = float(settings.product_data_fallback_timeout_seconds)
         classification = await run_in_threadpool(
@@ -414,12 +417,20 @@ async def analyze_image(
             category_model_override=category_model,
             image_processing=image_processing,
         )
+        # Start the fallback timer AFTER classification finishes. The primary
+        # and fallback futures begin running as soon as they are submitted,
+        # but the user only starts polling after they receive the initial
+        # response (which is gated on classification). Measuring the timeout
+        # from before classification would consume the timeout budget while
+        # the user is still waiting for the first response, causing the
+        # fallback to win prematurely.
+        fallback_started_at = time.monotonic()
         analysis_job_store.put(
             job_id,
             classification=classification,
             future=product_future,
             fallback_future=fallback_future,
-            started_at=request_started,
+            started_at=fallback_started_at,
             fallback_timeout=fallback_timeout,
         )
         result = _job_payload(
@@ -428,7 +439,7 @@ async def analyze_image(
             product_future,
             raise_product_errors=False,
             fallback_future=fallback_future,
-            started_at=request_started,
+            started_at=fallback_started_at,
             fallback_timeout=fallback_timeout,
         )
     except BadRequestError as exc:

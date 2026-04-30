@@ -21,6 +21,8 @@ def _fake_settings(**overrides):
         request_timeout=60,
         vision_fallback_models=["a/b"],
         category_fallback_models=["a/b"],
+        product_data_fallback_models=["a/b"],
+        showcase_fallback_models=[],
         model_call_max_retries=3,
         model_call_total_budget_seconds=120,
     )

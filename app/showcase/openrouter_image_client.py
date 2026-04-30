@@ -1,8 +1,8 @@
 import base64
 import json
 import time
-from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Sequence
 
 import requests
 
@@ -32,6 +32,17 @@ class OpenRouterImageResponseError(OpenRouterImageRetryableError):
 
 
 @dataclass
+class ImageAttemptRecord:
+    model: str
+    attempt: int
+    attempt_global: int
+    error_kind: str  # "ok" | "request_failed" | "parse_failed"
+    message: str
+    latency_ms: float
+    status_code: Optional[int] = None
+
+
+@dataclass
 class ImagePayload:
     mime_type: str
     base64_data: str
@@ -43,6 +54,8 @@ class OpenRouterImageResult:
     upstream_status_code: int
     response_body: Dict[str, Any]
     attempts: int
+    model: str = ""
+    attempt_records: List[ImageAttemptRecord] = field(default_factory=list)
 
 
 def extract_image_payload(payload: Dict[str, Any]) -> ImagePayload:
@@ -90,6 +103,7 @@ class OpenRouterImageClient:
         app_name: str = "",
         backoff_initial_s: float = 1.0,
         backoff_cap_s: float = 8.0,
+        fallback_models: Optional[Sequence[str]] = None,
     ) -> None:
         self.api_key = api_key
         self.base_url = base_url
@@ -100,6 +114,9 @@ class OpenRouterImageClient:
         self.app_name = app_name
         self.backoff_initial_s = backoff_initial_s
         self.backoff_cap_s = backoff_cap_s
+        self.fallback_models: List[str] = [
+            m for m in (fallback_models or []) if m
+        ]
         self.session = requests.Session()
         # Hook used by tests to skip real sleeps without monkey-patching time.
         self._sleep = time.sleep
@@ -112,6 +129,7 @@ class OpenRouterImageClient:
         content_type: str,
         request_id: str,
         model: Optional[str] = None,
+        fallback_models: Optional[Sequence[str]] = None,
     ) -> OpenRouterImageResult:
         if not self.api_key:
             raise OpenRouterImageClientError(
@@ -125,55 +143,132 @@ class OpenRouterImageClient:
                 error_code="missing_model",
             )
 
-        payload = self._build_payload(
-            prompt=prompt,
-            image_bytes=image_bytes,
-            content_type=content_type,
-            model=effective_model,
+        explicit_fallbacks = (
+            list(fallback_models) if fallback_models is not None else list(self.fallback_models)
         )
+        schedule: List[str] = [effective_model]
+        for candidate in explicit_fallbacks:
+            cleaned = (candidate or "").strip()
+            if cleaned and cleaned not in schedule:
+                schedule.append(cleaned)
+
+        attempts_records: List[ImageAttemptRecord] = []
+        global_attempt = 0
         last_error: Optional[OpenRouterImageClientError] = None
 
-        for attempt in range(1, self.max_retries + 1):
-            try:
-                response = self._post(payload)
-            except OpenRouterImageRetryableError as exc:
-                last_error = exc
-                if attempt < self.max_retries:
-                    self._sleep_backoff(attempt)
-                    continue
-                raise
-            except OpenRouterImageClientError:
-                raise
-
-            try:
-                response_body = response.json()
-            except ValueError as exc:
-                last_error = OpenRouterImageRetryableError(
-                    f"Failed to decode OpenRouter response JSON: {exc}",
-                    status_code=response.status_code,
-                )
-                if attempt < self.max_retries:
-                    self._sleep_backoff(attempt)
-                    continue
-                raise last_error
-
-            try:
-                image = extract_image_payload(response_body)
-            except OpenRouterImageRetryableError as exc:
-                last_error = exc
-                if attempt < self.max_retries:
-                    self._sleep_backoff(attempt)
-                    continue
-                raise
-
-            return OpenRouterImageResult(
-                image=image,
-                upstream_status_code=response.status_code,
-                response_body=response_body,
-                attempts=attempt,
+        for model_name in schedule:
+            payload = self._build_payload(
+                prompt=prompt,
+                image_bytes=image_bytes,
+                content_type=content_type,
+                model=model_name,
             )
 
+            for attempt in range(1, self.max_retries + 1):
+                global_attempt += 1
+                attempt_started = time.monotonic()
+                try:
+                    response = self._post(payload)
+                except OpenRouterImageRetryableError as exc:
+                    last_error = exc
+                    attempts_records.append(
+                        ImageAttemptRecord(
+                            model=model_name,
+                            attempt=attempt,
+                            attempt_global=global_attempt,
+                            error_kind="request_failed",
+                            message=str(exc),
+                            latency_ms=(time.monotonic() - attempt_started) * 1000.0,
+                            status_code=exc.status_code,
+                        )
+                    )
+                    if attempt < self.max_retries:
+                        self._sleep_backoff(attempt)
+                        continue
+                    break  # exhausted this model — try the next one
+                except OpenRouterImageClientError as exc:
+                    # Non-retryable upstream error (e.g. 401). Record and abort
+                    # — switching models will not change auth/missing-API-key
+                    # outcomes, so propagate immediately.
+                    attempts_records.append(
+                        ImageAttemptRecord(
+                            model=model_name,
+                            attempt=attempt,
+                            attempt_global=global_attempt,
+                            error_kind="request_failed",
+                            message=str(exc),
+                            latency_ms=(time.monotonic() - attempt_started) * 1000.0,
+                            status_code=exc.status_code,
+                        )
+                    )
+                    raise
+
+                try:
+                    response_body = response.json()
+                except ValueError as exc:
+                    last_error = OpenRouterImageRetryableError(
+                        f"Failed to decode OpenRouter response JSON: {exc}",
+                        status_code=response.status_code,
+                    )
+                    attempts_records.append(
+                        ImageAttemptRecord(
+                            model=model_name,
+                            attempt=attempt,
+                            attempt_global=global_attempt,
+                            error_kind="parse_failed",
+                            message=str(last_error),
+                            latency_ms=(time.monotonic() - attempt_started) * 1000.0,
+                            status_code=response.status_code,
+                        )
+                    )
+                    if attempt < self.max_retries:
+                        self._sleep_backoff(attempt)
+                        continue
+                    break
+
+                try:
+                    image = extract_image_payload(response_body)
+                except OpenRouterImageRetryableError as exc:
+                    last_error = exc
+                    attempts_records.append(
+                        ImageAttemptRecord(
+                            model=model_name,
+                            attempt=attempt,
+                            attempt_global=global_attempt,
+                            error_kind="parse_failed",
+                            message=str(exc),
+                            latency_ms=(time.monotonic() - attempt_started) * 1000.0,
+                            status_code=response.status_code,
+                        )
+                    )
+                    if attempt < self.max_retries:
+                        self._sleep_backoff(attempt)
+                        continue
+                    break
+
+                attempts_records.append(
+                    ImageAttemptRecord(
+                        model=model_name,
+                        attempt=attempt,
+                        attempt_global=global_attempt,
+                        error_kind="ok",
+                        message="",
+                        latency_ms=(time.monotonic() - attempt_started) * 1000.0,
+                        status_code=response.status_code,
+                    )
+                )
+                return OpenRouterImageResult(
+                    image=image,
+                    upstream_status_code=response.status_code,
+                    response_body=response_body,
+                    attempts=attempt,
+                    model=model_name,
+                    attempt_records=attempts_records,
+                )
+
         if last_error is not None:
+            # Surface the most recent retryable error after exhausting every
+            # configured model. Preserve the latest status_code/error_code.
             raise last_error
         raise OpenRouterImageClientError(
             f"OpenRouter request failed for {request_id}.",

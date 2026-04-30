@@ -34,6 +34,16 @@ CONFIG_FIELDS = (
     ConfigField("REQUEST_TIMEOUT", "request_timeout", "int", min_value=1),
     ConfigField("VISION_FALLBACK_MODELS", "vision_fallback_models", "multiline_str"),
     ConfigField("CATEGORY_FALLBACK_MODELS", "category_fallback_models", "multiline_str"),
+    ConfigField(
+        "PRODUCT_DATA_FALLBACK_MODELS",
+        "product_data_fallback_models",
+        "multiline_str",
+    ),
+    ConfigField(
+        "SHOWCASE_FALLBACK_MODELS",
+        "showcase_fallback_models",
+        "multiline_str",
+    ),
     ConfigField("MODEL_CALL_MAX_RETRIES", "model_call_max_retries", "int"),
     ConfigField(
         "MODEL_CALL_TOTAL_BUDGET_SECONDS",
