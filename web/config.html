@@ -122,11 +122,79 @@
       }
 
       input:focus,
-      select:focus {
+      select:focus,
+      textarea:focus {
         outline: none;
         border-color: var(--accent);
         background-color: white;
         box-shadow: 0 0 0 3px rgba(47, 128, 237, 0.1);
+      }
+
+      textarea {
+        resize: vertical;
+        line-height: 1.55;
+      }
+
+      details.collapsible {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 0;
+        overflow: hidden;
+      }
+
+      details.collapsible > summary {
+        list-style: none;
+        cursor: pointer;
+        padding: 14px 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-weight: 700;
+        font-size: 14px;
+        color: var(--text);
+        user-select: none;
+      }
+
+      details.collapsible > summary::-webkit-details-marker {
+        display: none;
+      }
+
+      details.collapsible > summary::after {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-right: 2px solid var(--muted);
+        border-bottom: 2px solid var(--muted);
+        transform: rotate(-45deg);
+        transition: transform 0.18s ease;
+        margin-left: 12px;
+      }
+
+      details.collapsible[open] > summary::after {
+        transform: rotate(45deg);
+      }
+
+      details.collapsible > summary:hover {
+        background: #f5f7fb;
+      }
+
+      details.collapsible > summary:focus-visible {
+        outline: none;
+        box-shadow: inset 0 0 0 2px rgba(47, 128, 237, 0.35);
+      }
+
+      details.collapsible .collapsible-body {
+        padding: 4px 18px 18px;
+        display: grid;
+        gap: 16px;
+      }
+
+      details.collapsible .summary-hint {
+        font-weight: 500;
+        color: var(--muted);
+        font-size: 12px;
+        margin-left: 10px;
       }
 
       .hint {
@@ -253,61 +321,6 @@
 
         <div class="controls-row">
           <div>
-            <label for="LOG_LLM_RAW">打印 LLM 原始日志</label>
-            <select id="LOG_LLM_RAW">
-              <option value="true">开启</option>
-              <option value="false">关闭</option>
-            </select>
-            <div class="hint">开启后会把 LLM 原始内容写入服务端 logs 目录。</div>
-          </div>
-          <div>
-            <label for="LOG_REQUESTS">打印请求日志</label>
-            <select id="LOG_REQUESTS">
-              <option value="true">开启</option>
-              <option value="false">关闭</option>
-            </select>
-            <div class="hint">开启后会记录 API 请求日志。</div>
-          </div>
-        </div>
-
-        <div class="controls-row">
-          <div>
-            <label for="ENABLE_DEBUG">允许 debug 响应字段</label>
-            <select id="ENABLE_DEBUG">
-              <option value="true">开启</option>
-              <option value="false">关闭</option>
-            </select>
-          </div>
-          <div>
-            <label for="IMAGE_COMPRESSION_THRESHOLD_MB">图片压缩阈值 MB</label>
-            <input id="IMAGE_COMPRESSION_THRESHOLD_MB" type="number" min="0" step="1" />
-            <div class="hint">设置为 0 可以关闭后端压缩。</div>
-          </div>
-        </div>
-
-        <div class="controls-row">
-          <div>
-            <label for="REQUEST_TIMEOUT">OpenRouter 单次调用超时秒数</label>
-            <input id="REQUEST_TIMEOUT" type="number" min="1" step="1" />
-            <div class="hint">单次 LLM 请求最多等多久。</div>
-          </div>
-          <div>
-            <label for="MODEL_CALL_MAX_RETRIES">主模型重试次数</label>
-            <input id="MODEL_CALL_MAX_RETRIES" type="number" min="0" step="1" />
-            <div class="hint">总尝试数 = 1 次初始 + 这里设置的重试次数（默认 3）。</div>
-          </div>
-        </div>
-
-        <div class="controls-row">
-          <div>
-            <label for="MODEL_CALL_TOTAL_BUDGET_SECONDS">单阶段总预算秒数</label>
-            <input id="MODEL_CALL_TOTAL_BUDGET_SECONDS" type="number" min="1" step="1" />
-            <div class="hint">vision / category 阶段各自的总耗时上限（默认 120）。</div>
-          </div>
-        </div>
-
-        <div class="controls-row">
-          <div>
             <label for="VISION_FALLBACK_MODELS">图片识别回退模型（一行一个）</label>
             <textarea id="VISION_FALLBACK_MODELS" rows="6" placeholder="google/gemini-2.5-flash"></textarea>
             <div class="hint">主模型 3 次重试后会按顺序逐个尝试。</div>
@@ -315,8 +328,84 @@
           <div>
             <label for="CATEGORY_FALLBACK_MODELS">分类回退模型（一行一个）</label>
             <textarea id="CATEGORY_FALLBACK_MODELS" rows="6" placeholder="google/gemini-2.5-flash"></textarea>
+            <div class="hint">分类阶段主模型失败后按顺序尝试。</div>
           </div>
         </div>
+
+        <div class="controls-row">
+          <div>
+            <label for="PRODUCT_DATA_FALLBACK_MODELS">商品数据回退模型（一行一个）</label>
+            <textarea id="PRODUCT_DATA_FALLBACK_MODELS" rows="6" placeholder="openai/gpt-4o"></textarea>
+            <div class="hint">主模型与保底模型均失败后按顺序尝试。</div>
+          </div>
+          <div>
+            <label for="SHOWCASE_FALLBACK_MODELS">图片合成回退模型（一行一个）</label>
+            <textarea id="SHOWCASE_FALLBACK_MODELS" rows="6" placeholder="google/gemini-3-pro-image-preview"></textarea>
+            <div class="hint">主模型重试耗尽后按顺序尝试。</div>
+          </div>
+        </div>
+
+        <details class="collapsible" id="advanced-section">
+          <summary>
+            <span>其他配置<span class="summary-hint">日志、超时、重试等高级参数</span></span>
+          </summary>
+          <div class="collapsible-body">
+            <div class="controls-row">
+              <div>
+                <label for="LOG_LLM_RAW">打印 LLM 原始日志</label>
+                <select id="LOG_LLM_RAW">
+                  <option value="true">开启</option>
+                  <option value="false">关闭</option>
+                </select>
+                <div class="hint">开启后会把 LLM 原始内容写入服务端 logs 目录。</div>
+              </div>
+              <div>
+                <label for="LOG_REQUESTS">打印请求日志</label>
+                <select id="LOG_REQUESTS">
+                  <option value="true">开启</option>
+                  <option value="false">关闭</option>
+                </select>
+                <div class="hint">开启后会记录 API 请求日志。</div>
+              </div>
+            </div>
+
+            <div class="controls-row">
+              <div>
+                <label for="ENABLE_DEBUG">允许 debug 响应字段</label>
+                <select id="ENABLE_DEBUG">
+                  <option value="true">开启</option>
+                  <option value="false">关闭</option>
+                </select>
+              </div>
+              <div>
+                <label for="IMAGE_COMPRESSION_THRESHOLD_MB">图片压缩阈值 MB</label>
+                <input id="IMAGE_COMPRESSION_THRESHOLD_MB" type="number" min="0" step="1" />
+                <div class="hint">设置为 0 可以关闭后端压缩。</div>
+              </div>
+            </div>
+
+            <div class="controls-row">
+              <div>
+                <label for="REQUEST_TIMEOUT">OpenRouter 单次调用超时秒数</label>
+                <input id="REQUEST_TIMEOUT" type="number" min="1" step="1" />
+                <div class="hint">单次 LLM 请求最多等多久。</div>
+              </div>
+              <div>
+                <label for="MODEL_CALL_MAX_RETRIES">主模型重试次数</label>
+                <input id="MODEL_CALL_MAX_RETRIES" type="number" min="0" step="1" />
+                <div class="hint">总尝试数 = 1 次初始 + 这里设置的重试次数（默认 3）。</div>
+              </div>
+            </div>
+
+            <div class="controls-row">
+              <div>
+                <label for="MODEL_CALL_TOTAL_BUDGET_SECONDS">单阶段总预算秒数</label>
+                <input id="MODEL_CALL_TOTAL_BUDGET_SECONDS" type="number" min="1" step="1" />
+                <div class="hint">vision / category 阶段各自的总耗时上限（默认 120）。</div>
+              </div>
+            </div>
+          </div>
+        </details>
 
         <div class="message" id="message"></div>
 
@@ -335,6 +424,10 @@
         "PRODUCT_DATA_FALLBACK_MODEL",
         "PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS",
         "SHOWCASE_MODEL",
+        "VISION_FALLBACK_MODELS",
+        "CATEGORY_FALLBACK_MODELS",
+        "PRODUCT_DATA_FALLBACK_MODELS",
+        "SHOWCASE_FALLBACK_MODELS",
         "LOG_LLM_RAW",
         "LOG_REQUESTS",
         "ENABLE_DEBUG",
@@ -342,13 +435,13 @@
         "REQUEST_TIMEOUT",
         "MODEL_CALL_MAX_RETRIES",
         "MODEL_CALL_TOTAL_BUDGET_SECONDS",
-        "VISION_FALLBACK_MODELS",
-        "CATEGORY_FALLBACK_MODELS",
       ];
 
       const MULTILINE_FIELDS = new Set([
         "VISION_FALLBACK_MODELS",
         "CATEGORY_FALLBACK_MODELS",
+        "PRODUCT_DATA_FALLBACK_MODELS",
+        "SHOWCASE_FALLBACK_MODELS",
       ]);
 
       const statusDot = document.getElementById("status-dot");

@@ -685,20 +685,64 @@
         border: 1px solid var(--border);
       }
 
-      .showcase-compare-tile .download-link {
-        display: inline-block;
-        margin-top: 10px;
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--accent);
-        text-decoration: none;
-        padding: 6px 12px;
-        border: 1px solid var(--accent);
-        border-radius: 6px;
+      .showcase-compare-tile img.zoomable {
+        cursor: zoom-in;
+        transition: transform 0.18s ease, box-shadow 0.18s ease;
       }
 
-      .showcase-compare-tile .download-link:hover {
-        background: #eff6ff;
+      .showcase-compare-tile img.zoomable:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
+      }
+
+      .image-lightbox {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.82);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        padding: 24px;
+        cursor: zoom-out;
+        opacity: 0;
+        transition: opacity 0.18s ease;
+      }
+
+      .image-lightbox.show {
+        display: flex;
+        opacity: 1;
+      }
+
+      .image-lightbox img {
+        max-width: 100%;
+        max-height: 100%;
+        border-radius: 10px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        cursor: default;
+      }
+
+      .image-lightbox-close {
+        position: absolute;
+        top: 16px;
+        right: 20px;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.12);
+        color: white;
+        border: none;
+        font-size: 22px;
+        line-height: 1;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.15s ease;
+      }
+
+      .image-lightbox-close:hover {
+        background: rgba(255, 255, 255, 0.24);
       }
 
       .showcase-meta-tags {
@@ -1250,7 +1294,6 @@
           showcaseAlertNoFile: "请先选择一张商品图",
           showcaseLabelOriginal: "原图",
           showcaseLabelGenerated: "合成图",
-          showcaseDownload: "下载合成图",
           showcaseFieldRequestId: "请求 ID",
           showcaseFieldModel: "模型",
           showcaseFieldLatency: "耗时",
@@ -1407,7 +1450,6 @@
           showcaseAlertNoFile: "商品画像を1枚選択してください",
           showcaseLabelOriginal: "元画像",
           showcaseLabelGenerated: "合成画像",
-          showcaseDownload: "合成画像をダウンロード",
           showcaseFieldRequestId: "リクエスト ID",
           showcaseFieldModel: "モデル",
           showcaseFieldLatency: "所要時間",
@@ -2703,7 +2745,6 @@
         const generatedDataUrl = payload.image_base64
           ? `data:${generatedMime};base64,${payload.image_base64}`
           : "";
-        const downloadName = `${payload.request_id || "showcase"}.${generatedMime.split("/")[1] || "png"}`;
         const generatedSizeKb = payload.image_base64
           ? `${Math.round((payload.image_base64.length * 3) / 4 / 1024)} KB (base64-decoded)`
           : "—";
@@ -2745,8 +2786,7 @@
             </div>
             <div class="showcase-compare-tile">
               <div class="label">${t("showcaseLabelGenerated")}</div>
-              ${generatedDataUrl ? `<img src="${escapeForAttr(generatedDataUrl)}" alt="generated">` : ""}
-              ${generatedDataUrl ? `<div><a class="download-link" href="${escapeForAttr(generatedDataUrl)}" download="${escapeForAttr(downloadName)}">⬇ ${t("showcaseDownload")}</a></div>` : ""}
+              ${generatedDataUrl ? `<img src="${escapeForAttr(generatedDataUrl)}" alt="generated" class="zoomable" onclick="openImageLightbox(this.src)">` : ""}
             </div>
           </div>
 
@@ -2790,6 +2830,34 @@
             : t("showcaseShowFinalPrompt");
         }
       };
+
+      window.openImageLightbox = function (src) {
+        if (!src) return;
+        const lightbox = document.getElementById("image-lightbox");
+        const img = document.getElementById("image-lightbox-img");
+        if (!lightbox || !img) return;
+        img.src = src;
+        lightbox.classList.add("show");
+        document.body.style.overflow = "hidden";
+      };
+
+      window.closeImageLightbox = function () {
+        const lightbox = document.getElementById("image-lightbox");
+        const img = document.getElementById("image-lightbox-img");
+        if (!lightbox) return;
+        lightbox.classList.remove("show");
+        if (img) img.src = "";
+        document.body.style.overflow = "";
+      };
+
+      document.addEventListener("keydown", (ev) => {
+        if (ev.key === "Escape") {
+          const lightbox = document.getElementById("image-lightbox");
+          if (lightbox && lightbox.classList.contains("show")) {
+            window.closeImageLightbox();
+          }
+        }
+      });
 
       async function submitShowcaseRequest() {
         if (!showcaseSelectedFile) {
@@ -2883,5 +2951,10 @@
       renderTitleResult(null, true);
       renderShowcaseResult();
     </script>
+
+    <div class="image-lightbox" id="image-lightbox" onclick="if(event.target===this) closeImageLightbox()">
+      <button type="button" class="image-lightbox-close" onclick="closeImageLightbox()" aria-label="Close">×</button>
+      <img id="image-lightbox-img" alt="preview" />
+    </div>
   </body>
 </html>
