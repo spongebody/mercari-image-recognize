@@ -1207,6 +1207,8 @@
           timingTotal: "总耗时",
           timingClassification: "分类接口",
           timingProductData: "商品数据接口",
+          timingProductDataPrimary: "主模型耗时",
+          timingProductDataFallback: "保底模型耗时",
           productDataSourceLabel: "商品数据来源",
           productDataSourcePrimary: "主模型",
           productDataSourceFallback: "保底模型",
@@ -1363,6 +1365,8 @@
           timingTotal: "総時間",
           timingClassification: "カテゴリ分類API",
           timingProductData: "商品データAPI",
+          timingProductDataPrimary: "メインモデル所要時間",
+          timingProductDataFallback: "フォールバック所要時間",
           productDataSourceLabel: "商品データのソース",
           productDataSourcePrimary: "メインモデル",
           productDataSourceFallback: "フォールバックモデル",
@@ -1787,6 +1791,12 @@
         }
         if (Number.isFinite(timings.product_data_ms)) {
           stats.push(`<span>📦 ${t("timingProductData")} ${formatDuration(timings.product_data_ms)}</span>`);
+        }
+        if (Number.isFinite(timings.product_data_primary_ms)) {
+          stats.push(`<span>🟢 ${t("timingProductDataPrimary")} ${formatDuration(timings.product_data_primary_ms)}</span>`);
+        }
+        if (Number.isFinite(timings.product_data_fallback_ms)) {
+          stats.push(`<span>🟡 ${t("timingProductDataFallback")} ${formatDuration(timings.product_data_fallback_ms)}</span>`);
         }
         if (data.product_data_source) {
           const sourceLabel =

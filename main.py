@@ -170,6 +170,51 @@ def _pending_payload(job_id: str, classification: Dict[str, Any]) -> Dict[str, A
     return payload
 
 
+def _safe_product_data_ms(future) -> Optional[float]:
+    """Return the product_data_ms a finished future reported, or None.
+
+    Safe to call on pending or errored futures: any failure path returns None
+    rather than raising, since this helper is only used to surface optional
+    timing fields back to the client.
+    """
+    if future is None or not future.done():
+        return None
+    try:
+        result = future.result()
+    except BaseException:
+        return None
+    if not isinstance(result, dict):
+        return None
+    timings = result.get("timings")
+    if not isinstance(timings, dict):
+        return None
+    value = timings.get("product_data_ms")
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _primary_elapsed_seconds(
+    primary,
+    primary_ok: bool,
+    started_at: Optional[float],
+) -> Optional[float]:
+    """Compute primary's wall-clock elapsed time (in seconds) for threshold checks.
+
+    When primary has completed successfully we trust the product_data_ms it
+    reported (which was measured against the same submit timestamp). Otherwise
+    we fall back to ``now - started_at`` so a still-running primary that has
+    blown past the threshold is treated as exceeded.
+    """
+    if primary_ok:
+        ms = _safe_product_data_ms(primary)
+        if ms is not None:
+            return ms / 1000.0
+    if not primary.done() and started_at is not None:
+        return time.monotonic() - float(started_at)
+    return None
+
+
 def _resolve_product_source(
     job: Dict[str, Any],
     *,
@@ -196,20 +241,36 @@ def _resolve_product_source(
     fallback_error = fallback.exception() if fallback_done else None
     fallback_ok = fallback_done and fallback_error is None
 
+    primary_elapsed = _primary_elapsed_seconds(primary, primary_ok, started_at)
+    # Use >= so a threshold of 0 still triggers when primary has not yet
+    # produced a result, matching the original behaviour and side-stepping
+    # the time.monotonic() granularity floor on Windows where two adjacent
+    # reads inside the same tick can return the same float.
+    primary_exceeded = (
+        primary_elapsed is not None
+        and fallback_timeout is not None
+        and primary_elapsed >= float(fallback_timeout)
+    )
+
+    # Rule 1: prefer primary when it returned within the threshold.
+    if primary_ok and not primary_exceeded:
+        return "primary", primary.result(), None
+
+    # Rule 2: primary blew past the threshold (still running or done late) →
+    # use fallback as soon as it has data, regardless of primary's state.
+    if primary_exceeded and fallback_ok:
+        return "fallback", fallback.result(), None
+
+    # Rule 3a: primary errored but fallback succeeded → use whatever we have.
+    if primary_done and primary_error is not None and fallback_ok:
+        return "fallback", fallback.result(), None
+
+    # Rule 3 tail: primary is done (slow but successful) and fallback is
+    # missing or also failed → keep the primary data instead of erroring.
     if primary_ok:
         return "primary", primary.result(), None
 
-    timed_out = False
-    if (
-        fallback is not None
-        and started_at is not None
-        and fallback_timeout is not None
-    ):
-        timed_out = (time.monotonic() - float(started_at)) >= float(fallback_timeout)
-
-    if fallback_ok and (primary_done or timed_out):
-        return "fallback", fallback.result(), None
-
+    # Both failed → propagate the primary error so the caller can decide.
     if primary_done and primary_error is not None:
         if fallback is None or fallback_done:
             if raise_product_errors:
@@ -246,6 +307,17 @@ def _job_payload(
     payload = _merge_analysis_payload(classification, product_data)
     payload["job_id"] = job_id
     payload["product_data_source"] = source
+    # Surface per-source timings so the UI can show both primary and fallback
+    # wall times, even when only one of them was actually selected as source.
+    primary_ms = _safe_product_data_ms(future)
+    fallback_ms = _safe_product_data_ms(fallback_future)
+    if primary_ms is not None or fallback_ms is not None:
+        timings = dict(payload.get("timings") or {})
+        if primary_ms is not None:
+            timings["product_data_primary_ms"] = round(primary_ms, 2)
+        if fallback_ms is not None:
+            timings["product_data_fallback_ms"] = round(fallback_ms, 2)
+        payload["timings"] = timings
     return payload
 
 
@@ -388,16 +460,24 @@ async def analyze_image(
 
     try:
         job_id = uuid.uuid4().hex
+        # Capture the monotonic timestamp the moment we hand off the task to the
+        # executor. We use this as both (a) the timing baseline reported back as
+        # product_data_ms and (b) the threshold baseline for the fallback
+        # decision logic. Aligning both on submit time means the timeout the
+        # user configures actually maps to the elapsed time they observe.
+        primary_submitted_at = time.monotonic()
         product_future = product_data_executor.submit(
             analyzer.generate_product_data,
             images=image_payloads,
             language=language,
             debug=debug_enabled,
             use_fallback_prompt=False,
+            started_at=primary_submitted_at,
         )
         fallback_model = (settings.product_data_fallback_model or "").strip()
         fallback_future = None
         if fallback_model:
+            fallback_submitted_at = time.monotonic()
             fallback_future = product_data_executor.submit(
                 analyzer.generate_product_data,
                 images=image_payloads,
@@ -405,6 +485,7 @@ async def analyze_image(
                 debug=debug_enabled,
                 model_override=fallback_model,
                 use_fallback_prompt=True,
+                started_at=fallback_submitted_at,
             )
         fallback_timeout = float(settings.product_data_fallback_timeout_seconds)
         classification = await run_in_threadpool(
@@ -417,20 +498,12 @@ async def analyze_image(
             category_model_override=category_model,
             image_processing=image_processing,
         )
-        # Start the fallback timer AFTER classification finishes. The primary
-        # and fallback futures begin running as soon as they are submitted,
-        # but the user only starts polling after they receive the initial
-        # response (which is gated on classification). Measuring the timeout
-        # from before classification would consume the timeout budget while
-        # the user is still waiting for the first response, causing the
-        # fallback to win prematurely.
-        fallback_started_at = time.monotonic()
         analysis_job_store.put(
             job_id,
             classification=classification,
             future=product_future,
             fallback_future=fallback_future,
-            started_at=fallback_started_at,
+            started_at=primary_submitted_at,
             fallback_timeout=fallback_timeout,
         )
         result = _job_payload(
@@ -439,7 +512,7 @@ async def analyze_image(
             product_future,
             raise_product_errors=False,
             fallback_future=fallback_future,
-            started_at=fallback_started_at,
+            started_at=primary_submitted_at,
             fallback_timeout=fallback_timeout,
         )
     except BadRequestError as exc:

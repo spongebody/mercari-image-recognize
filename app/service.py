@@ -438,12 +438,16 @@ class MercariAnalyzer:
         debug: bool = False,
         model_override: Optional[str] = None,
         use_fallback_prompt: bool = False,
+        started_at: Optional[float] = None,
     ) -> Dict[str, Any]:
         if language not in SUPPORTED_LANGUAGES:
             raise BadRequestError("Unsupported language.")
         if not images:
             raise BadRequestError("Image list is required.")
-        started = time.monotonic()
+        # Allow callers to pass the submit-time monotonic timestamp so that the
+        # reported product_data_ms reflects wall time from submission rather than
+        # from when the executor worker picked up the task.
+        started = float(started_at) if started_at is not None else time.monotonic()
         data_urls = [
             image_bytes_to_data_url(image_bytes, mime_type)
             for image_bytes, mime_type in images

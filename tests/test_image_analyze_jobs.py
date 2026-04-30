@@ -103,7 +103,13 @@ class ImageAnalyzeJobsTest(unittest.TestCase):
         self.assertEqual(completed["image_processing"][0]["compressed"], True)
         self.assertEqual(
             completed["timings"],
-            {"total_ms": 250.0, "classification_ms": 100.0, "product_data_ms": 250.0},
+            {
+                "total_ms": 250.0,
+                "classification_ms": 100.0,
+                "product_data_ms": 250.0,
+                "product_data_primary_ms": 250.0,
+                "product_data_fallback_ms": 250.0,
+            },
         )
 
     @patch.object(main, "product_data_executor")

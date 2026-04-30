@@ -106,15 +106,20 @@ def _good_payload(title="X"):
     }
 
 
-class FallbackTimerStartsAfterClassificationTest(unittest.TestCase):
-    """Issue #1: started_at must be captured AFTER classification finishes."""
+class FallbackTimerStartsAtPrimarySubmitTest(unittest.TestCase):
+    """started_at must reflect the primary future's submit moment.
+
+    This is the threshold baseline for fallback selection. Aligning it with
+    submit time means the configured PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS maps
+    to the actual wall time the primary model spent generating, so the user-
+    observable product_data_ms can be compared against the threshold directly.
+    """
 
     def setUp(self):
         self.client = TestClient(main.app)
         self._original_fallback_model = main.settings.product_data_fallback_model
         self._original_fallback_timeout = main.settings.product_data_fallback_timeout_seconds
         main.settings.product_data_fallback_model = "openai/gpt-4o-mini"
-        # Pick a value > 0 so the started_at value is meaningfully tested.
         main.settings.product_data_fallback_timeout_seconds = 5.0
 
     def tearDown(self):
@@ -123,19 +128,11 @@ class FallbackTimerStartsAfterClassificationTest(unittest.TestCase):
 
     @patch.object(main, "product_data_executor")
     @patch.object(main, "analyzer")
-    def test_started_at_is_captured_after_classification(self, analyzer, executor):
-        """Started_at must reflect a moment AFTER classify returns, not before.
-
-        Without the fix, started_at was recorded before classify ran, so the
-        fallback timeout window was eaten by classification and the fallback
-        could win prematurely on the very first poll.
-        """
+    def test_started_at_is_captured_before_classification(self, analyzer, executor):
         primary_future = concurrent.futures.Future()
         fallback_future = concurrent.futures.Future()
         executor.submit.side_effect = [primary_future, fallback_future]
 
-        # Capture the wall clock immediately before sending the request and
-        # have classify intentionally consume some wall-clock time.
         classify_payload = {
             "status": "product_pending",
             "categories": [],
@@ -159,9 +156,10 @@ class FallbackTimerStartsAfterClassificationTest(unittest.TestCase):
 
             self.assertEqual(put_spy.call_count, 1)
             started_at = put_spy.call_args.kwargs["started_at"]
-            # The fix requires started_at to be captured *after* classify
-            # consumed at least 50ms of wall clock. Allow a small tolerance.
-            self.assertGreaterEqual(started_at - pre_request_time, 0.04)
+            # started_at must be captured BEFORE classify slept for 50ms.
+            # Anything well under the 50ms classify duration confirms it sits
+            # at submit time rather than after classification finishes.
+            self.assertLess(started_at - pre_request_time, 0.04)
 
 
 class FallbackPromptIsUsedTest(unittest.TestCase):
