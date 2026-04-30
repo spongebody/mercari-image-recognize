@@ -397,7 +397,6 @@ async def analyze_image(
     image_list: List[UploadFile] = File(...),
     language: str = Form(DEFAULT_LANGUAGE),
     debug: str = Form("false"),
-    category_count: int = Form(3),
     vision_model: str = Form(None),
     category_model: str = Form(None),
 ):
@@ -456,7 +455,6 @@ async def analyze_image(
         raise HTTPException(status_code=400, detail="Invalid language.")
 
     debug_enabled = settings.enable_debug_param and parse_bool_param(debug, False)
-    category_count = max(1, min(category_count, 3))
 
     try:
         job_id = uuid.uuid4().hex
@@ -493,7 +491,6 @@ async def analyze_image(
             images=image_payloads,
             language=language,
             debug=debug_enabled,
-            category_limit=category_count,
             vision_model_override=vision_model,
             category_model_override=category_model,
             image_processing=image_processing,

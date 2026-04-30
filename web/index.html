@@ -945,14 +945,6 @@
                   <option value="zh" id="lang-opt-zh">简体中文</option>
                 </select>
               </div>
-              <div>
-                <label for="category-count" id="category-count-label">返回类别个数</label>
-                <select id="category-count">
-                  <option value="1">1</option>
-                  <option value="2">2</option>
-                  <option value="3" selected>3</option>
-                </select>
-              </div>
             </div>
 
             <div class="models-row">
@@ -1172,7 +1164,6 @@
           outputLangJa: "日语",
           outputLangEn: "英语",
           outputLangZh: "简体中文",
-          categoryCountLabel: "返回类别个数",
           visionModelLabel: "视觉模型",
           visionModelPlaceholder: "留空使用默认视觉模型",
           categoryModelLabel: "分类模型",
@@ -1330,7 +1321,6 @@
           outputLangJa: "日本語",
           outputLangEn: "英語",
           outputLangZh: "中国語（簡体字）",
-          categoryCountLabel: "返却するカテゴリ数",
           visionModelLabel: "ビジョンモデル",
           visionModelPlaceholder: "空欄なら既定モデルを使用",
           categoryModelLabel: "カテゴリモデル",
@@ -1525,8 +1515,6 @@
       const langOptEn = document.getElementById("lang-opt-en");
       const langOptZh = document.getElementById("lang-opt-zh");
       const outputLanguageLabel = document.getElementById("output-language-label");
-      const categoryCountLabel = document.getElementById("category-count-label");
-      const categoryCountSelect = document.getElementById("category-count");
       const visionModelLabel = document.getElementById("vision-model-label");
       const categoryModelLabel = document.getElementById("category-model-label");
       const visionModelInput = document.getElementById("vision-model");
@@ -1636,7 +1624,6 @@
         langOptJa.textContent = t("outputLangJa");
         langOptEn.textContent = t("outputLangEn");
         langOptZh.textContent = t("outputLangZh");
-        categoryCountLabel.textContent = t("categoryCountLabel");
         // visionModelLabel.textContent = t("visionModelLabel");
         // visionModelInput.placeholder = t("visionModelPlaceholder");
         // categoryModelLabel.textContent = t("categoryModelLabel");
@@ -2375,7 +2362,6 @@
             formData.append("image_list", fileObj.file);
           });
           formData.append("language", languageSelect.value);
-          formData.append("category_count", categoryCountSelect.value || "3");
           if (visionModelInput?.value.trim()) formData.append("vision_model", visionModelInput.value.trim());
           if (categoryModelInput?.value.trim()) formData.append("category_model", categoryModelInput.value.trim());
 

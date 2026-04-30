@@ -119,7 +119,6 @@ class ParallelFlowServiceTest(unittest.TestCase):
                 (b"back-image", "image/png"),
             ],
             language="ja",
-            category_limit=3,
         )
 
         vision_content = vision_client.calls[0]["messages"][1]["content"]

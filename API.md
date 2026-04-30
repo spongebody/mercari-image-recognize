@@ -114,7 +114,6 @@
 - `image_list`（文件，必填，可多次上传）：商品图片列表（支持多张，如正面/背面/包装/标签；JPG/PNG/GIF 等）。
 - `language`（字符串，可选）：`ja` / `en` / `zh`，默认 `ja`。
 - `debug`（字符串，可选）：`true` / `1` / `yes` 等，默认 `false`。
-- `category_count`（整数，可选）：返回类别数量（1-3），默认 `3`。
 - `vision_model`（字符串，可选）：视觉模型覆盖。
 - `category_model`（字符串，可选）：分类模型覆盖。
 
@@ -199,7 +198,7 @@ files.forEach((file) => {
 - 如果商品数据在首接口返回前已经完成，首接口会直接返回 `status=completed`，并合并 `title`、`description`、`brand_name`、`brand_id_obj`。
 - `_debug` 仅在 `debug=true` 且服务端允许调试时返回。
 - 主接口不再返回价格相关字段。
-- `best_target_path` / `alternatives` 在成功匹配分类路径时返回。
+- `categories` 始终返回置信度从高到低的最多 3 个匹配分类（候选目录中可信匹配少于 3 时可能少于 3 个）；`best_target_path` / `alternatives` 在成功匹配分类路径时返回，同样按置信度降序。
 - `timings.total_ms` 表示从请求开始到当前响应时刻的实际墙钟耗时；`timings.classification_ms` 表示首接口分类链路耗时，单位均为毫秒。由于分类与商品数据并行执行，完成态的 `total_ms ≈ max(classification_ms, product_data_ms)`，而非两者相加。
 - `image_processing` 字段返回每张上传图片的压缩处理结果（是否压缩、原始/处理后字节数等）。
 

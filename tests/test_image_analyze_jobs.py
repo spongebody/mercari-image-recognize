@@ -60,7 +60,10 @@ class ImageAnalyzeJobsTest(unittest.TestCase):
         self.assertNotIn("brand_id_obj", body)
         self.assertEqual(body["image_processing"][0]["compressed"], True)
         analyzer.classify_first_image_categories.assert_called_once()
-        self.assertEqual(analyzer.classify_first_image_categories.call_args.kwargs["category_limit"], 3)
+        self.assertNotIn(
+            "category_limit",
+            analyzer.classify_first_image_categories.call_args.kwargs,
+        )
         self.assertEqual(body["timings"], {"total_ms": 100.0, "classification_ms": 100.0})
 
         pending_response = self.client.get(f"/api/v1/mercari/image/analyze/{body['job_id']}")
@@ -145,7 +148,7 @@ class ImageAnalyzeJobsTest(unittest.TestCase):
         response = self.client.post(
             "/api/v1/mercari/image/analyze",
             files=[("image_list", ("front.png", b"\x89PNG\r\n\x1a\n", "image/png"))],
-            data={"language": "ja", "category_count": "3"},
+            data={"language": "ja"},
         )
 
         self.assertEqual(response.status_code, 200)

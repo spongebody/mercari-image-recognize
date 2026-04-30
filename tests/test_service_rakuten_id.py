@@ -91,7 +91,6 @@ class RakutenIdResponseTest(unittest.TestCase):
         result = analyzer.analyze(
             images=[(b"image-bytes", "image/png")],
             language="ja",
-            category_limit=1,
         )
 
         self.assertEqual(result["categories"][0]["id"], "123")
@@ -132,7 +131,6 @@ class RakutenIdResponseTest(unittest.TestCase):
         result = analyzer.analyze(
             images=[(b"image-bytes", "image/png")],
             language="ja",
-            category_limit=1,
         )
 
         self.assertEqual(result["prices"], [1000, 1500, 2000])
@@ -175,7 +173,6 @@ class RakutenIdResponseTest(unittest.TestCase):
                 (b"clothing-image", "image/png"),
             ],
             language="ja",
-            category_limit=1,
         )
 
         content = vision_client.calls[0]["messages"][1]["content"]
@@ -221,7 +218,6 @@ class RakutenIdResponseTest(unittest.TestCase):
         result = analyzer.analyze(
             images=[(b"image-bytes", "image/jpeg")],
             language="ja",
-            category_limit=1,
             image_processing=[
                 {
                     "index": 1,
@@ -291,8 +287,7 @@ class RakutenIdResponseTest(unittest.TestCase):
             result = analyzer.analyze(
                 images=[(b"image-bytes", "image/png")],
                 language="ja",
-                category_limit=1,
-            )
+                )
 
         self.assertEqual(
             result["timings"],
@@ -337,7 +332,6 @@ class RakutenIdResponseTest(unittest.TestCase):
         result = analyzer.analyze(
             images=[(b"image-bytes", "image/png")],
             language="ja",
-            category_limit=1,
         )
 
         self.assertEqual(result["tax_excluded"], 980)
@@ -378,7 +372,6 @@ class RakutenIdResponseTest(unittest.TestCase):
         result = analyzer.analyze(
             images=[(b"image-bytes", "image/png")],
             language="ja",
-            category_limit=1,
         )
 
         self.assertIsNone(result["tax_excluded"])
@@ -419,7 +412,6 @@ class RakutenIdResponseTest(unittest.TestCase):
         result = analyzer.analyze(
             images=[(b"image-bytes", "image/png")],
             language="ja",
-            category_limit=1,
         )
 
         self.assertIsNone(result["tax_excluded"])
@@ -460,7 +452,6 @@ class RakutenIdResponseTest(unittest.TestCase):
         result = analyzer.analyze(
             images=[(b"image-bytes", "image/png")],
             language="ja",
-            category_limit=1,
         )
 
         self.assertEqual(result["tax_excluded"], 980)

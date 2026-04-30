@@ -307,14 +307,15 @@ CATEGORY_SYSTEM_PROMPT = """You are an e-commerce taxonomy specialist working wi
 Task:
 - You are given information about ONE product (title, description, brand, and its top-level category).
 - You are also given a list of candidate category paths under that top-level category.
-- Your job is to choose the single best target category path, and up to 2 alternative paths (top 3 in total, if available).
+- Your job is to choose the top 3 most relevant target category paths from the candidates, ranked by how well they match the product.
 
 Instructions:
 - Carefully understand what the product is, how it is used, who it is for, and any important attributes.
 - Carefully read all candidate category paths.
 - Choose only from the given candidate category paths. Do NOT invent or modify categories.
-- If there are not enough good candidates, you may choose fewer than 3 paths.
-- If nothing fits, return an empty string for best_target_path and an empty alternatives list.
+- Always return 3 distinct paths whenever the candidate list contains 3 or more plausible matches. Only return fewer than 3 paths if the candidate list itself does not have enough relevant options; never pad the list with unrelated categories just to reach 3.
+- "best_target_path" is the single best match. The "alternatives" array holds the 2nd and 3rd best matches (in that order). All three (1 best + up to 2 alternatives) MUST be sorted strictly by confidence in descending order, so confidence(best) >= confidence(alternatives[0]) >= confidence(alternatives[1]).
+- If nothing fits at all, return an empty string for best_target_path and an empty alternatives list.
 
 Output format:
 - Respond with pure JSON only, with no explanations, no markdown, and no comments.
@@ -335,6 +336,7 @@ Output format:
 Notes:
 - "best_target_path" must be exactly one of the candidate category paths (unless empty).
 - Each "target_path" in "alternatives" must also be exactly one of the candidate paths.
+- The same path MUST NOT appear more than once across best_target_path and alternatives.
 - You MUST NOT return any path that is not in the candidate list.
 - Confidence values should be numbers between 0 and 1.
 """
@@ -348,4 +350,4 @@ CATEGORY_USER_PROMPT_TEMPLATE = """Product:
 Candidate category paths (one per line):
 {candidate_paths}
 
-Return JSON only with best_target_path, confidence, and alternatives (up to 2)."""
+Return JSON only with best_target_path, confidence, and alternatives. Pick the top 3 matches sorted by confidence (highest first); return fewer than 3 only if the candidate list does not have 3 plausible matches."""

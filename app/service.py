@@ -366,7 +366,6 @@ class MercariAnalyzer:
         images: List[Tuple[bytes, str]],
         language: str,
         debug: bool = False,
-        category_limit: int = 3,
         vision_model_override: Optional[str] = None,
         category_model_override: Optional[str] = None,
         image_processing: Optional[List[Dict[str, Any]]] = None,
@@ -375,7 +374,6 @@ class MercariAnalyzer:
             raise BadRequestError("Unsupported language.")
         if not images:
             raise BadRequestError("Image list is required.")
-        category_limit = max(1, min(int(category_limit), 3))
         total_started = time.monotonic()
         attempts_by_stage: Dict[str, List[AttemptRecord]] = {}
 
@@ -400,7 +398,6 @@ class MercariAnalyzer:
                 description=simple_description,
                 brand_for_prompt="",
                 group_name=group_name,
-                category_limit=category_limit,
                 model_override=category_model_override,
             )
             attempts_by_stage["category"] = category_attempts
@@ -486,7 +483,6 @@ class MercariAnalyzer:
         images: List[Tuple[bytes, str]],
         language: str,
         debug: bool = False,
-        category_limit: int = 1,
         vision_model_override: Optional[str] = None,
         category_model_override: Optional[str] = None,
         image_processing: Optional[List[Dict[str, Any]]] = None,
@@ -495,7 +491,6 @@ class MercariAnalyzer:
             raise BadRequestError("Unsupported language.")
         if not images:
             raise BadRequestError("Image list is required.")
-        category_limit = max(1, min(int(category_limit), 3))
         total_started = time.monotonic()
         attempts_by_stage: Dict[str, List[AttemptRecord]] = {}
 
@@ -542,7 +537,6 @@ class MercariAnalyzer:
                 description=description_text or _description_to_text(ai_raw.get("description", "")),
                 brand_for_prompt=brand_raw or brand_name,
                 group_name=group_name,
-                category_limit=category_limit,
                 model_override=category_model_override,
             )
             attempts_by_stage["category"] = category_attempts
@@ -588,7 +582,6 @@ class MercariAnalyzer:
         title: str,
         image_url: Optional[str],
         language: str,
-        category_limit: int = 3,
         category_model_override: Optional[str] = None,
         vision_model_override: Optional[str] = None,
     ) -> Dict[str, Any]:
@@ -599,7 +592,6 @@ class MercariAnalyzer:
         if not title_clean:
             raise BadRequestError("Title is required.")
 
-        category_limit = max(1, min(int(category_limit), 3))
         categories: List[Dict[str, str]] = []
         title_error: Optional[Exception] = None
 
@@ -617,7 +609,6 @@ class MercariAnalyzer:
                     description="",
                     brand_for_prompt="",
                     group_name=group_name,
-                    category_limit=category_limit,
                     model_override=category_model_override,
                 )
         except (BadRequestError, LLMAllAttemptsFailedError) as exc:
@@ -650,7 +641,6 @@ class MercariAnalyzer:
             image_bytes=image_bytes,
             mime_type=mime_type,
             language=language,
-            category_limit=category_limit,
             vision_model_override=vision_model_override,
             category_model_override=category_model_override,
         )
@@ -891,7 +881,6 @@ class MercariAnalyzer:
         description: str,
         brand_for_prompt: str,
         group_name: str,
-        category_limit: int,
         model_override: Optional[str] = None,
     ) -> Tuple[List[Dict[str, str]], Optional[Dict[str, Any]], List[AttemptRecord]]:
         candidates = self.category_store.get_categories_by_group(group_name)
@@ -945,7 +934,9 @@ class MercariAnalyzer:
                 if isinstance(path, str) and path.strip():
                     ordered_paths.append((path, _normalize_confidence(alt.get("confidence"))))
 
-        category_limit = max(1, min(category_limit, 3))
+        # Always cap at 3 — the prompt asks for top-3, but defensively trim in
+        # case the model returns more (e.g. duplicates after candidate matching).
+        max_results = 3
         seen = set()
         results: List[Dict[str, str]] = []
         for path, confidence in ordered_paths:
@@ -967,7 +958,7 @@ class MercariAnalyzer:
                         "confidence": confidence,
                     }
                 )
-            if len(results) >= category_limit:
+            if len(results) >= max_results:
                 break
 
         return results, parsed, attempts
@@ -977,7 +968,6 @@ class MercariAnalyzer:
         image_bytes: bytes,
         mime_type: str,
         language: str,
-        category_limit: int = 3,
         vision_model_override: Optional[str] = None,
         category_model_override: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
@@ -1003,7 +993,6 @@ class MercariAnalyzer:
             description=description_text or _description_to_text(ai_raw.get("description", "")),
             brand_for_prompt=brand_raw,
             group_name=group_name,
-            category_limit=category_limit,
             model_override=category_model_override,
         )
 
