@@ -1,130 +1,300 @@
 # Mercari Image Analyzer
 
-## Quick start
+Mercari Image Analyzer 是一个基于 FastAPI + OpenRouter 的图片识别、商品信息生成、类目匹配和商品图生成服务。后端入口是 `main.py`，核心业务编排在 `app/service.py`。
 
-1) Install dependencies:
+## 启动方式
+
+### 1. 安装依赖
+
+任选一种方式。
+
+使用 `uv`：
+
+```bash
+uv sync
+```
+
+使用 Python venv + pip：
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-2) Configure `.env` (loaded automatically by `python-dotenv` in `app/config.py`).
+Windows PowerShell 激活虚拟环境时使用：
 
-3) Run the API:
+```powershell
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+### 2. 配置环境变量
+
+复制 `.env.example` 为 `.env`，至少填写：
+
+```dotenv
+OPENROUTER_API_KEY=...
+VISION_MODEL=openai/gpt-4o-mini
+CATEGORY_MODEL=openai/gpt-4o-mini
+```
+
+`.env` 会在 `app/config.py` 中通过 `python-dotenv` 自动加载。
+
+### 3. 启动 API
+
 ```bash
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-The same FastAPI process also serves the runtime configuration page at `/config`.
-Changes saved from that page are written to `.env` and applied to subsequent API
-requests immediately.
+如果使用 `uv`：
 
-## Image analysis flow
+```bash
+uv run uvicorn main:app --host 0.0.0.0 --port 8000
+```
 
-Image analysis now runs a fast category path and a product-data path in parallel:
+### 4. 同时启动 API 和本地前端
 
-1. Fast classification path:
-   - Uses only the first uploaded image with `FAST_CLASSIFICATION_SYSTEM_PROMPT` + `FAST_CLASSIFICATION_USER_PROMPT`.
-   - Extracts only top-level category, title, and simple description.
-   - Calls `CATEGORY_SYSTEM_PROMPT` + `CATEGORY_USER_PROMPT_TEMPLATE` to choose up to 3 CSV-backed category paths with confidence scores.
-   - The first API response returns these categories plus a `job_id` as soon as this path completes.
-2. Product data path:
-   - Uses all uploaded images with `PRODUCT_DATA_SYSTEM_PROMPT` + `PRODUCT_DATA_USER_PROMPT`.
-   - Generates title, structured description, and brand information.
-   - Does not generate `tax_excluded`, `tax_included`, or `prices`; price entry is handled manually by the client.
-   - Uses `PRODUCT_DATA_MODEL` by default (`google/gemini-2.5-flash` unless configured).
-   - In parallel, a smaller fallback model `PRODUCT_DATA_FALLBACK_MODEL` (default `openai/gpt-4o-mini`) runs the same prompt. If the primary model has not produced a result within `PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS` (default `10`), the polling endpoint returns the fallback result so callers always get bounded-latency data. The completed payload includes `product_data_source` (`"primary"` or `"fallback"`) so clients can tell which model produced the data.
+`run.sh` 会同时启动：
 
-If the product-data path finishes before the first response is sent, the response is returned as `status=completed` with the full product data. Otherwise the client polls `GET /api/v1/mercari/image/analyze/{job_id}` until it returns `status=completed`. In-memory jobs live only in the current API process.
+- API: `http://localhost:8000`
+- UI: `http://localhost:8002`
 
-The image analysis response includes backend timings in milliseconds: `timings.classification_ms` for the first API response's category path, `timings.product_data_ms` for the polling-side product data generation path once complete, and `timings.total_ms` for the wall-clock duration. Because the two paths run in parallel, the completed `total_ms ≈ max(classification_ms, product_data_ms)` rather than their sum. The response also includes `image_processing`, which lists each uploaded image's compression status (whether it was compressed and the original/processed byte sizes).
+```bash
+./run.sh
+```
 
-## Prompt overview
+可通过环境变量覆盖端口：
 
-All prompts live in `app/llm/prompts.py`.
+```bash
+API_PORT=8010 UI_PORT=8012 ./run.sh
+```
 
-- Fast image classification: `FAST_CLASSIFICATION_SYSTEM_PROMPT` + `FAST_CLASSIFICATION_USER_PROMPT`
-  - Uses the first image to generate only the minimal classification evidence, without brand or price fields.
-- Product data generation: `PRODUCT_DATA_SYSTEM_PROMPT` + `PRODUCT_DATA_USER_PROMPT`
-  - Uses all images to generate title, description, and brand fields without price fields.
-- Legacy/title fallback image recognition: `VISION_SYSTEM_PROMPT_WITH_PRICE` + `VISION_USER_PROMPT_WITH_PRICE`
-  - Still used by title fallback image classification.
-- Title-only category: `PRODUCT_TITLE_CATEGORY_SYSTEM_PROMPT` + `PRODUCT_TITLE_CATEGORY_USER_PROMPT`
-  - Classifies a title to a top-level category.
-- Category selection: `CATEGORY_SYSTEM_PROMPT` + `CATEGORY_USER_PROMPT_TEMPLATE`
-  - Chooses best category path and up to 2 alternatives from the candidate list.
+前端静态页面也可以单独打开 `web/index.html`，或用任意静态文件服务器托管 `web/`。
 
-## Environment variables
+### 5. 配置页和健康检查
 
-Booleans accept `1`, `true`, `yes`, or `on`.
+- 配置页：`GET /config`
+- 读取运行时配置：`GET /api/v1/config`
+- 更新运行时配置：`PUT /api/v1/config`
+- 健康检查：`GET /health`
 
-- `OPENROUTER_API_KEY` (required): OpenRouter API key.
-- `VISION_MODEL` (default: empty): model for image understanding.
-- `CATEGORY_MODEL` (default: empty): model for category selection.
-- `PRODUCT_DATA_MODEL` (default: `google/gemini-2.5-flash`): model for all-image product data generation.
-- `PRODUCT_DATA_FALLBACK_MODEL` (default: `openai/gpt-4o-mini`): smaller model that runs in parallel with the primary product-data call. Set to empty to disable the fallback.
-- `PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS` (default: `10`): if the primary product-data call has not completed after this many seconds, the polling endpoint returns the fallback result instead. Accepts decimals (e.g., `7.5`).
-- `BRAND_CSV_PATH` (default: `data/mercari_brand.csv`): brand data CSV path.
-- `CATEGORY_CSV_PATH` (default: `data/category_rakuten.csv`): category data CSV path.
-- `OPENROUTER_BASE_URL` (default: `https://openrouter.ai/api/v1/chat/completions`): API base URL.
-- `OPENROUTER_REFERER` (default: empty): optional referer header.
-- `OPENROUTER_APP_NAME` (default: `mercari-image-backend`): app name header.
-- `REQUEST_TIMEOUT` (default: `60`): per-call OpenRouter request timeout in seconds.
-- `ENABLE_DEBUG` (default: `true`): allow debug response fields.
-- `MAX_IMAGE_BYTES` (default: `5242880`): max upload size in bytes.
-- `IMAGE_COMPRESSION_THRESHOLD_MB` (default: `1`): backend compresses any single uploaded image larger than this size in MB before sending it to the vision model. Set `0` to disable backend compression.
-- `LOG_LLM_RAW` (default: `false`): write raw LLM logs under `logs/`.
-- `LOG_REQUESTS` (default: `true`): write request logs under `logs/requests/`.
-- `LOG_REQUESTS_RETENTION_DAYS` (default: `7`): request log retention days.
-- `LOG_REQUESTS_MAX_FILES` (default: `1000`): cap on request log files.
-- `VISION_FALLBACK_MODELS` (default: built-in 7-model list): comma-separated OpenRouter model
-  ids tried in order if the primary `VISION_MODEL` exhausts its retries.
-- `CATEGORY_FALLBACK_MODELS` (default: built-in 7-model list): comma-separated OpenRouter
-  model ids tried in order if the primary `CATEGORY_MODEL` exhausts its retries.
-- `MODEL_CALL_MAX_RETRIES` (default: `3`): number of retries on the primary model before the
-  caller starts walking the fallback list. The total primary attempt count is
-  `MODEL_CALL_MAX_RETRIES + 1`. Applies to vision, category, and title-category stages.
-- `MODEL_CALL_TOTAL_BUDGET_SECONDS` (default: `120`): hard cap on the total wall-clock time
-  one stage may spend across all retries and fallbacks. Each per-attempt timeout is reduced
-  to `min(REQUEST_TIMEOUT, remaining budget)`. The vision stage and the category stage have
-  independent budgets.
-- `REASONING_ENABLED` (optional): enable or disable reasoning globally for all OpenRouter requests.
-- `REASONING_EFFORT` (optional): reasoning effort level, one of `minimal`, `low`, `medium`, `high`, `xhigh`, `none`.
-- `REASONING_MAX_TOKENS` (optional): reasoning token budget hint sent globally to OpenRouter.
-- `REASONING_SUMMARY` (optional): reasoning summary level, one of `auto`, `concise`, `detailed`.
+配置页保存的内容会写回 `.env`，并尽量同步到当前进程内的客户端实例。当前代码按单进程使用设计；多 worker 部署时，修改配置后需要重启或重载所有 worker。
 
-Every LLM stage retries the primary model up to `MODEL_CALL_MAX_RETRIES + 1` times with
-exponential backoff (0.2s, 0.4s, 0.8s, capped at 1.5s and clamped by remaining budget),
-then walks the fallback list (one attempt each, no inter-model backoff). Both OpenRouter
-request errors and JSON parse failures feed the same retry/fallback loop. Once every
-attempt has failed the stage raises an error that the API surfaces as a structured 502
-response (see `API.md`). The deprecated `CATEGORY_LLM_RETRY_ENABLED` /
-`CATEGORY_LLM_MAX_RETRIES` settings have been removed.
+## API 服务链路
 
-## Runtime configuration page
+### POST `/api/v1/mercari/image/analyze`
 
-Open `http://<host>:<port>/config` to edit the common API settings without
-manually changing `.env`. The page can update:
+这是主图片识别接口，接收 `multipart/form-data`：
 
-- `VISION_MODEL`
-- `CATEGORY_MODEL`
-- `PRODUCT_DATA_MODEL`
-- `PRODUCT_DATA_FALLBACK_MODEL`
-- `PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS`
-- `SHOWCASE_MODEL`
-- `LOG_LLM_RAW`
-- `LOG_REQUESTS`
-- `ENABLE_DEBUG`
-- `IMAGE_COMPRESSION_THRESHOLD_MB`
-- `REQUEST_TIMEOUT`
-- `MODEL_CALL_MAX_RETRIES`
-- `MODEL_CALL_TOTAL_BUDGET_SECONDS`
-- `VISION_FALLBACK_MODELS`
-- `CATEGORY_FALLBACK_MODELS`
+- `image_list`: 1 张或多张图片，字段名固定为 `image_list`
+- `language`: `ja` / `en` / `zh`，默认 `ja`
+- `debug`: `true` 时返回调试信息，前提是 `ENABLE_DEBUG=true`
+- `vision_model`: 可选，覆盖本次快速识别模型
+- `category_model`: 可选，覆盖本次类目选择模型
 
-`OPENROUTER_API_KEY` is intentionally not exposed on the page.
+完整链路：
 
-Runtime updates are applied inside the current API process. The provided systemd
-command runs a single uvicorn worker, which matches this behavior. If you deploy
-multiple workers later, restart or reload all workers after changing config.
+1. `main.py` 校验上传文件：文件存在、MIME 类型在 `app/constants.py` 的 `ALLOWED_MIME_TYPES` 中、大小不超过 `MAX_IMAGE_BYTES`。
+2. `app/image_processing.py::compress_image_if_needed` 根据 `IMAGE_COMPRESSION_THRESHOLD_MB` 对大图压缩，避免直接把过大的原图发给模型。
+3. `main.py` 创建 `job_id`，把商品信息生成任务提交到 `ThreadPoolExecutor`：
+   - 主任务调用 `MercariAnalyzer.generate_product_data`
+   - 如果 `PRODUCT_DATA_FALLBACK_MODEL` 非空，同时提交 fallback 商品信息任务
+4. 同一请求内立即执行快速分类链路 `MercariAnalyzer.classify_first_image_categories`：
+   - 只使用第一张图
+   - 使用 `FAST_CLASSIFICATION_SYSTEM_PROMPT` + `FAST_CLASSIFICATION_USER_PROMPT`
+   - 通过 `VISION_MODEL` 或请求里的 `vision_model` 调 OpenRouter
+   - 得到 `title`、`simple_description`、`top_level_category`
+5. `app/service.py` 将模型返回的顶级类目映射到 `TOP_LEVEL_CATEGORIES`，再用 `CategoryStore.get_categories_by_group` 从分类 CSV 取候选路径。
+6. 类目选择链路调用 OpenRouter：
+   - prompt 来自 `CATEGORY_SYSTEM_PROMPT` + `CATEGORY_USER_PROMPT_TEMPLATE`
+   - 模型来自 `CATEGORY_MODEL` 或请求里的 `category_model`
+   - 从候选路径中选出最多 3 个分类
+7. `main.py` 将分类结果和商品信息 future 存入 `AnalysisJobStore`。
+8. 如果商品信息已经可用，直接返回 `status=completed`；否则返回 `status=product_pending` 和 `job_id`。
+9. 客户端用 `GET /api/v1/mercari/image/analyze/{job_id}` 轮询商品信息结果。
+
+商品信息生成链路：
+
+1. `MercariAnalyzer.generate_product_data` 使用全部图片。
+2. 主模型使用 `PRODUCT_DATA_SYSTEM_PROMPT` + `PRODUCT_DATA_USER_PROMPT`。
+3. fallback 模型使用 `PRODUCT_DATA_FALLBACK_SYSTEM_PROMPT` + `PRODUCT_DATA_FALLBACK_USER_PROMPT`。
+4. OpenRouter 返回 JSON 后，`app/llm/json_parser.py` 解析，`app/service.py` 规范化标题、描述、品牌等字段。
+5. 品牌识别结果会通过 `BrandStore.match` 在品牌 CSV 中匹配，输出 `brand_name` 和 `brand_id_obj`。
+6. 轮询时，`main.py::_resolve_product_source` 根据 `PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS` 决定用主模型结果还是 fallback 结果，并返回 `product_data_source=primary|fallback`。
+
+请求 OpenRouter 时统一经过：
+
+- `app/llm/client.py::OpenRouterClient`: 构造请求、Headers、timeout、reasoning 参数。
+- `app/llm/resilient.py::ResilientCaller`: 负责主模型重试、fallback 模型链、总耗时预算、JSON 解析失败重试。
+- `app/llm/json_parser.py`: 从模型文本中提取 JSON。
+
+### GET `/api/v1/mercari/image/analyze/{job_id}`
+
+轮询主识别接口生成的后台商品信息任务。
+
+- `product_pending`: 商品信息任务仍未选出可用结果。
+- `completed`: 分类结果和商品信息都已合并。
+- `404`: 当前进程内没有这个 job。job 只保存在内存中，默认 TTL 为 `AnalysisJobStore(ttl_seconds=1800)`。
+
+### POST `/api/v1/mercari/title/analyze`
+
+标题分类接口，接收 JSON：
+
+```json
+{
+  "title": "商品标题",
+  "image_url": "https://example.com/fallback.jpg",
+  "language": "ja"
+}
+```
+
+完整链路：
+
+1. `main.py` 校验语言和标题。
+2. `MercariAnalyzer.analyze_title` 调用 `PRODUCT_TITLE_CATEGORY_SYSTEM_PROMPT` + `PRODUCT_TITLE_CATEGORY_USER_PROMPT`，先只根据标题判断顶级类目。
+3. 如果标题能得到有效顶级类目，则复用 `_choose_categories` 从分类 CSV 候选中选出目标路径。
+4. 如果标题分类失败且提供了 `image_url`，`app/utils.py::fetch_image_from_url` 下载图片，再走旧版图片识别链路 `_classify_image_to_paths`。
+5. fallback 图片识别使用 `VISION_SYSTEM_PROMPT_WITH_PRICE` + `VISION_USER_PROMPT_WITH_PRICE`，再进入类目选择链路。
+
+### POST `/api/v1/showcase/generate`
+
+商品图生成接口，接收单张图片和可选提示词：
+
+- `file`: 图片文件
+- `prompt_hint`: 可选，追加到默认商品图 prompt
+- `model`: 可选，覆盖本次图生图模型
+
+完整链路：
+
+1. `main.py` 校验上传图片。
+2. `app/showcase/service.py::ShowcaseService.generate_showcase` 生成 `request_id`，根据配置决定是否保存输入图。
+3. `app/showcase/prompt.py::build_showcase_prompt` 构造商品图生成 prompt。
+4. `app/showcase/openrouter_image_client.py` 调 OpenRouter 图生图接口，支持重试和 `SHOWCASE_FALLBACK_MODELS`。
+5. 根据 `SHOWCASE_RETAIN_OUTPUT_FILES` 决定是否保存输出图到 `SHOWCASE_STORAGE_ROOT`。
+6. `app/showcase/archive.py` 总是把请求记录写到 `logs/showcase/`。
+
+## 运行时依赖文件
+
+核心图片识别/分类接口运行时依赖这些文件：
+
+- `main.py`: FastAPI app、路由、上传校验、后台任务、配置页。
+- `app/config.py`: 环境变量读取和默认配置。
+- `app/runtime_config.py`: `/api/v1/config` 可修改配置字段及写回 `.env`。
+- `app/constants.py`: 支持语言、MIME 类型、顶级类目、默认 fallback 模型。
+- `app/image_processing.py`: 上传图片压缩。
+- `app/jobs.py`: 图片识别后台任务内存存储。
+- `app/service.py`: 商品识别、标题分类、品牌匹配、类目选择的核心编排。
+- `app/utils.py`: 文本规范化、图片转 data URL、远程图片下载、价格辅助函数。
+- `app/errors.py`: 业务和 LLM 错误类型。
+- `app/llm/prompts.py`: 所有识别、商品信息、类目选择 prompt。
+- `app/llm/client.py`: OpenRouter Chat Completions 请求客户端。
+- `app/llm/resilient.py`: 主模型重试、fallback 链路、耗时预算。
+- `app/llm/json_parser.py`: LLM JSON 提取和解析。
+- `app/data/brands.py`: 加载和匹配品牌 CSV。
+- `app/data/categories.py`: 加载和查找分类 CSV。
+- `data/mercari_brand.csv`: 默认品牌数据，来自 `BRAND_CSV_PATH`。
+- `data/category_rakuten.csv`: 默认分类数据，来自 `CATEGORY_CSV_PATH`。
+
+商品图生成接口额外依赖：
+
+- `app/showcase/service.py`
+- `app/showcase/openrouter_image_client.py`
+- `app/showcase/prompt.py`
+- `app/showcase/storage.py`
+- `app/showcase/archive.py`
+- `storage/`: 保留输入/输出图片时使用。
+- `logs/showcase/`: 写入每次生成请求的归档记录。
+
+前端和配置页依赖：
+
+- `web/index.html`: 本地测试 UI。
+- `web/config.html`: `/config` 配置页面。
+
+## data 目录说明
+
+当前运行时只直接读取：
+
+- `data/mercari_brand.csv`
+- `data/category_rakuten.csv`
+
+`data/` 根目录只保留以上两个运行时文件。其他数据源、测试素材、旧文件和备份文件统一放在 `data/others/`，相关脚本的默认路径也指向 `data/others/`：
+
+- `data/others/rdx_category.csv`: `scripts/update_meru_id.py`、`scripts/build_rakuten_category_csv.py`、`scripts/extract_top_categories.py` 的输入或输出目标。
+- `data/others/rakuten_to_mercari.csv`: `scripts/update_meru_id.py` 用来回填 `meru_id`。
+- `data/others/Rakuten_ZenPlus_Catetory_Mapping.csv`: `scripts/update_meru_id.py` 用来回填 `zenplus_id`。
+- `data/others/rdx_brand.csv`: `scripts/build_mercari_brand_csv.py` 用来回填跨平台品牌 ID。
+- `data/others/title_test_cases.csv`: `scripts/run_title_tests.py` 和 `scripts/perf_test.py` 的标题用例。
+- `data/others/lv.jpg`、`data/others/test.png`: `scripts/perf_test.py` 的默认测试图片。
+
+服务运行时不会读取 `data/others/`；它只影响维护脚本、压测脚本或人工追溯旧数据。
+
+## 配置变量
+
+布尔值接受 `1`、`true`、`yes`、`on` 表示开启；`0`、`false`、`no`、`off` 表示关闭。列表类变量使用英文逗号分隔。
+
+### OpenRouter 和模型
+
+- `OPENROUTER_API_KEY`: OpenRouter API Key；识别和生成接口都需要。
+- `OPENROUTER_BASE_URL`: OpenRouter Chat Completions 地址，默认 `https://openrouter.ai/api/v1/chat/completions`。
+- `OPENROUTER_REFERER`: 可选，写入 `HTTP-Referer` 请求头。
+- `OPENROUTER_APP_NAME`: 可选，写入 `X-Title` 请求头，默认 `mercari-image-backend`。
+- `VISION_MODEL`: 图片快速识别和旧版图片 fallback 识别的主模型。
+- `CATEGORY_MODEL`: 类目选择和标题顶级类目判断的主模型。
+- `PRODUCT_DATA_MODEL`: 多图商品信息生成的主模型，默认 `google/gemini-2.5-flash`。
+- `PRODUCT_DATA_FALLBACK_MODEL`: 与主商品信息任务并行运行的保底模型；留空可关闭并行保底。
+- `PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS`: 主商品信息任务超过该秒数仍未返回时，轮询接口优先采用 fallback 结果，默认 `10`。
+- `VISION_FALLBACK_MODELS`: `VISION_MODEL` 重试失败后按顺序尝试的模型链。
+- `CATEGORY_FALLBACK_MODELS`: `CATEGORY_MODEL` 重试失败后按顺序尝试的模型链。
+- `PRODUCT_DATA_FALLBACK_MODELS`: 商品信息主模型或显式 fallback 模型请求失败后继续尝试的模型链。
+- `MODEL_CALL_MAX_RETRIES`: 主模型最大重试次数；总尝试次数为 `MODEL_CALL_MAX_RETRIES + 1`。
+- `MODEL_CALL_TOTAL_BUDGET_SECONDS`: 单个 LLM 阶段跨重试和 fallback 的总耗时预算。
+- `REQUEST_TIMEOUT`: 单次 OpenRouter 请求超时时间，单位秒。
+
+### 数据文件
+
+- `BRAND_CSV_PATH`: 品牌 CSV 路径，默认 `data/mercari_brand.csv`。
+- `CATEGORY_CSV_PATH`: 分类 CSV 路径，默认 `data/category_rakuten.csv`。
+
+`BRAND_CSV_PATH` 需要包含 `id,name,name_jp,name_en,rakuten_id,yshop_id,yauc_id,meru_id,ebay_id,rakuma_id,amazon_id,qoo10_id` 等字段。`CATEGORY_CSV_PATH` 需要包含 `category_id,path|category_name,group_name,meru_id,rakuma_id,zenplus_id` 等字段。
+
+### 上传、调试和日志
+
+- `MAX_IMAGE_BYTES`: 单张上传图片最大字节数，默认 `5242880`。
+- `IMAGE_COMPRESSION_THRESHOLD_MB`: 单张图片超过该 MB 数后后端先压缩再发给视觉模型；设置为 `0` 可关闭压缩。
+- `ENABLE_DEBUG`: 是否允许请求通过 `debug=true` 返回 `_debug` 字段。
+- `LOG_LLM_RAW`: 是否把 LLM 原始请求结果和解析结果写入 `logs/`。
+- `LOG_REQUESTS`: 是否记录 HTTP 请求日志。
+- `LOG_REQUESTS_RETENTION_DAYS`: 请求日志保留天数。
+- `LOG_REQUESTS_MAX_FILES`: 请求日志最多保留文件数。
+
+### Reasoning 参数
+
+这些变量会原样组装为 OpenRouter 的 `reasoning` 参数；留空则不发送对应字段。
+
+- `REASONING_ENABLED`: 是否启用 reasoning。
+- `REASONING_EFFORT`: reasoning 强度，可选 `minimal`、`low`、`medium`、`high`、`xhigh`、`none`。
+- `REASONING_MAX_TOKENS`: reasoning token 预算。
+- `REASONING_SUMMARY`: reasoning 摘要级别，可选 `auto`、`concise`、`detailed`。
+
+### Showcase 商品图生成
+
+- `SHOWCASE_MODEL`: `/api/v1/showcase/generate` 默认图生图模型。
+- `SHOWCASE_STORAGE_ROOT`: 输入/输出图片保留目录，默认 `storage`。
+- `SHOWCASE_RETAIN_INPUT_FILES`: 是否保留上传的输入图片。
+- `SHOWCASE_RETAIN_OUTPUT_FILES`: 是否保留生成的输出图片。
+- `SHOWCASE_REQUEST_TIMEOUT`: showcase 单次 OpenRouter 请求超时时间。
+- `SHOWCASE_MAX_RETRIES`: 每个 showcase 模型的最大尝试次数，最小为 `1`。
+- `SHOWCASE_FALLBACK_MODELS`: showcase 主模型耗尽重试后按顺序尝试的 fallback 模型。
+- `SHOWCASE_TIMEZONE`: showcase `request_id`、归档目录和时间戳使用的时区，默认 `Asia/Shanghai`。
+
+### run.sh 专用变量
+
+- `API_HOST`: API 监听地址，默认 `0.0.0.0`。
+- `API_PORT`: API 端口，默认 `8000`。
+- `UI_HOST`: 本地 UI 静态服务器监听地址，默认 `0.0.0.0`。
+- `UI_PORT`: 本地 UI 静态服务器端口，默认 `8002`。
+
+### 已废弃变量
+
+`.env.example` 中历史遗留的 `CATEGORY_LLM_RETRY_ENABLED` 和 `CATEGORY_LLM_MAX_RETRIES` 当前代码不再读取；重试策略由 `MODEL_CALL_MAX_RETRIES`、`MODEL_CALL_TOTAL_BUDGET_SECONDS` 和各类 fallback 模型链控制。

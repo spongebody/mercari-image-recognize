@@ -5,7 +5,7 @@ Accepted input formats:
 - raw Mercari export in CP932 with Japanese headers
 - already-normalized UTF-8 CSV with English headers
 
-Platform ids are backfilled from data/rdx_brand.csv by matching:
+Platform ids are backfilled from data/others/rdx_brand.csv by matching:
     rdx_brand.meru_id == mercari_brand.id
 """
 
@@ -15,7 +15,7 @@ from typing import Dict, Iterable, List
 
 BASE_DIR = Path(__file__).parent.parent
 DEFAULT_MERCARI_CSV = BASE_DIR / "data" / "mercari_brand.csv"
-DEFAULT_RDX_CSV = BASE_DIR / "data" / "rdx_brand.csv"
+DEFAULT_RDX_CSV = BASE_DIR / "data" / "others" / "rdx_brand.csv"
 OUTPUT_FIELDNAMES = [
     "id",
     "name",

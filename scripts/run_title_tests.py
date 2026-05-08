@@ -5,7 +5,7 @@ Batch runner for Mercari title→category API tests.
 Usage:
   python scripts/run_title_tests.py \
     --base-url http://localhost:8000 \
-    --input data/title_test_cases.csv \
+    --input data/others/title_test_cases.csv \
     --output logs/title_test_results.jsonl
 """
 from __future__ import annotations
@@ -136,7 +136,7 @@ def write_results(path: Path, rows: Iterable[Dict[str, Any]]) -> None:
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Run batch title->category tests.")
     parser.add_argument("--base-url", default="http://localhost:8000", help="API base URL.")
-    parser.add_argument("--input", default="data/title_test_cases.csv", help="CSV file with test cases.")
+    parser.add_argument("--input", default="data/others/title_test_cases.csv", help="CSV file with test cases.")
     parser.add_argument("--output", default="logs/title_test_results.jsonl", help="Where to write results.")
     parser.add_argument("--timeout", type=int, default=30, help="Per-request timeout in seconds.")
     parser.add_argument("--limit", type=int, default=0, help="Limit number of cases (0 = all).")

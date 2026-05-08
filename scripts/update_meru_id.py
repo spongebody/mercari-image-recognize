@@ -1,9 +1,9 @@
 """
-Update meru_id and zenplus_id fields in data/rdx_category.csv.
+Update meru_id and zenplus_id fields in data/others/rdx_category.csv.
 
-  - meru_id   ← suggested_target_id  from data/rakuten_to_mercari.csv
+  - meru_id   ← suggested_target_id  from data/others/rakuten_to_mercari.csv
                  (matched on id == source_id)
-  - zenplus_id ← ZenPlus Category ID from data/Rakuten_ZenPlus_Catetory_Mapping.csv
+  - zenplus_id ← ZenPlus Category ID from data/others/Rakuten_ZenPlus_Catetory_Mapping.csv
                  (matched on id == Rakuten Category ID)
 
 Usage: python scripts/update_meru_id.py
@@ -14,9 +14,10 @@ import sys
 from pathlib import Path
 
 BASE_DIR = Path(__file__).parent.parent
-RDX_CSV  = BASE_DIR / "data" / "rdx_category.csv"
-RAK_CSV  = BASE_DIR / "data" / "rakuten_to_mercari.csv"
-ZP_CSV   = BASE_DIR / "data" / "Rakuten_ZenPlus_Catetory_Mapping.csv"
+DATA_OTHERS_DIR = BASE_DIR / "data" / "others"
+RDX_CSV  = DATA_OTHERS_DIR / "rdx_category.csv"
+RAK_CSV  = DATA_OTHERS_DIR / "rakuten_to_mercari.csv"
+ZP_CSV   = DATA_OTHERS_DIR / "Rakuten_ZenPlus_Catetory_Mapping.csv"
 
 
 def load_meru_mapping(csv_path: Path) -> dict[str, str]:

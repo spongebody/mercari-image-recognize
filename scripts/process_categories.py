@@ -1,9 +1,11 @@
+from pathlib import Path
+
 import pandas as pd
-from collections import Counter
 
 # 读取CSV文件
-input_file = '/Users/youbo/Desktop/remote-jobs/image-recognize/data/category.csv'
-output_file = '/Users/youbo/Desktop/remote-jobs/image-recognize/data/category_updated.csv'
+BASE_DIR = Path(__file__).resolve().parent.parent
+input_file = BASE_DIR / "data" / "others" / "category.csv"
+output_file = BASE_DIR / "data" / "others" / "category_updated.csv"
 
 # 读取数据
 df = pd.read_csv(input_file)

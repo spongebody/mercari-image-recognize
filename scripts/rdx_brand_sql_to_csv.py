@@ -1,5 +1,5 @@
 """
-Convert rdx_brand.sql INSERT data to rdx_brand.csv
+Convert rdx_brand.sql INSERT data to data/others/rdx_brand.csv
 Usage: python scripts/rdx_brand_sql_to_csv.py [path/to/rdx_brand.sql]
 """
 
@@ -12,7 +12,7 @@ DEFAULT_SQL_PATH = Path.home() / (
     "Library/Containers/com.tencent.xinWeChat/Data/Documents/"
     "xwechat_files/wxid_uc27rz9y5s6f22_6089/temp/drag/rdx_brand.sql"
 )
-OUTPUT_CSV = Path(__file__).parent.parent / "data" / "rdx_brand.csv"
+OUTPUT_CSV = Path(__file__).parent.parent / "data" / "others" / "rdx_brand.csv"
 
 COLUMNS = [
     "id", "admin_id", "name_jp", "name_en", "name_kana", "name_cn",

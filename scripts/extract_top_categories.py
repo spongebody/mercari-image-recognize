@@ -1,7 +1,7 @@
 import csv
 from collections import Counter
 
-csv_path = "data/rdx_category.csv"
+csv_path = "data/others/rdx_category.csv"
 
 top_categories = []
 

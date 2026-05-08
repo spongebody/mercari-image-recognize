@@ -14,7 +14,7 @@ import requests
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-DATA_DIR = ROOT_DIR / "data"
+DATA_DIR = ROOT_DIR / "data" / "others"
 DEFAULT_IMAGE_FILES = ["lv.jpg", "test.png"]
 
 
@@ -242,11 +242,11 @@ def main() -> int:
         image_paths = [DATA_DIR / name for name in DEFAULT_IMAGE_FILES]
         images = load_images(image_paths)
         if not images:
-            raise RuntimeError("No test images found under data/.")
+            raise RuntimeError("No test images found under data/others/.")
 
         titles = load_titles(DATA_DIR / "title_test_cases.csv", args.title_limit)
         if not titles:
-            raise RuntimeError("No title test cases found under data/title_test_cases.csv.")
+            raise RuntimeError("No title test cases found under data/others/title_test_cases.csv.")
 
         image_tasks = [images[i % len(images)] for i in range(max(0, args.image_requests))]
         title_tasks = [titles[i % len(titles)] for i in range(max(0, args.title_requests))]

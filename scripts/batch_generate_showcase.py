@@ -22,8 +22,8 @@ from main import app  # noqa: E402
 
 
 SUPPORTED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
-DEFAULT_INPUT_DIR = REPO_ROOT / "data" / "showcase_test_images"
-DEFAULT_OUTPUT_DIR = REPO_ROOT / "data" / "showcase_output"
+DEFAULT_INPUT_DIR = REPO_ROOT / "data" / "others" / "showcase_test_images"
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "data" / "others" / "showcase_output"
 
 
 @dataclass

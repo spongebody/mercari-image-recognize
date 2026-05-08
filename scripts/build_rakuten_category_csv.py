@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build a legacy-compatible Rakuten category CSV from data/rdx_category.csv.
+Build a legacy-compatible Rakuten category CSV from data/others/rdx_category.csv.
 
 Output columns:
   - category_id: Rakuten category id
@@ -19,7 +19,7 @@ from pathlib import Path
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_INPUT = BASE_DIR / "data" / "rdx_category.csv"
+DEFAULT_INPUT = BASE_DIR / "data" / "others" / "rdx_category.csv"
 DEFAULT_OUTPUT = BASE_DIR / "data" / "category_rakuten.csv"
 OUTPUT_FIELDS = ["category_id", "path", "group_name", "meru_id", "rakuma_id", "zenplus_id"]
 
