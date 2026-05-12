@@ -85,6 +85,7 @@ DESCRIPTION_SECTION_KEYS = {
         "検索用キーワード",
     ),
 }
+MIN_PRODUCT_TITLE_CHARS = 80
 
 
 def _language_label(language: str) -> str:
@@ -290,6 +291,102 @@ def _description_to_text(description: Any) -> str:
     return compress_whitespace(_stringify_value(description))
 
 
+def _title_snippet(value: Any, max_chars: int = 60) -> str:
+    text = compress_whitespace(_stringify_value(value))
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars].rstrip(" 、,.;；。")
+
+
+def _extend_title_to_minimum(
+    title: str,
+    *,
+    description: Dict[str, Any],
+    brand_name: str = "",
+    brand_raw: str = "",
+    language: str = DEFAULT_LANGUAGE,
+    min_chars: int = MIN_PRODUCT_TITLE_CHARS,
+) -> str:
+    title_clean = _clean_string(title)
+    if len(title_clean) >= min_chars:
+        return title_clean
+
+    parts: List[str] = []
+    details = description.get("product_details") if isinstance(description, dict) else {}
+    if not isinstance(details, dict):
+        details = {}
+
+    for value in (
+        brand_name,
+        brand_raw,
+        details.get("brand"),
+        details.get("product_name"),
+        details.get("model_number"),
+        details.get("target"),
+        details.get("color"),
+        details.get("size"),
+        details.get("weight"),
+        details.get("condition"),
+    ):
+        part = _title_snippet(value)
+        if part:
+            parts.append(part)
+
+    keywords = description.get("search_keywords") if isinstance(description, dict) else []
+    if isinstance(keywords, list):
+        parts.extend(_title_snippet(item, max_chars=30) for item in keywords)
+
+    if isinstance(description, dict):
+        parts.append(_title_snippet(description.get("product_intro"), max_chars=50))
+        parts.append(_title_snippet(description.get("recommendation"), max_chars=50))
+
+    generic_parts_by_language = {
+        "ja": [
+            "画像確認商品",
+            "ブランド カラー 型番 サイズ 状態 情報入り",
+            "メルカリ出品向け詳細タイトル",
+            "写真から確認できる特徴を反映",
+            "商品説明と合わせて確認しやすい出品タイトル",
+        ],
+        "zh": [
+            "图片识别商品",
+            "品牌 颜色 型号 尺寸 成色 信息补充",
+            "适合商品发布的详细标题",
+            "结合图片可确认特征",
+            "便于买家检索和理解的发布标题",
+        ],
+        "en": [
+            "image verified item",
+            "brand color model size condition details included",
+            "marketplace listing title",
+            "visible product features reflected",
+            "buyer friendly searchable listing title",
+        ],
+    }
+    parts.extend(generic_parts_by_language.get(language, generic_parts_by_language["ja"]))
+
+    seen = {title_clean.casefold()} if title_clean else set()
+    title_parts = [title_clean] if title_clean else []
+    for part in parts:
+        cleaned = _clean_string(part)
+        if not cleaned:
+            continue
+        key = cleaned.casefold()
+        if key in seen or (title_clean and cleaned in title_clean):
+            continue
+        title_parts.append(cleaned)
+        seen.add(key)
+        candidate = _clean_string(" ".join(title_parts))
+        if len(candidate) >= min_chars:
+            return candidate
+
+    candidate = _clean_string(" ".join(title_parts))
+    filler = generic_parts_by_language.get(language, generic_parts_by_language["ja"])[-1]
+    while len(candidate) < min_chars:
+        candidate = _clean_string(f"{candidate} {filler}" if candidate else filler)
+    return candidate
+
+
 def _paths_from_categories(
     categories: List[Dict[str, str]],
     include_alternatives: bool = True,
@@ -457,13 +554,21 @@ class MercariAnalyzer:
         )
 
         brand_raw = _clean_string(ai_raw.get("brand_name", ""))
+        description_struct = _normalize_description(ai_raw.get("description"))
         brand_match = self.brand_store.match(brand_raw)
         brand_name = brand_match["brand_name"] if brand_match else ""
         brand_id_obj = dict(brand_match["brand_id_obj"]) if brand_match else empty_brand_id_obj()
+        title = _extend_title_to_minimum(
+            ai_raw.get("title", ""),
+            description=description_struct,
+            brand_name=brand_name,
+            brand_raw=brand_raw,
+            language=language,
+        )
 
         result: Dict[str, Any] = {
-            "title": _clean_string(ai_raw.get("title", "")),
-            "description": _normalize_description(ai_raw.get("description")),
+            "title": title,
+            "description": description_struct,
             "brand_name": brand_name,
             "brand_id_obj": brand_id_obj,
             "timings": {
@@ -541,6 +646,14 @@ class MercariAnalyzer:
             )
             attempts_by_stage["category"] = category_attempts
             category_ms = round((time.monotonic() - category_started) * 1000, 2)
+
+        title = _extend_title_to_minimum(
+            title,
+            description=description_struct,
+            brand_name=brand_name,
+            brand_raw=brand_raw,
+            language=language,
+        )
 
         result: Dict[str, Any] = {
             "title": title,

@@ -223,7 +223,8 @@ class ProductDataFallbackChainTest(unittest.TestCase):
         models_called = [call["model"] for call in vision_client.calls]
         self.assertEqual(models_called[0], "explicit-fallback-model")
         self.assertEqual(models_called[1], "chain-model-a")
-        self.assertEqual(result["title"], "ok-from-chain")
+        self.assertTrue(result["title"].startswith("ok-from-chain"))
+        self.assertGreaterEqual(len(result["title"]), 80)
 
     def test_primary_chain_includes_explicit_fallback_first(self):
         """Primary product-data path should fall back to the explicit fallback model first.
@@ -248,7 +249,8 @@ class ProductDataFallbackChainTest(unittest.TestCase):
         models_called = [call["model"] for call in vision_client.calls]
         self.assertEqual(models_called[0], "primary-product-data")
         self.assertEqual(models_called[1], "explicit-fallback-model")
-        self.assertEqual(result["title"], "ok-from-explicit-fb")
+        self.assertTrue(result["title"].startswith("ok-from-explicit-fb"))
+        self.assertGreaterEqual(len(result["title"]), 80)
 
 
 if __name__ == "__main__":

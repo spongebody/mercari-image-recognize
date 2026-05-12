@@ -187,6 +187,46 @@ class ParallelFlowServiceTest(unittest.TestCase):
         self.assertEqual(result["brand_id_obj"]["rakuten_brand_id"], "nike-r")
         self.assertEqual(set(result["timings"].keys()), {"product_data_ms"})
 
+    def test_generate_product_data_expands_short_title_to_at_least_80_chars(self):
+        vision_client = RecordingChatClient(
+            {
+                "title": "Nike シャツ",
+                "description": {
+                    "product_details": {
+                        "brand": "Nike",
+                        "product_name": "Dri-FIT トレーニングシャツ",
+                        "model_number": "DV1234-010",
+                        "target": "メンズ",
+                        "color": "ブラック",
+                        "size": "M",
+                        "weight": "",
+                        "condition": "良好",
+                    },
+                    "product_intro": "速乾素材のスポーツウェアです。",
+                    "recommendation": "普段使いにもトレーニングにもおすすめです。",
+                    "search_keywords": ["Nike", "Dri-FIT", "トレーニングシャツ"],
+                },
+                "brand_name": "Nike",
+            }
+        )
+        analyzer = MercariAnalyzer(
+            settings=_settings(),
+            brand_store=FakeBrandStore(),
+            category_store=FakeCategoryStore(),
+            vision_client=vision_client,
+            category_client=SequenceChatClient([]),
+        )
+
+        result = analyzer.generate_product_data(
+            images=[(b"front-image", "image/png")],
+            language="ja",
+        )
+
+        self.assertGreaterEqual(len(result["title"]), 80)
+        self.assertTrue(result["title"].startswith("Nike シャツ"))
+        self.assertIn("DV1234-010", result["title"])
+        self.assertIn("ブラック", result["title"])
+
     def test_generate_product_data_supports_model_override_for_fallback(self):
         vision_client = RecordingChatClient(
             {

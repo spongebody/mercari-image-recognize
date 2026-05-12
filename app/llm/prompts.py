@@ -171,7 +171,7 @@ PRODUCT_DATA_SYSTEM_PROMPT = """You are an assistant helping sellers list items 
 Given one or more images of the same product, inspect every image independently, then merge the evidence into one product listing payload.
 
 Generate:
-1. A short, clear, buyer-friendly title suitable for a Japanese marketplace listing.
+1. A clear, buyer-friendly title suitable for a Japanese marketplace listing. It MUST be at least 80 characters. If the concise product name is shorter, extend it with verified brand, model number, color, size, target user, condition, material, and other visible attributes.
 2. A structured description object in JSON format with ENGLISH field names only:
    - product_details: object with brand, product_name, model_number, target, color, size, weight, condition. Keep every field and use "" when unknown.
    - product_intro: professional product introduction based on brand/model/type, functions, features, advantages, usage scenarios, and included items.
@@ -184,6 +184,7 @@ Do not return any price fields. Do not infer prices. Do not use web search or br
 IMPORTANT:
 - Use the requested language for title and all description text.
 - Use information from all images, especially the first two images.
+- The title must be at least 80 characters; prefer verified product attributes over generic wording.
 - If you are not sure about the brand, do not guess; return "".
 
 You must respond with pure JSON only, without explanations, markdown, or comments.
@@ -236,7 +237,7 @@ You are the FALLBACK pipeline: the primary model has been slow or unavailable, s
 Given one or more images of the same product, inspect every image independently, then merge the evidence into one product listing payload.
 
 Generate:
-1. title — a short, clear, buyer-friendly listing title suitable for a Japanese marketplace. Use the language requested by the user. Aim for ~20–35 characters in Japanese, ~6–12 words otherwise. Keep brand/model/key attribute up front.
+1. title — a clear, buyer-friendly listing title suitable for a Japanese marketplace. Use the language requested by the user. It MUST be at least 80 characters. Keep brand/model/key attribute up front, then extend with verified color, size, target user, condition, material, included items, and other visible attributes.
 2. description — a JSON object with the following fields (English keys only):
    - product_details: object with brand, product_name, model_number, target, color, size, weight, condition. Every field MUST be present; use "" if unknown. Do NOT guess values. Be specific and concise (e.g., "Apple", "Magic Keyboard", "A1843", "Unisex", "Silver / White", "W41.89cm x D11.49cm x H1.09cm", "390g", "Used – minor wear").
    - product_intro: a multi-paragraph professional introduction. REQUIREMENTS:
@@ -253,6 +254,7 @@ Do NOT return any price fields. Do NOT infer prices. Do NOT use web search or br
 
 QUALITY CHECKLIST before responding:
 - Did you populate every product_details field (using "" only when truly unknown)?
+- Is the title at least 80 characters and based on visible or otherwise verified attributes?
 - Is product_intro 3–5 paragraphs and within the length target?
 - Are recommendation lines benefit-driven, not generic?
 - Does search_keywords contain 8–15 distinct, relevant entries with no leading "#"?
@@ -294,6 +296,7 @@ Multi-image requirements:
 
 Description requirements (must follow):
 - product_details: include every required field; use "" when unknown.
+- title: at least 80 characters; use verified brand, model, color, size, condition, and visible feature details to extend it when needed.
 - product_intro: 3–5 paragraphs separated by "\\n\\n"; cover overview, key features, advantages, usage scenarios, included items / compatibility. Ground claims in the images.
 - recommendation: 2–3 short benefit-driven lines separated by "\\n".
 - search_keywords: 8–15 distinct strings, no leading "#".
