@@ -318,10 +318,84 @@ files.forEach((file) => {
   ```
 
   字段约束：
-  - `stage` ∈ `"fast_vision"`, `"product_data"`, `"vision"`, `"category"`, `"title_category"`。
+  - `stage` ∈ `"fast_vision"`, `"product_data"`, `"product_data_regeneration"`, `"vision"`, `"category"`, `"title_category"`。
   - `kind` 当前固定为 `"all_attempts_failed"`，保留供未来扩展。
   - `attempts[].error_kind` ∈ `"request_failed"`, `"parse_failed"`, `"budget_exhausted"`。
   - `attempts[].status_code` 在 `parse_failed` 时为 200；`request_failed` 时尽力从上游消息中解析整数 HTTP 状态码，否则 `null`。
+- `500`：内部错误，`detail` 为字符串。
+
+### POST /api/v1/mercari/product-data/regenerate
+根据商品图片、可选原始商品数据、可选用户补充信息，重新生成商品数据。适用于用户对首次生成结果不满意后补充成色、关键词、同款信息、材质说明等内容再生成。
+
+#### 请求（multipart/form-data）
+字段：
+- `image_list`（文件，必填，可多次上传）：商品图片列表，校验和压缩逻辑与 `/api/v1/mercari/image/analyze` 相同。
+- `language`（字符串，可选）：`ja` / `en` / `zh`，默认 `ja`。
+- `original_product_data`（字符串，可选）：原始商品数据 JSON 字符串，必须是 JSON object。
+- `user_notes`（字符串，可选）：用户补充信息。生成时优先级最高。
+- `debug`（字符串，可选）：`true` / `1` / `yes` 等，默认 `false`。
+
+优先级：
+1. 如果提供 `user_notes`，模型优先使用用户补充信息。
+2. 如果没有 `user_notes` 但有 `original_product_data`，模型基于原始商品数据和图片进行优化。
+3. 如果两者都没有，模型深入分析图片并生成新的商品数据。
+
+示例：
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/mercari/product-data/regenerate" \
+  -F "image_list=@/path/to/item_front.jpg" \
+  -F "image_list=@/path/to/item_back.jpg" \
+  -F "language=ja" \
+  -F 'original_product_data={"title":"古いタイトル","brand_name":"Nike"}' \
+  -F "user_notes=成色は目立つ傷なし。明らか同款。"
+```
+
+#### 响应（200）
+
+```json
+{
+  "title": "...",
+  "description": {
+    "product_details": {
+      "brand": "...",
+      "product_name": "...",
+      "model_number": "...",
+      "target": "...",
+      "color": "...",
+      "size": "...",
+      "weight": "...",
+      "condition": "..."
+    },
+    "product_intro": "...",
+    "recommendation": "...",
+    "search_keywords": ["..."]
+  },
+  "brand_name": "...",
+  "brand_id_obj": {
+    "rakuten_brand_id": "...",
+    "yshop_brand_id": "...",
+    "yauc_brand_id": "...",
+    "meru_brand_id": "...",
+    "ebay_brand_id": "...",
+    "rakuma_brand_id": "...",
+    "amazon_brand_id": "...",
+    "qoo10_brand_id": "..."
+  },
+  "timings": {
+    "product_data_ms": 1200.34
+  }
+}
+```
+
+说明：
+- 标题会通过模型 prompt 和服务端兜底保证至少 80 个字符。
+- 响应不包含价格字段，也不会重新分类。
+- `brand_id_obj` 来自品牌 CSV 匹配；未匹配时各平台品牌 ID 为空字符串。
+
+#### 错误
+- `400`：请求无效（图片格式/大小、语言、`original_product_data` JSON 格式错误）。`detail` 为字符串。
+- `502`：LLM 链路全部尝试失败。`detail` 为结构化对象，schema 与 image/analyze 接口一致；`stage` 为 `"product_data_regeneration"`。
 - `500`：内部错误，`detail` 为字符串。
 
 ### POST /api/v1/mercari/title/analyze

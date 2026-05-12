@@ -266,6 +266,56 @@ class ParallelFlowServiceTest(unittest.TestCase):
         self.assertEqual(vision_client.calls[0]["model"], "openai/gpt-4o-mini")
         self.assertEqual(result["brand_name"], "Nike")
 
+    def test_regenerate_product_data_prioritizes_user_notes_and_original_data(self):
+        vision_client = RecordingChatClient(
+            {
+                "title": "Nike Dri-FIT ブラック M 良好 トレーニング向け 速乾 スポーツウェア",
+                "description": {
+                    "product_details": {
+                        "brand": "Nike",
+                        "product_name": "Dri-FIT トレーニングシャツ",
+                        "model_number": "DV1234-010",
+                        "target": "メンズ",
+                        "color": "ブラック",
+                        "size": "M",
+                        "weight": "",
+                        "condition": "目立つ傷なし",
+                    },
+                    "product_intro": "ユーザー補足を反映した商品紹介です。",
+                    "recommendation": "同款を探している方におすすめです。",
+                    "search_keywords": ["Nike", "Dri-FIT", "明らか同款", "イタリア真皮"],
+                },
+                "brand_name": "Nike",
+            }
+        )
+        analyzer = MercariAnalyzer(
+            settings=_settings(),
+            brand_store=FakeBrandStore(),
+            category_store=FakeCategoryStore(),
+            vision_client=vision_client,
+            category_client=SequenceChatClient([]),
+        )
+
+        result = analyzer.regenerate_product_data(
+            images=[(b"front-image", "image/png")],
+            language="ja",
+            original_product_data={
+                "title": "古いタイトル",
+                "description": {"product_details": {"condition": "傷あり"}},
+                "brand_name": "Nike",
+            },
+            user_notes="成色は目立つ傷なし。明らか同款。イタリア真皮という説明を優先。",
+        )
+
+        prompt_text = vision_client.calls[0]["messages"][1]["content"][0]["text"]
+        self.assertIn("User supplemental information", prompt_text)
+        self.assertIn("成色は目立つ傷なし", prompt_text)
+        self.assertIn("Original product data", prompt_text)
+        self.assertIn("古いタイトル", prompt_text)
+        self.assertEqual(vision_client.calls[0]["model"], "product-data-test")
+        self.assertGreaterEqual(len(result["title"]), 80)
+        self.assertEqual(result["brand_name"], "Nike")
+
 
 if __name__ == "__main__":
     unittest.main()

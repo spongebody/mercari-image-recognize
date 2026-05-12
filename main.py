@@ -1,3 +1,4 @@
+import json
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -321,6 +322,78 @@ def _job_payload(
     return payload
 
 
+async def _prepare_image_payloads(
+    image_list: List[UploadFile],
+) -> Tuple[List[Tuple[bytes, str]], List[Dict[str, Any]]]:
+    if not image_list:
+        raise HTTPException(status_code=400, detail="Image files are required.")
+
+    image_payloads: List[Tuple[bytes, str]] = []
+    image_processing = []
+    for index, image in enumerate(image_list, start=1):
+        if not image:
+            raise HTTPException(
+                status_code=400, detail=f"Image file is required (index {index})."
+            )
+
+        if image.content_type not in settings.allowed_mime_types:
+            raise HTTPException(
+                status_code=400, detail=f"Unsupported image type (index {index})."
+            )
+
+        try:
+            data = await image.read()
+        except Exception:
+            raise HTTPException(
+                status_code=400, detail=f"Failed to read uploaded file (index {index})."
+            )
+
+        if not data:
+            raise HTTPException(
+                status_code=400, detail=f"Uploaded image is empty (index {index})."
+            )
+
+        if len(data) > settings.max_image_bytes:
+            raise HTTPException(
+                status_code=400, detail=f"Image is too large (index {index})."
+            )
+
+        processed = compress_image_if_needed(
+            image_bytes=data,
+            mime_type=image.content_type or "application/octet-stream",
+            threshold_bytes=settings.image_compression_threshold_bytes,
+        )
+        image_payloads.append((processed.data, processed.mime_type))
+        image_processing.append(
+            {
+                "index": index,
+                "filename": image.filename or "",
+                "compressed": processed.compressed,
+                "original_bytes": processed.original_bytes,
+                "processed_bytes": processed.processed_bytes,
+            }
+        )
+    return image_payloads, image_processing
+
+
+def _parse_original_product_data(raw: Optional[str]) -> Optional[Dict[str, Any]]:
+    if raw is None or not raw.strip():
+        return None
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="original_product_data must be valid JSON.",
+        ) from exc
+    if not isinstance(parsed, dict):
+        raise HTTPException(
+            status_code=400,
+            detail="original_product_data must be a JSON object.",
+        )
+    return parsed
+
+
 @app.get("/config", response_class=HTMLResponse)
 def config_page() -> HTMLResponse:
     try:
@@ -400,55 +473,7 @@ async def analyze_image(
     vision_model: str = Form(None),
     category_model: str = Form(None),
 ):
-    if not image_list:
-        raise HTTPException(status_code=400, detail="Image files are required.")
-
-    image_list = image_list
-    image_payloads: List[Tuple[bytes, str]] = []
-    image_processing = []
-    for index, image in enumerate(image_list, start=1):
-        if not image:
-            raise HTTPException(
-                status_code=400, detail=f"Image file is required (index {index})."
-            )
-
-        if image.content_type not in settings.allowed_mime_types:
-            raise HTTPException(
-                status_code=400, detail=f"Unsupported image type (index {index})."
-            )
-
-        try:
-            data = await image.read()
-        except Exception:
-            raise HTTPException(
-                status_code=400, detail=f"Failed to read uploaded file (index {index})."
-            )
-
-        if not data:
-            raise HTTPException(
-                status_code=400, detail=f"Uploaded image is empty (index {index})."
-            )
-
-        if len(data) > settings.max_image_bytes:
-            raise HTTPException(
-                status_code=400, detail=f"Image is too large (index {index})."
-            )
-
-        processed = compress_image_if_needed(
-            image_bytes=data,
-            mime_type=image.content_type or "application/octet-stream",
-            threshold_bytes=settings.image_compression_threshold_bytes,
-        )
-        image_payloads.append((processed.data, processed.mime_type))
-        image_processing.append(
-            {
-                "index": index,
-                "filename": image.filename or "",
-                "compressed": processed.compressed,
-                "original_bytes": processed.original_bytes,
-                "processed_bytes": processed.processed_bytes,
-            }
-        )
+    image_payloads, image_processing = await _prepare_image_payloads(image_list)
 
     language = language or DEFAULT_LANGUAGE
     if language not in SUPPORTED_LANGUAGES:
@@ -511,6 +536,42 @@ async def analyze_image(
             fallback_future=fallback_future,
             started_at=primary_submitted_at,
             fallback_timeout=fallback_timeout,
+        )
+    except BadRequestError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except LLMAllAttemptsFailedError as exc:
+        raise HTTPException(status_code=502, detail=_format_attempts_error(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Internal server error.") from exc
+
+    return JSONResponse(result)
+
+
+@app.post("/api/v1/mercari/product-data/regenerate")
+async def regenerate_product_data(
+    image_list: List[UploadFile] = File(...),
+    language: str = Form(DEFAULT_LANGUAGE),
+    original_product_data: Optional[str] = Form(default=None),
+    user_notes: Optional[str] = Form(default=None),
+    debug: str = Form("false"),
+):
+    image_payloads, _image_processing = await _prepare_image_payloads(image_list)
+
+    language = language or DEFAULT_LANGUAGE
+    if language not in SUPPORTED_LANGUAGES:
+        raise HTTPException(status_code=400, detail="Invalid language.")
+
+    original_payload = _parse_original_product_data(original_product_data)
+    debug_enabled = settings.enable_debug_param and parse_bool_param(debug, False)
+
+    try:
+        result = await run_in_threadpool(
+            analyzer.regenerate_product_data,
+            images=image_payloads,
+            language=language,
+            original_product_data=original_payload,
+            user_notes=user_notes or "",
+            debug=debug_enabled,
         )
     except BadRequestError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

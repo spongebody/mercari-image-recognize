@@ -546,6 +546,51 @@
         margin-bottom: 12px;
       }
 
+      .regenerate-panel {
+        margin-top: 18px;
+        padding-top: 18px;
+        border-top: 1px solid var(--border);
+        display: grid;
+        gap: 12px;
+      }
+
+      .regenerate-panel textarea {
+        width: 100%;
+        min-height: 72px;
+        resize: vertical;
+        font-family: inherit;
+        font-size: 13px;
+        line-height: 1.5;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px 12px;
+        background: #fff;
+        color: var(--text);
+        display: block;
+        margin-top: 4px;
+      }
+
+      .regenerate-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 2px;
+      }
+
+      .regenerate-actions button {
+        width: auto;
+      }
+
+      .regenerate-message {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .regenerate-message.error {
+        color: var(--danger);
+      }
+
       .field-group {
         margin-bottom: 16px;
       }
@@ -1320,6 +1365,13 @@
           productDataSourceLabel: "商品数据来源",
           productDataSourcePrimary: "主模型",
           productDataSourceFallback: "保底模型",
+          regenerateNotesLabel: "重新生成补充信息",
+          regenerateNotesPlaceholder: "例如：成色为目立つ傷なし、明らか同款、意大利真皮、关键词等",
+          regenerateButton: "重新生成商品数据",
+          regeneratingButton: "重新生成中...",
+          regenerateSuccess: "已更新商品数据",
+          regenerateError: "重新生成失败",
+          regenerateNoFiles: "缺少原始上传图片，无法重新生成",
           fieldTitle: "📝 标题",
           fieldDescription: "📄 描述",
           descSectionDetails: "商品详情",
@@ -1477,6 +1529,13 @@
           productDataSourceLabel: "商品データのソース",
           productDataSourcePrimary: "メインモデル",
           productDataSourceFallback: "フォールバックモデル",
+          regenerateNotesLabel: "再生成用の補足情報",
+          regenerateNotesPlaceholder: "例：状態は目立つ傷なし、明らか同款、イタリア本革、検索キーワードなど",
+          regenerateButton: "商品データを再生成",
+          regeneratingButton: "再生成中...",
+          regenerateSuccess: "商品データを更新しました",
+          regenerateError: "再生成に失敗しました",
+          regenerateNoFiles: "元のアップロード画像がないため再生成できません",
           fieldTitle: "📝 タイトル",
           fieldDescription: "📄 説明",
           descSectionDetails: "商品詳細",
@@ -2447,7 +2506,6 @@
         
         testResults = [];
         resultsList.innerHTML = "";
-        
         processing = true;
         submitBtn.disabled = true;
         buttonText.innerHTML = `<span class="spinner"></span> ${t("processingButton")}`;
@@ -2611,6 +2669,82 @@
         }
       }
 
+      function hasRegeneratableProductData(payload) {
+        const data = payload?.data || payload || {};
+        return Boolean(data && (data.title || data.description || data.brand_name));
+      }
+
+      function buildOriginalProductData(payload) {
+        const data = payload?.data || payload || {};
+        const original = {};
+        if (data.title) original.title = data.title;
+        if (data.description) original.description = data.description;
+        if (data.brand_name) original.brand_name = data.brand_name;
+        if (data.brand_id_obj) original.brand_id_obj = data.brand_id_obj;
+        return original;
+      }
+
+      function buildRegenerateEndpoint() {
+        const endpoint = (apiInput.value.trim() || "/api/v1/mercari/image/analyze").replace(/\/$/, "");
+        if (endpoint.includes("/api/v1/mercari/image/analyze")) {
+          return endpoint.replace("/api/v1/mercari/image/analyze", "/api/v1/mercari/product-data/regenerate");
+        }
+        return "/api/v1/mercari/product-data/regenerate";
+      }
+
+      function mergeRegeneratedProductData(currentPayload, regeneratedPayload) {
+        const current = currentPayload?.data || currentPayload || {};
+        const regenerated = regeneratedPayload?.data || regeneratedPayload || {};
+        const merged = {
+          ...current,
+          title: regenerated.title,
+          description: regenerated.description,
+          brand_name: regenerated.brand_name,
+          brand_id_obj: regenerated.brand_id_obj,
+        };
+        if (current.status) merged.status = current.status;
+        if (current.timings || regenerated.timings) {
+          merged.timings = {
+            ...(current.timings || {}),
+            ...(regenerated.timings || {}),
+          };
+        }
+        if (regenerated._debug) {
+          merged._debug = {
+            ...(current._debug || {}),
+            ...regenerated._debug,
+          };
+        }
+        return merged;
+      }
+
+      function buildRegeneratePanel(entry) {
+        if (!entry.success || !hasRegeneratableProductData(entry.payload)) return "";
+        const notes = entry.regenerateNotes || "";
+        const message = entry.regenerateMessage
+          ? `<span class="regenerate-message">${escapeHtml(entry.regenerateMessage)}</span>`
+          : "";
+        const error = entry.regenerateError
+          ? `<span class="regenerate-message error">${escapeHtml(entry.regenerateError)}</span>`
+          : "";
+        return `
+          <div class="regenerate-panel">
+            <label class="field-label" for="regen-notes-${entry.resultId}">${t("regenerateNotesLabel")}</label>
+            <textarea
+              id="regen-notes-${entry.resultId}"
+              placeholder="${escapeForAttr(t("regenerateNotesPlaceholder"))}"
+              oninput="setRegenerateNotes('${entry.resultId}', this.value)"
+            >${escapeHtml(notes)}</textarea>
+            <div class="regenerate-actions">
+              <button type="button" class="secondary" onclick="regenerateProductData('${entry.resultId}')" ${entry.regenerating ? "disabled" : ""}>
+                ${entry.regenerating ? `<span class="spinner"></span> ${t("regeneratingButton")}` : t("regenerateButton")}
+              </button>
+              ${error || message}
+            </div>
+          </div>
+        `;
+      }
+
       function buildResultCard(entry) {
         const { fileObj, payload, success, resultId } = entry;
         const card = document.createElement("div");
@@ -2647,6 +2781,8 @@
           <div class="result-structured">
             ${structuredData}
           </div>
+
+          ${buildRegeneratePanel(entry)}
           
           <button class="toggle-json" data-toggle-for="${resultId}" onclick="toggleJson('${resultId}', event)">
             <span>📋</span>
@@ -2721,6 +2857,72 @@
         entry.success = success;
         renderResults();
       }
+
+      window.setRegenerateNotes = function(resultId, value) {
+        const entry = testResults.find((item) => item.resultId === resultId);
+        if (!entry) return;
+        entry.regenerateNotes = value;
+      };
+
+      window.regenerateProductData = async function(resultId) {
+        const entry = testResults.find((item) => item.resultId === resultId);
+        if (!entry) return;
+        const fileItems = Array.isArray(entry.fileObj?._files) ? entry.fileObj._files : [];
+        const uploadFiles = fileItems.map((item) => item.file).filter(Boolean);
+        if (!uploadFiles.length && entry.fileObj?.file instanceof File) {
+          uploadFiles.push(entry.fileObj.file);
+        }
+        if (!uploadFiles.length) {
+          entry.regenerateError = t("regenerateNoFiles");
+          entry.regenerateMessage = "";
+          renderResults();
+          return;
+        }
+
+        entry.regenerating = true;
+        entry.regenerateError = "";
+        entry.regenerateMessage = "";
+        renderResults();
+
+        const formData = new FormData();
+        uploadFiles.forEach((file) => {
+          formData.append("image_list", file);
+        });
+        formData.append("language", languageSelect.value || "ja");
+        formData.append("original_product_data", JSON.stringify(buildOriginalProductData(entry.payload)));
+        const notes = entry.regenerateNotes || "";
+        if (notes.trim()) {
+          formData.append("user_notes", notes.trim());
+        }
+
+        try {
+          const resp = await fetch(buildRegenerateEndpoint(), {
+            method: "POST",
+            body: formData,
+          });
+          const text = await resp.text();
+          let payload;
+          try {
+            payload = JSON.parse(text);
+          } catch (err) {
+            payload = { error: t("jsonParseFailed"), raw: text };
+          }
+
+          if (!resp.ok) {
+            const message = payload?.detail?.message || payload?.detail || payload?.error || `HTTP ${resp.status}`;
+            throw new Error(String(message));
+          }
+
+          entry.payload = mergeRegeneratedProductData(entry.payload, payload);
+          entry.success = true;
+          entry.regenerateMessage = t("regenerateSuccess");
+        } catch (err) {
+          entry.regenerateError = `${t("regenerateError")}: ${String(err?.message || err)}`;
+        } finally {
+          entry.regenerating = false;
+          renderResults();
+        }
+      };
 
       // 切换 JSON 显示
       window.toggleJson = function(resultId, ev) {

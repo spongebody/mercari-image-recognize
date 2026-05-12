@@ -20,6 +20,8 @@ from .llm.prompts import (
     FAST_CLASSIFICATION_USER_PROMPT,
     PRODUCT_DATA_FALLBACK_SYSTEM_PROMPT,
     PRODUCT_DATA_FALLBACK_USER_PROMPT,
+    PRODUCT_DATA_REGENERATION_SYSTEM_PROMPT,
+    PRODUCT_DATA_REGENERATION_USER_PROMPT,
     PRODUCT_DATA_SYSTEM_PROMPT,
     PRODUCT_DATA_USER_PROMPT,
     PRODUCT_TITLE_CATEGORY_SYSTEM_PROMPT,
@@ -387,6 +389,12 @@ def _extend_title_to_minimum(
     return candidate
 
 
+def _product_data_context_json(value: Optional[Dict[str, Any]]) -> str:
+    if not value:
+        return "(none)"
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2)
+
+
 def _paths_from_categories(
     categories: List[Dict[str, str]],
     include_alternatives: bool = True,
@@ -580,6 +588,65 @@ class MercariAnalyzer:
                 "product_data_ai_raw": ai_raw,
                 "product_data_ai_full": ai_full,
                 "attempts": {"product_data": [a.__dict__ for a in attempts]},
+            }
+        return result
+
+    def regenerate_product_data(
+        self,
+        images: List[Tuple[bytes, str]],
+        language: str,
+        original_product_data: Optional[Dict[str, Any]] = None,
+        user_notes: str = "",
+        debug: bool = False,
+        model_override: Optional[str] = None,
+        started_at: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        if language not in SUPPORTED_LANGUAGES:
+            raise BadRequestError("Unsupported language.")
+        if not images:
+            raise BadRequestError("Image list is required.")
+        started = float(started_at) if started_at is not None else time.monotonic()
+        data_urls = [
+            image_bytes_to_data_url(image_bytes, mime_type)
+            for image_bytes, mime_type in images
+        ]
+        ai_raw, ai_full, attempts = self._call_product_data_regeneration_llm(
+            data_urls,
+            language,
+            original_product_data=original_product_data,
+            user_notes=user_notes,
+            model_override=model_override,
+        )
+
+        brand_raw = _clean_string(ai_raw.get("brand_name", ""))
+        description_struct = _normalize_description(ai_raw.get("description"))
+        brand_match = self.brand_store.match(brand_raw)
+        brand_name = brand_match["brand_name"] if brand_match else ""
+        brand_id_obj = dict(brand_match["brand_id_obj"]) if brand_match else empty_brand_id_obj()
+        title = _extend_title_to_minimum(
+            ai_raw.get("title", ""),
+            description=description_struct,
+            brand_name=brand_name,
+            brand_raw=brand_raw,
+            language=language,
+        )
+
+        result: Dict[str, Any] = {
+            "title": title,
+            "description": description_struct,
+            "brand_name": brand_name,
+            "brand_id_obj": brand_id_obj,
+            "timings": {
+                "product_data_ms": round((time.monotonic() - started) * 1000, 2),
+            },
+        }
+        if debug:
+            result["_debug"] = {
+                "product_data_ai_raw": ai_raw,
+                "product_data_ai_full": ai_full,
+                "attempts": {
+                    "product_data_regeneration": [a.__dict__ for a in attempts]
+                },
             }
         return result
 
@@ -917,6 +984,71 @@ class MercariAnalyzer:
         self._log_raw(f"{stage}_parsed", parsed)
         self._log_raw(f"{stage}_raw_response", raw_response)
         self._log_raw(f"{stage}_attempts", [a.__dict__ for a in attempts])
+        return parsed, raw_response, attempts
+
+    def _call_product_data_regeneration_llm(
+        self,
+        image_data_urls: List[str],
+        language: str,
+        original_product_data: Optional[Dict[str, Any]] = None,
+        user_notes: str = "",
+        model_override: Optional[str] = None,
+    ) -> Tuple[Dict[str, Any], Dict[str, Any], List[AttemptRecord]]:
+        if not image_data_urls:
+            raise BadRequestError("Image list is empty.")
+        user_prompt = PRODUCT_DATA_REGENERATION_USER_PROMPT.format(
+            language_label=_language_label(language),
+            user_notes=_clean_string(user_notes) or "(none)",
+            original_product_data_json=_product_data_context_json(original_product_data),
+        )
+        image_payloads: List[Dict[str, Any]] = []
+        image_count = len(image_data_urls)
+        for index, url in enumerate(image_data_urls, start=1):
+            image_payloads.append(
+                {
+                    "type": "text",
+                    "text": (
+                        f"Image {index} of {image_count}: inspect this image carefully. "
+                        "Extract unique evidence before regenerating the product data."
+                    ),
+                }
+            )
+            image_payloads.append({"type": "image_url", "image_url": {"url": url}})
+        messages = [
+            {"role": "system", "content": PRODUCT_DATA_REGENERATION_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": user_prompt}] + image_payloads,
+            },
+        ]
+        primary = (
+            model_override
+            or getattr(self.settings, "product_data_model", "")
+            or self.settings.vision_model
+        )
+        fallbacks = self._product_data_primary_chain(primary)
+
+        try:
+            parsed, raw_response, attempts = self.vision_caller.call_and_parse(
+                stage="product_data_regeneration",
+                primary_model=primary,
+                fallback_models=fallbacks,
+                messages=messages,
+                temperature=0.2,
+                max_tokens=12000,
+            )
+        except LLMAllAttemptsFailedError as exc:
+            self._log_raw(
+                "product_data_regeneration_attempts",
+                [a.__dict__ for a in exc.attempts],
+            )
+            raise
+        self._log_raw("product_data_regeneration_parsed", parsed)
+        self._log_raw("product_data_regeneration_raw_response", raw_response)
+        self._log_raw(
+            "product_data_regeneration_attempts",
+            [a.__dict__ for a in attempts],
+        )
         return parsed, raw_response, attempts
 
     def _product_data_primary_chain(self, primary_model: str) -> List[str]:

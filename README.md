@@ -137,6 +137,27 @@ API_PORT=8010 UI_PORT=8012 ./run.sh
 - `completed`: 分类结果和商品信息都已合并。
 - `404`: 当前进程内没有这个 job。job 只保存在内存中，默认 TTL 为 `AnalysisJobStore(ttl_seconds=1800)`。
 
+### POST `/api/v1/mercari/product-data/regenerate`
+
+商品数据重新生成接口，接收 `multipart/form-data`：
+
+- `image_list`: 1 张或多张商品图片，字段名固定为 `image_list`，上传校验和压缩逻辑与 `/api/v1/mercari/image/analyze` 相同。
+- `language`: `ja` / `en` / `zh`，默认 `ja`。
+- `original_product_data`: 可选，原始商品数据 JSON 字符串。
+- `user_notes`: 可选，用户补充信息，例如成色、关键词、同款判断、材质描述。
+- `debug`: 可选，`true` 时返回调试信息，前提是 `ENABLE_DEBUG=true`。
+
+完整链路：
+
+1. `main.py` 使用与图片识别接口相同的上传校验和 `compress_image_if_needed` 压缩逻辑。
+2. `main.py` 解析 `original_product_data`，要求它是 JSON object；非法 JSON 返回 `400`。
+3. `MercariAnalyzer.regenerate_product_data` 使用全部图片。
+4. prompt 来自 `PRODUCT_DATA_REGENERATION_SYSTEM_PROMPT` + `PRODUCT_DATA_REGENERATION_USER_PROMPT`。
+5. 生成优先级为：用户补充信息 > 原始商品数据 > 图片深度分析。
+6. OpenRouter 返回 JSON 后，`app/llm/json_parser.py` 解析，`app/service.py` 规范化标题、描述、品牌等字段，并复用标题至少 80 字符的兜底逻辑。
+7. 品牌识别结果会通过 `BrandStore.match` 在品牌 CSV 中匹配，输出 `brand_name` 和 `brand_id_obj`。
+8. 接口同步返回重新生成的商品数据，不重新分类，也不返回价格字段。
+
 ### POST `/api/v1/mercari/title/analyze`
 
 标题分类接口，接收 JSON：
