@@ -247,6 +247,9 @@ files.forEach((file) => {
     }
   ],
   "brand_name": "...",
+  "tax_excluded": null,
+  "tax_included": null,
+  "prices": [1000, 1500, 2000],
   "brand_id_obj": {
     "rakuten_brand_id": "...",
     "yshop_brand_id": "...",
@@ -277,7 +280,9 @@ files.forEach((file) => {
 
 说明：
 - `brand_name` / `brand_id_obj` 只在商品数据完成后返回。
-- 商品数据生成结果不包含 `tax_excluded`、`tax_included`、`prices`。
+- `tax_excluded`、`tax_included`、`prices` 始终存在。初次 `product_pending` 时默认返回 `null` / `null` / `[]`；完成后由商品数据生成链路返回价格。
+- 如果图片中有明确可见的实际商品价格，`tax_excluded` 返回不含税价格整数日元，`tax_included` 返回含税价格整数日元或 `null`，并且 `prices` 为 `[]`。
+- 如果没有明确可见的实际商品价格，`tax_excluded` 和 `tax_included` 为 `null`，`prices` 返回 `[poor, average, good]` 三个按成色升序的参考价格。
 - 由于分类与商品数据在服务端并行执行，完成态 `timings.total_ms = max(classification_ms, product_data_ms)`，反映两个 LLM 链路重叠后的实际耗时；`classification_ms` 表示首接口分类耗时，`product_data_ms` 表示轮询侧商品数据生成耗时。
 - `image_processing` 与首接口保持一致，标记每张图片是否被压缩。
 - `product_data_source` 标识商品数据来自哪个 LLM：`"primary"` 表示主模型（`PRODUCT_DATA_MODEL`），`"fallback"` 表示保底小模型（`PRODUCT_DATA_FALLBACK_MODEL`）。当主模型超过 `PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS` 仍未返回，或主模型失败时，保底模型结果会被采用；`PRODUCT_DATA_FALLBACK_MODEL` 留空可关闭保底。

@@ -89,6 +89,14 @@ showcase_service = ShowcaseService(
     timezone_name=settings.showcase_timezone,
 )
 
+
+def _ensure_price_fields(payload: Dict[str, Any]) -> Dict[str, Any]:
+    payload.setdefault("tax_excluded", None)
+    payload.setdefault("tax_included", None)
+    payload.setdefault("prices", [])
+    return payload
+
+
 def _format_attempts_error(exc: LLMAllAttemptsFailedError) -> Dict[str, Any]:
     return {
         "message": f"{exc.stage} stage failed after {len(exc.attempts)} attempt(s).",
@@ -161,14 +169,14 @@ def _merge_analysis_payload(
             debug_payload["attempts"] = attempts
         payload["_debug"] = debug_payload
     payload["status"] = "completed"
-    return payload
+    return _ensure_price_fields(payload)
 
 
 def _pending_payload(job_id: str, classification: Dict[str, Any]) -> Dict[str, Any]:
     payload = dict(classification)
     payload["job_id"] = job_id
     payload["status"] = "product_pending"
-    return payload
+    return _ensure_price_fields(payload)
 
 
 def _safe_product_data_ms(future) -> Optional[float]:

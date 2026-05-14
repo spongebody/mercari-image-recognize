@@ -119,9 +119,10 @@ API_PORT=8010 UI_PORT=8012 ./run.sh
 1. `MercariAnalyzer.generate_product_data` 使用全部图片。
 2. 主模型使用 `PRODUCT_DATA_SYSTEM_PROMPT` + `PRODUCT_DATA_USER_PROMPT`。
 3. fallback 模型使用 `PRODUCT_DATA_FALLBACK_SYSTEM_PROMPT` + `PRODUCT_DATA_FALLBACK_USER_PROMPT`。
-4. OpenRouter 返回 JSON 后，`app/llm/json_parser.py` 解析，`app/service.py` 规范化标题、描述、品牌等字段。
+4. OpenRouter 返回 JSON 后，`app/llm/json_parser.py` 解析，`app/service.py` 规范化标题、描述、品牌、价格等字段。
 5. 品牌识别结果会通过 `BrandStore.match` 在品牌 CSV 中匹配，输出 `brand_name` 和 `brand_id_obj`。
-6. 轮询时，`main.py::_resolve_product_source` 根据 `PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS` 决定用主模型结果还是 fallback 结果，并返回 `product_data_source=primary|fallback`。
+6. 价格字段始终返回：`tax_excluded` / `tax_included` 表示图片中明确可见的实际价格；如果没有明确价格，则两者为 `null`，`prices` 返回 3 个按成色升序的参考价格。初次 `product_pending` 时字段也会存在，默认是 `null` / `null` / `[]`。
+7. 轮询时，`main.py::_resolve_product_source` 根据 `PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS` 决定用主模型结果还是 fallback 结果，并返回 `product_data_source=primary|fallback`。
 
 请求 OpenRouter 时统一经过：
 

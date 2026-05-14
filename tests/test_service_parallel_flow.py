@@ -137,7 +137,7 @@ class ParallelFlowServiceTest(unittest.TestCase):
         self.assertEqual(set(result["timings"].keys()), {"total_ms", "classification_ms"})
         self.assertEqual(result["timings"]["total_ms"], result["timings"]["classification_ms"])
 
-    def test_generate_product_data_uses_product_data_model_and_omits_price_fields(self):
+    def test_generate_product_data_uses_product_data_model_and_returns_price_fields(self):
         vision_client = RecordingChatClient(
             {
                 "title": "Nike シャツ",
@@ -157,6 +157,9 @@ class ParallelFlowServiceTest(unittest.TestCase):
                     "search_keywords": ["Nike", "シャツ"],
                 },
                 "brand_name": "Nike",
+                "tax_excluded": "¥980",
+                "tax_included": "税込 1,078円",
+                "prices": [1000, 1500, 2000],
             }
         )
         analyzer = MercariAnalyzer(
@@ -180,12 +183,56 @@ class ParallelFlowServiceTest(unittest.TestCase):
         image_parts = [part for part in call["messages"][1]["content"] if part["type"] == "image_url"]
         self.assertEqual(call["model"], "product-data-test")
         self.assertEqual(len(image_parts), 2)
-        self.assertNotIn("tax_excluded", prompt_text)
-        self.assertNotIn("prices", result)
-        self.assertNotIn("tax_excluded", result)
+        self.assertIn("tax_excluded", prompt_text)
+        self.assertIn("prices", prompt_text)
+        self.assertEqual(result["tax_excluded"], 980)
+        self.assertEqual(result["tax_included"], 1078)
+        self.assertEqual(result["prices"], [])
         self.assertEqual(result["brand_name"], "Nike")
         self.assertEqual(result["brand_id_obj"]["rakuten_brand_id"], "nike-r")
         self.assertEqual(set(result["timings"].keys()), {"product_data_ms"})
+
+    def test_generate_product_data_preserves_inferred_prices_when_no_direct_price(self):
+        vision_client = RecordingChatClient(
+            {
+                "title": "Nike シャツ",
+                "description": {
+                    "product_details": {
+                        "brand": "Nike",
+                        "product_name": "シャツ",
+                        "model_number": "",
+                        "target": "メンズ",
+                        "color": "黒",
+                        "size": "M",
+                        "weight": "",
+                        "condition": "良好",
+                    },
+                    "product_intro": "商品紹介",
+                    "recommendation": "おすすめ",
+                    "search_keywords": ["Nike", "シャツ"],
+                },
+                "brand_name": "Nike",
+                "tax_excluded": None,
+                "tax_included": None,
+                "prices": [1000, 1500, 2000],
+            }
+        )
+        analyzer = MercariAnalyzer(
+            settings=_settings(),
+            brand_store=FakeBrandStore(),
+            category_store=FakeCategoryStore(),
+            vision_client=vision_client,
+            category_client=SequenceChatClient([]),
+        )
+
+        result = analyzer.generate_product_data(
+            images=[(b"front-image", "image/png")],
+            language="ja",
+        )
+
+        self.assertIsNone(result["tax_excluded"])
+        self.assertIsNone(result["tax_included"])
+        self.assertEqual(result["prices"], [1000, 1500, 2000])
 
     def test_generate_product_data_expands_short_title_to_at_least_80_chars(self):
         vision_client = RecordingChatClient(

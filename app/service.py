@@ -141,6 +141,19 @@ def _normalize_direct_price(value: Any) -> Optional[int]:
     return None
 
 
+def _normalize_price_fields(ai_raw: Dict[str, Any]) -> Dict[str, Any]:
+    tax_excluded = _normalize_direct_price(ai_raw.get("tax_excluded"))
+    tax_included = _normalize_direct_price(ai_raw.get("tax_included"))
+    if tax_excluded is None:
+        tax_included = None
+    prices = [] if tax_excluded is not None else normalize_price_list(ai_raw.get("prices", []))
+    return {
+        "tax_excluded": tax_excluded,
+        "tax_included": tax_included,
+        "prices": prices,
+    }
+
+
 def _normalize_confidence(value: Any) -> float:
     if value is None or isinstance(value, bool):
         return 0.0
@@ -579,6 +592,7 @@ class MercariAnalyzer:
             "description": description_struct,
             "brand_name": brand_name,
             "brand_id_obj": brand_id_obj,
+            **_normalize_price_fields(ai_raw),
             "timings": {
                 "product_data_ms": round((time.monotonic() - started) * 1000, 2),
             },
@@ -682,13 +696,7 @@ class MercariAnalyzer:
         title = _clean_string(ai_raw.get("title", ""))
         description_struct = _normalize_description(ai_raw.get("description"))
         description_text = _description_to_text(description_struct)
-        tax_excluded = _normalize_direct_price(ai_raw.get("tax_excluded"))
-        tax_included = _normalize_direct_price(
-            ai_raw.get("tax_included")
-        )
-        if tax_excluded is None:
-            tax_included = None
-        prices = [] if tax_excluded is not None else normalize_price_list(ai_raw.get("prices", []))
+        price_fields = _normalize_price_fields(ai_raw)
         top_level_category = _clean_string(ai_raw.get("top_level_category", ""))
         brand_raw = _clean_string(ai_raw.get("brand_name", ""))
 
@@ -725,9 +733,7 @@ class MercariAnalyzer:
         result: Dict[str, Any] = {
             "title": title,
             "description": description_struct,
-            "tax_excluded": tax_excluded,
-            "tax_included": tax_included,
-            "prices": prices,
+            **price_fields,
             "categories": categories,
             "brand_name": brand_name,
             "brand_id_obj": brand_id_obj,

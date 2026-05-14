@@ -56,6 +56,9 @@ class ImageAnalyzeJobsTest(unittest.TestCase):
         body = response.json()
         self.assertEqual(body["status"], "product_pending")
         self.assertIn("job_id", body)
+        self.assertIsNone(body["tax_excluded"])
+        self.assertIsNone(body["tax_included"])
+        self.assertEqual(body["prices"], [])
         self.assertNotIn("brand_name", body)
         self.assertNotIn("brand_id_obj", body)
         self.assertEqual(body["image_processing"][0]["compressed"], True)
@@ -69,6 +72,9 @@ class ImageAnalyzeJobsTest(unittest.TestCase):
         pending_response = self.client.get(f"/api/v1/mercari/image/analyze/{body['job_id']}")
         self.assertEqual(pending_response.status_code, 200)
         self.assertEqual(pending_response.json()["status"], "product_pending")
+        self.assertIsNone(pending_response.json()["tax_excluded"])
+        self.assertIsNone(pending_response.json()["tax_included"])
+        self.assertEqual(pending_response.json()["prices"], [])
         self.assertNotIn("brand_name", pending_response.json())
         self.assertEqual(pending_response.json()["image_processing"][0]["compressed"], True)
 
@@ -92,6 +98,9 @@ class ImageAnalyzeJobsTest(unittest.TestCase):
                 },
                 "brand_name": "Nike",
                 "brand_id_obj": {"rakuten_brand_id": "nike-r"},
+                "tax_excluded": 980,
+                "tax_included": 1078,
+                "prices": [],
                 "timings": {"product_data_ms": 250.0},
             }
         )
@@ -102,6 +111,9 @@ class ImageAnalyzeJobsTest(unittest.TestCase):
         self.assertEqual(completed["status"], "completed")
         self.assertEqual(completed["brand_name"], "Nike")
         self.assertEqual(completed["brand_id_obj"]["rakuten_brand_id"], "nike-r")
+        self.assertEqual(completed["tax_excluded"], 980)
+        self.assertEqual(completed["tax_included"], 1078)
+        self.assertEqual(completed["prices"], [])
         self.assertEqual(completed["categories"][0]["confidence"], 0.92)
         self.assertEqual(completed["image_processing"][0]["compressed"], True)
         self.assertEqual(
