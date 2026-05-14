@@ -278,7 +278,7 @@ API_PORT=8010 UI_PORT=8012 ./run.sh
 - `BRAND_CSV_PATH`: 品牌 CSV 路径，默认 `data/mercari_brand.csv`。
 - `CATEGORY_CSV_PATH`: 分类 CSV 路径，默认 `data/category_rakuten.csv`。
 
-`BRAND_CSV_PATH` 需要包含 `id,name,name_jp,name_en,rakuten_id,yshop_id,yauc_id,meru_id,ebay_id,rakuma_id,amazon_id,qoo10_id` 等字段。`CATEGORY_CSV_PATH` 需要包含 `category_id,path|category_name,group_name,meru_id,rakuma_id,zenplus_id` 等字段。
+`BRAND_CSV_PATH` 需要包含 `id,name,name_jp,name_en,rakuten_id,yshop_id,yauc_id,meru_id,ebay_id,rakuma_id,amazon_id,qoo10_id` 等字段。`CATEGORY_CSV_PATH` 需要包含 `category_id,path|category_name,group_name,meru_id,rakuma_id,zenplus_id,meru_path,rakuma_path,zenplus_path` 等字段。
 
 ### 上传、调试和日志
 

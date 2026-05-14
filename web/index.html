@@ -659,6 +659,8 @@
         border-radius: 6px;
         font-size: 13px;
         color: var(--text);
+        max-width: 100%;
+        overflow-wrap: anywhere;
       }
 
       .tag.primary {
@@ -1395,6 +1397,9 @@
           idMercari: "Mercari ID",
           idRakuma: "Rakuma ID",
           idZenplus: "ZenPlus ID",
+          pathMercari: "Mercari Path",
+          pathRakuma: "Rakuma Path",
+          pathZenplus: "ZenPlus Path",
           fieldBrand: "🔖 品牌",
           unknownBrand: "未知品牌",
           fieldPriceSingle: "💰 建议价格",
@@ -1559,6 +1564,9 @@
           idMercari: "Mercari ID",
           idRakuma: "Rakuma ID",
           idZenplus: "ZenPlus ID",
+          pathMercari: "Mercari Path",
+          pathRakuma: "Rakuma Path",
+          pathZenplus: "ZenPlus Path",
           fieldBrand: "🔖 ブランド",
           unknownBrand: "不明ブランド",
           fieldPriceSingle: "💰 推奨価格",
@@ -2306,11 +2314,17 @@
         const meruId = data.meru_id || "";
         const rakumaId = data.rakuma_id || "";
         const zenplusId = data.zenplus_id || "";
+        const meruPath = data.meru_path || "";
+        const rakumaPath = data.rakuma_path || "";
+        const zenplusPath = data.zenplus_path || "";
         return [
           [t("idRakuten"), rakutenId],
           [t("idMercari"), meruId],
           [t("idRakuma"), rakumaId],
-          [t("idZenplus"), zenplusId]
+          [t("idZenplus"), zenplusId],
+          [t("pathMercari"), meruPath],
+          [t("pathRakuma"), rakumaPath],
+          [t("pathZenplus"), zenplusPath]
         ].filter(([, value]) => value);
       }
 

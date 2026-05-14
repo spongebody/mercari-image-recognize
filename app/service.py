@@ -414,40 +414,37 @@ def _paths_from_categories(
 ) -> Optional[Dict[str, Any]]:
     if not categories:
         return None
-    ordered_paths: List[Tuple[str, str, str, str, str]] = []
+    ordered_paths: List[Dict[str, str]] = []
     for category in categories:
-        path = category.get("name") or ""
-        cat_id = category.get("id") or ""
-        meru_id = category.get("meru_id") or ""
-        rakuma_id = category.get("rakuma_id") or ""
-        zenplus_id = category.get("zenplus_id") or ""
-        path = compress_whitespace(path)
-        item = (path, cat_id, meru_id, rakuma_id, zenplus_id)
-        if path and item not in ordered_paths:
+        item = {
+            "target_path": compress_whitespace(category.get("name") or ""),
+            "category_id": category.get("id") or "",
+            "rakuten_id": category.get("rakuten_id") or category.get("id") or "",
+            "meru_id": category.get("meru_id") or "",
+            "rakuma_id": category.get("rakuma_id") or "",
+            "zenplus_id": category.get("zenplus_id") or "",
+            "meru_path": category.get("meru_path") or "",
+            "rakuma_path": category.get("rakuma_path") or "",
+            "zenplus_path": category.get("zenplus_path") or "",
+        }
+        if item["target_path"] and item not in ordered_paths:
             ordered_paths.append(item)
     if not ordered_paths:
         return None
-    best_path, best_id, best_meru_id, best_rakuma_id, best_zenplus_id = ordered_paths[0]
+    best = ordered_paths[0]
     payload: Dict[str, Any] = {
-        "best_target_path": best_path,
-        "best_category_id": best_id,
-        "rakuten_id": best_id,
-        "meru_id": best_meru_id,
-        "rakuma_id": best_rakuma_id,
-        "zenplus_id": best_zenplus_id,
+        "best_target_path": best["target_path"],
+        "best_category_id": best["category_id"],
+        "rakuten_id": best["rakuten_id"],
+        "meru_id": best["meru_id"],
+        "rakuma_id": best["rakuma_id"],
+        "zenplus_id": best["zenplus_id"],
+        "meru_path": best["meru_path"],
+        "rakuma_path": best["rakuma_path"],
+        "zenplus_path": best["zenplus_path"],
     }
     if include_alternatives:
-        payload["alternatives"] = [
-            {
-                "target_path": path,
-                "category_id": cat_id,
-                "rakuten_id": cat_id,
-                "meru_id": meru_id,
-                "rakuma_id": rakuma_id,
-                "zenplus_id": zenplus_id,
-            }
-            for path, cat_id, meru_id, rakuma_id, zenplus_id in ordered_paths[1:]
-        ]
+        payload["alternatives"] = ordered_paths[1:]
     return payload
 
 
@@ -1206,6 +1203,9 @@ class MercariAnalyzer:
                         "meru_id": match.get("meru_id", ""),
                         "rakuma_id": match.get("rakuma_id", ""),
                         "zenplus_id": match.get("zenplus_id", ""),
+                        "meru_path": match.get("meru_path", ""),
+                        "rakuma_path": match.get("rakuma_path", ""),
+                        "zenplus_path": match.get("zenplus_path", ""),
                         "confidence": confidence,
                     }
                 )

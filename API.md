@@ -144,6 +144,9 @@ files.forEach((file) => {
       "meru_id": "...",
       "rakuma_id": "...",
       "zenplus_id": "...",
+      "meru_path": "...",
+      "rakuma_path": "...",
+      "zenplus_path": "...",
       "confidence": 0.92
     }
   ],
@@ -166,6 +169,9 @@ files.forEach((file) => {
   "meru_id": "...",
   "rakuma_id": "...",
   "zenplus_id": "...",
+  "meru_path": "...",
+  "rakuma_path": "...",
+  "zenplus_path": "...",
   "alternatives": [
     {
       "target_path": "...",
@@ -173,7 +179,10 @@ files.forEach((file) => {
       "rakuten_id": "...",
       "meru_id": "...",
       "rakuma_id": "...",
-      "zenplus_id": "..."
+      "zenplus_id": "...",
+      "meru_path": "...",
+      "rakuma_path": "...",
+      "zenplus_path": "..."
     }
   ],
   "_debug": {
@@ -431,6 +440,9 @@ curl -X POST "http://localhost:8000/api/v1/mercari/product-data/regenerate" \
   "meru_id": "...",
   "rakuma_id": "...",
   "zenplus_id": "...",
+  "meru_path": "...",
+  "rakuma_path": "...",
+  "zenplus_path": "...",
   "alternatives": [
     {
       "target_path": "...",
@@ -438,7 +450,10 @@ curl -X POST "http://localhost:8000/api/v1/mercari/product-data/regenerate" \
       "rakuten_id": "...",
       "meru_id": "...",
       "rakuma_id": "...",
-      "zenplus_id": "..."
+      "zenplus_id": "...",
+      "meru_path": "...",
+      "rakuma_path": "...",
+      "zenplus_path": "..."
     }
   ]
 }

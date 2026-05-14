@@ -48,6 +48,9 @@ class FakeCategoryStore:
             "meru_id": "m-123",
             "rakuma_id": "ra-123",
             "zenplus_id": "z-123",
+            "meru_path": "Mercari > Tops",
+            "rakuma_path": "Rakuma>Tops",
+            "zenplus_path": "ZenPlus>Tops",
         }
     }
 
@@ -97,6 +100,45 @@ class RakutenIdResponseTest(unittest.TestCase):
         self.assertEqual(result["categories"][0]["rakuten_id"], "123")
         self.assertEqual(result["best_category_id"], "123")
         self.assertEqual(result["rakuten_id"], "123")
+
+    def test_analyze_includes_platform_paths_for_image_category_response(self):
+        settings = SimpleNamespace(
+            vision_model="vision-test",
+            category_model="category-test",
+            log_llm_raw=False,
+            vision_fallback_models=[],
+            category_fallback_models=[],
+            model_call_max_retries=0,
+            model_call_total_budget_seconds=10,
+            request_timeout=10,
+        )
+        analyzer = MercariAnalyzer(
+            settings=settings,
+            brand_store=FakeBrandStore(),
+            category_store=FakeCategoryStore(),
+            vision_client=FakeChatClient(
+                {
+                    "title": "シャツ",
+                    "description": "メンズシャツ",
+                    "prices": [1000, 1500, 2000],
+                    "top_level_category": "メンズファッション",
+                    "brand_name": "",
+                }
+            ),
+            category_client=FakeChatClient(
+                {"best_target_path": "メンズファッション/トップス"}
+            ),
+        )
+
+        result = analyzer.analyze(
+            images=[(b"image-bytes", "image/png")],
+            language="ja",
+        )
+
+        self.assertEqual(result["meru_path"], "Mercari > Tops")
+        self.assertEqual(result["rakuma_path"], "Rakuma>Tops")
+        self.assertEqual(result["zenplus_path"], "ZenPlus>Tops")
+        self.assertEqual(result["categories"][0]["meru_path"], "Mercari > Tops")
 
     def test_analyze_uses_single_vision_call_for_prices(self):
         settings = SimpleNamespace(

@@ -29,6 +29,9 @@ class CategoryStore:
                     "meru_id": compress_whitespace(row.get("meru_id", "")),
                     "rakuma_id": compress_whitespace(row.get("rakuma_id", "")),
                     "zenplus_id": compress_whitespace(row.get("zenplus_id", "")),
+                    "meru_path": compress_whitespace(row.get("meru_path", "")),
+                    "rakuma_path": compress_whitespace(row.get("rakuma_path", "")),
+                    "zenplus_path": compress_whitespace(row.get("zenplus_path", "")),
                 }
                 self.by_group[group].append(entry)
                 key = (normalize_category_label(group), normalize_category_label(name))
