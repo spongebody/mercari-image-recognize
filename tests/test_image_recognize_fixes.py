@@ -180,11 +180,14 @@ class FallbackPromptIsUsedTest(unittest.TestCase):
         sent_system = vision_client.calls[0]["messages"][0]["content"]
         self.assertEqual(sent_system, PRODUCT_DATA_FALLBACK_SYSTEM_PROMPT)
         self.assertNotEqual(sent_system, PRODUCT_DATA_SYSTEM_PROMPT)
-        # The fallback user prompt should explicitly require multi-paragraph
-        # product_intro and search_keywords without leading "#".
+        # Fallback quality rules live in the system prompt; the user prompt
+        # should only carry request-scoped context such as language.
+        self.assertIn("3–5 paragraphs", sent_system)
+        self.assertIn("search_keywords", sent_system)
         sent_user = vision_client.calls[0]["messages"][1]["content"][0]["text"]
-        self.assertIn("3–5 paragraph", sent_user)
-        self.assertIn("search_keywords", sent_user)
+        self.assertIn("Japanese", sent_user)
+        self.assertNotIn("3–5 paragraph", sent_user)
+        self.assertNotIn("search_keywords", sent_user)
 
     def test_primary_prompt_used_by_default(self):
         analyzer, vision_client = _build_analyzer(

@@ -75,7 +75,7 @@ def call_image(
     timeout: int,
 ) -> Dict[str, Any]:
     filename, data, mime = image
-    files = {"image": (filename, data, mime)}
+    files = {"image_list": (filename, data, mime)}
     data_fields = {
         "language": "ja",
         "debug": "false",

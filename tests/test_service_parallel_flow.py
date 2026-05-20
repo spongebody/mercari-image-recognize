@@ -179,12 +179,16 @@ class ParallelFlowServiceTest(unittest.TestCase):
         )
 
         call = vision_client.calls[0]
+        system_prompt = call["messages"][0]["content"]
         prompt_text = call["messages"][1]["content"][0]["text"]
         image_parts = [part for part in call["messages"][1]["content"] if part["type"] == "image_url"]
         self.assertEqual(call["model"], "product-data-test")
         self.assertEqual(len(image_parts), 2)
-        self.assertIn("tax_excluded", prompt_text)
-        self.assertIn("prices", prompt_text)
+        self.assertIn("tax_excluded", system_prompt)
+        self.assertIn("prices", system_prompt)
+        self.assertIn("Japanese", prompt_text)
+        self.assertNotIn("tax_excluded", prompt_text)
+        self.assertNotIn("prices", prompt_text)
         self.assertEqual(result["tax_excluded"], 980)
         self.assertEqual(result["tax_included"], 1078)
         self.assertEqual(result["prices"], [])
@@ -233,6 +237,90 @@ class ParallelFlowServiceTest(unittest.TestCase):
         self.assertIsNone(result["tax_excluded"])
         self.assertIsNone(result["tax_included"])
         self.assertEqual(result["prices"], [1000, 1500, 2000])
+
+    def test_generate_product_data_treats_single_direct_price_as_tax_included(self):
+        vision_client = RecordingChatClient(
+            {
+                "title": "Nike シャツ",
+                "description": {
+                    "product_details": {
+                        "brand": "Nike",
+                        "product_name": "シャツ",
+                        "model_number": "",
+                        "target": "メンズ",
+                        "color": "黒",
+                        "size": "M",
+                        "weight": "",
+                        "condition": "良好",
+                    },
+                    "product_intro": "商品紹介",
+                    "recommendation": "おすすめ",
+                    "search_keywords": ["Nike", "シャツ"],
+                },
+                "brand_name": "Nike",
+                "tax_excluded": "¥980",
+                "tax_included": None,
+                "prices": [1000, 1500, 2000],
+            }
+        )
+        analyzer = MercariAnalyzer(
+            settings=_settings(),
+            brand_store=FakeBrandStore(),
+            category_store=FakeCategoryStore(),
+            vision_client=vision_client,
+            category_client=SequenceChatClient([]),
+        )
+
+        result = analyzer.generate_product_data(
+            images=[(b"front-image", "image/png")],
+            language="ja",
+        )
+
+        self.assertIsNone(result["tax_excluded"])
+        self.assertEqual(result["tax_included"], 980)
+        self.assertEqual(result["prices"], [])
+
+    def test_generate_product_data_preserves_explicit_tax_included_only_price(self):
+        vision_client = RecordingChatClient(
+            {
+                "title": "Nike シャツ",
+                "description": {
+                    "product_details": {
+                        "brand": "Nike",
+                        "product_name": "シャツ",
+                        "model_number": "",
+                        "target": "メンズ",
+                        "color": "黒",
+                        "size": "M",
+                        "weight": "",
+                        "condition": "良好",
+                    },
+                    "product_intro": "商品紹介",
+                    "recommendation": "おすすめ",
+                    "search_keywords": ["Nike", "シャツ"],
+                },
+                "brand_name": "Nike",
+                "tax_excluded": None,
+                "tax_included": "税込¥1,078",
+                "prices": [1000, 1500, 2000],
+            }
+        )
+        analyzer = MercariAnalyzer(
+            settings=_settings(),
+            brand_store=FakeBrandStore(),
+            category_store=FakeCategoryStore(),
+            vision_client=vision_client,
+            category_client=SequenceChatClient([]),
+        )
+
+        result = analyzer.generate_product_data(
+            images=[(b"front-image", "image/png")],
+            language="ja",
+        )
+
+        self.assertIsNone(result["tax_excluded"])
+        self.assertEqual(result["tax_included"], 1078)
+        self.assertEqual(result["prices"], [])
 
     def test_generate_product_data_expands_short_title_to_at_least_80_chars(self):
         vision_client = RecordingChatClient(
@@ -359,6 +447,8 @@ class ParallelFlowServiceTest(unittest.TestCase):
         self.assertIn("成色は目立つ傷なし", prompt_text)
         self.assertIn("Original product data", prompt_text)
         self.assertIn("古いタイトル", prompt_text)
+        self.assertNotIn("Prioritize user supplemental information", prompt_text)
+        self.assertNotIn("Return JSON only with title", prompt_text)
         self.assertEqual(vision_client.calls[0]["model"], "product-data-test")
         self.assertGreaterEqual(len(result["title"]), 80)
         self.assertEqual(result["brand_name"], "Nike")

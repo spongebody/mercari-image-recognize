@@ -25,65 +25,27 @@ The JSON schema is:
 
 PRODUCT_TITLE_CATEGORY_USER_PROMPT = """Product title: {title}
 
-Language of the title: {language_label}
+Language of the title: {language_label}"""
 
-Return JSON with only top_level_category following the required schema."""
+TITLE_IMAGE_FALLBACK_SYSTEM_PROMPT = """You are an assistant helping sellers classify a product image for a Japanese marketplace.
 
-VISION_SYSTEM_PROMPT_WITH_PRICE = """You are an assistant helping sellers list items for a Japanese marketplace.
+This is a fallback for title-only category analysis. Use the image only to identify the product well enough for downstream taxonomy matching.
 
-Given one or more images of the same product, your task is:
-
-1. Inspect EVERY image independently, then merge the evidence into one product analysis.
-   Treat the first two images as equally important. Do not ignore later images because the first image looks sufficient.
-   Combine complementary details across images, including front/back views, tags, labels, packaging, close-ups, and condition cues.
-2. Infer what the product is (type), its condition, important attributes, and any visible details across all images.
-   Use front/back photos, labels, tags, packaging, and close-ups to extract precise model numbers, brand, color, size, weight, and condition.
-3. Generate a short, clear, and buyer-friendly title suitable for a Japanese marketplace listing.
-4. Generate a structured description object in JSON format with ENGLISH field names only. The description must have 4 sections:
-   - **product_details**: A JSON object with the required fields below. If a field is unknown, return an empty string value but keep the field.
-     - brand
-     - product_name
-     - model_number
-     - target
-     - color
-     - size
-     - weight
-     - condition
-   - **product_intro**: A professional product introduction based on brand/model/type. Include functions, features, advantages, usage scenarios, and included items.
-   - **recommendation**: Short, persuasive lines summarizing the key selling points.
-   - **search_keywords**: An array of relevant search keywords (brand, model, product type, synonyms).
-
-   Use the requested language for all text content. Include newline characters (\n) inside section strings where appropriate.
-
-5. Extract visible price information from ANY image first, before estimating:
-   - Check every uploaded image for an actual product price on a tag, label, sticker, receipt, or packaging.
-   - If any image clearly shows an actual product price, return it as tax_excluded (integer JPY), even if a different image is better for identifying the product.
-   - If any image clearly shows a tax-included price, return it as tax_included (integer JPY).
-   - If a direct actual product price is visible, set prices to [] and do NOT infer condition-based prices.
-   - If no direct actual product price is clearly visible, set tax_excluded and tax_included to null, then propose 3 realistic reference prices in Japanese Yen (integers) for three condition levels:
-     - prices[0]: Poor condition - visible wear, defects, or cosmetic issues
-     - prices[1]: Average condition - typical used condition
-     - prices[2]: Good condition - well-maintained, minimal wear or near-new
-     Prices must be in ascending order. Use your understanding of the product type, brand, and visible condition cues to anchor the prices to typical second-hand markets in Japan. Do NOT use web search or browsing tools.
-6. Choose the single best matching top-level category from the following Rakuten-style taxonomy list (return exactly one of these strings):
+Return:
+1. title: a short, clear product title in the requested language.
+2. simple_description: one concise sentence describing the visible product, including type, use case, visible condition, and important attributes.
+3. top_level_category: the single best matching top-level category from this Rakuten-style taxonomy list (return exactly one of these strings):
 """ + TOP_LEVEL_CATEGORY_OPTIONS + """
 
-7. If you can clearly identify a brand name printed on the item or its packaging,
+4. brand_name: if you can clearly identify a brand name printed on the item or its packaging,
    return that brand name exactly as printed (for example "Nintendo", "Sony", "UNIQLO").
    If you are not sure or no brand is visible, return an empty string "".
 
 IMPORTANT:
-- Before producing the final JSON, mentally verify that you used information from all images, especially the first two images.
-- The title and description must use the language requested by the user (default Japanese).
-- The total description text (all sections combined) should be 800-1000 characters for Japanese, or 500-1000 words for other languages.
-- Make the description persuasive and detailed, helping buyers visualize owning and using the item.
-- Naturally weave in SEO keywords without making it sound robotic or keyword-stuffed.
-- tax_excluded and tax_included must be integers in Japanese Yen when visible, otherwise null.
-- If tax_excluded is not null, prices must be [].
-- If tax_excluded is null, prices must be integers in Japanese Yen, in ascending order [poor, average, good].
-- Do NOT use web search/browsing; rely on the product type, brand strength, and visible condition to set realistic second-hand prices for Japan only when no direct actual price is visible.
+- Use only visible image evidence. Do not guess hidden specifications, brands, or model numbers.
+- The title and simple_description must use the requested language (default Japanese).
 - The top_level_category must be exactly one of the provided strings.
-- If you are not sure about the brand, do NOT guess; just return an empty string.
+- Do not generate listing copy, prices, product_intro, recommendation, or search keywords.
 
 You must respond with pure JSON only, without any explanations, without markdown, and without comments.
 
@@ -91,53 +53,17 @@ The JSON schema is:
 
 {
   "title": "string",
-  "description": {
-    "product_details": {
-      "brand": "string",
-      "product_name": "string",
-      "model_number": "string",
-      "target": "string",
-      "color": "string",
-      "size": "string",
-      "weight": "string",
-      "condition": "string"
-    },
-    "product_intro": "string",
-    "recommendation": "string",
-    "search_keywords": ["string"]
-  },
-  "tax_excluded": number or null,
-  "tax_included": number or null,
-  "prices": [] or [number, number, number],
+  "simple_description": "string",
   "top_level_category": "string",
   "brand_name": "string"
 }
 """
 
-VISION_USER_PROMPT_WITH_PRICE = """Look at these product images and fill in all JSON fields according to the instructions.
+TITLE_IMAGE_FALLBACK_USER_PROMPT = """Classify this product image for category matching.
 
-Language for title and description: {language_label}.
+Language for title and simple_description: {language_label}.
 
-Multi-image requirements:
-- Treat all images as evidence for the SAME product.
-- Inspect each image label in order (Image 1 of N, Image 2 of N, etc.) and do not discard information from any image.
-- Merge complementary information from all images into the final JSON.
-
-For the description:
-- Return a JSON object with 4 sections: product_details, product_intro, recommendation, search_keywords
-- product_details must be a JSON object with fields (brand/product_name/model_number/target/color/size/weight/condition). Leave values blank if unknown.
-- product_intro should cover features, advantages, usage scenarios, and included items
-- recommendation should be short and persuasive
-- search_keywords should be an array of relevant keywords
-- Use \\n for line breaks inside strings
-
-Price fields:
-- First look for a clearly visible actual product price in every image, such as a price tag, label, sticker, receipt, or packaging price.
-- If visible, return tax_excluded as the actual product price integer in JPY. If a tax-included price is also visible, return tax_included as an integer in JPY; otherwise return null.
-- If tax_excluded is visible, set prices to [] and do not infer condition-based prices.
-- If no actual product price is clearly visible, set tax_excluded and tax_included to null, then return 3 inferred reference prices in JPY (integers) for [poor, average, good] condition based ONLY on the images and typical second-hand pricing in Japan. Keep prices realistic, ascending, and grounded in the product type, brand strength, and visible wear.
-
-Do not use web search or browsing. If you are not sure about the brand, set "brand_name" to ""."""
+Return JSON only with title, simple_description, top_level_category, and brand_name. Do not include any extra fields."""
 
 FAST_CLASSIFICATION_SYSTEM_PROMPT = """You are an assistant helping sellers quickly classify a product for a Japanese marketplace.
 
@@ -180,8 +106,8 @@ Generate:
 3. brand_name: visible brand name exactly as printed, or "" if unclear.
 4. Price fields:
    - First look for a clearly visible actual product price in every image, such as a price tag, label, sticker, receipt, or packaging price.
-   - If visible, return tax_excluded as the actual product price integer in JPY. If a tax-included price is also visible, return tax_included as an integer in JPY; otherwise return null.
-   - If tax_excluded is visible, set prices to [] and do not infer condition-based prices.
+   - If exactly one actual product price is visible, return it as tax_included (integer JPY), set tax_excluded to null, and set prices to [].
+   - If both tax-excluded and tax-included prices are clearly visible, return both as integers in JPY and set prices to [].
    - If no actual product price is clearly visible, set tax_excluded and tax_included to null, then return 3 inferred reference prices in JPY (integers) for [poor, average, good] condition based only on the images and typical second-hand pricing in Japan. Keep prices realistic and ascending.
 
 Do not use web search or browsing.
@@ -192,8 +118,9 @@ IMPORTANT:
 - The title must be at least 80 characters; prefer verified product attributes over generic wording.
 - If you are not sure about the brand, do not guess; return "".
 - tax_excluded and tax_included must be integers in Japanese Yen when visible, otherwise null.
-- If tax_excluded is not null, prices must be [].
-- If tax_excluded is null, prices must be integers in Japanese Yen, in ascending order [poor, average, good].
+- If tax_excluded or tax_included is not null, prices must be [].
+- If exactly one direct price is visible, it belongs in tax_included, not tax_excluded.
+- If both direct price fields are null, prices must be integers in Japanese Yen, in ascending order [poor, average, good].
 
 You must respond with pure JSON only, without explanations, markdown, or comments.
 
@@ -223,22 +150,11 @@ The JSON schema is:
 }
 """
 
-PRODUCT_DATA_USER_PROMPT = """Look at these product images and fill in all JSON fields according to the instructions.
+PRODUCT_DATA_USER_PROMPT = """Generate the product listing payload from the attached images.
 
 Language for title and description: {language_label}.
 
-Multi-image requirements:
-- Treat all images as evidence for the SAME product.
-- Inspect each image label in order and merge complementary information from all images.
-- Extract precise visible details such as model number, brand, color, size, weight, condition, packaging, labels, and included items.
-
-Price fields:
-- First look for a clearly visible actual product price in every image, such as a price tag, label, sticker, receipt, or packaging price.
-- If visible, return tax_excluded as the actual product price integer in JPY. If a tax-included price is also visible, return tax_included as an integer in JPY; otherwise return null.
-- If tax_excluded is visible, set prices to [] and do not infer condition-based prices.
-- If no actual product price is clearly visible, set tax_excluded and tax_included to null, then return 3 inferred reference prices in JPY (integers) for [poor, average, good] condition based ONLY on the images and typical second-hand pricing in Japan.
-
-Return JSON only with title, description, brand_name, tax_excluded, tax_included, and prices."""
+Treat all attached images as evidence for the same product and follow the system schema exactly."""
 
 
 PRODUCT_DATA_REGENERATION_SYSTEM_PROMPT = """You are an expert e-commerce listing editor helping sellers improve Japanese marketplace product data.
@@ -293,7 +209,7 @@ The JSON schema is:
 }
 """
 
-PRODUCT_DATA_REGENERATION_USER_PROMPT = """Regenerate product data for these product images.
+PRODUCT_DATA_REGENERATION_USER_PROMPT = """Regenerate product data from the attached images and context.
 
 Language for title and description: {language_label}.
 
@@ -303,12 +219,7 @@ User supplemental information:
 Original product data:
 {original_product_data_json}
 
-Regeneration requirements:
-- Treat all images as evidence for the SAME product.
-- Prioritize user supplemental information over original product data.
-- Preserve correct original details and improve weak or generic wording.
-- If user supplemental information and original data are both empty, deeply analyze the images and generate a complete, useful listing payload.
-- Return JSON only with title, description, and brand_name."""
+Follow the system priority rules and schema exactly."""
 
 
 # A more explicit / verbose system prompt aimed at smaller / faster fallback
@@ -338,8 +249,8 @@ Generate:
 3. brand_name — the visible brand exactly as printed (e.g., "Nintendo", "UNIQLO"). Return "" if no brand is clearly visible. Do NOT guess.
 4. Price fields:
    - First look for a clearly visible actual product price in every image, such as a price tag, label, sticker, receipt, or packaging price.
-   - If visible, return tax_excluded as the actual product price integer in JPY. If a tax-included price is also visible, return tax_included as an integer in JPY; otherwise return null.
-   - If tax_excluded is visible, set prices to [] and do not infer condition-based prices.
+   - If exactly one actual product price is visible, return it as tax_included (integer JPY), set tax_excluded to null, and set prices to [].
+   - If both tax-excluded and tax-included prices are clearly visible, return both as integers in JPY and set prices to [].
    - If no actual product price is clearly visible, set tax_excluded and tax_included to null, then return 3 inferred reference prices in JPY (integers) for [poor, average, good] condition based only on the images and typical second-hand pricing in Japan.
 
 Do NOT use web search or browsing.
@@ -351,7 +262,7 @@ QUALITY CHECKLIST before responding:
 - Are recommendation lines benefit-driven, not generic?
 - Does search_keywords contain 8–15 distinct, relevant entries with no leading "#"?
 - Did you avoid inventing facts you cannot verify from the images?
-- Did you return tax_excluded, tax_included, and prices using the required mutual exclusion rule?
+- Did you put a single visible direct price in tax_included, and use prices only when no direct price is visible?
 
 You MUST respond with pure JSON only — no explanations, no markdown fences, no comments.
 
@@ -381,26 +292,11 @@ The JSON schema is:
 }
 """
 
-PRODUCT_DATA_FALLBACK_USER_PROMPT = """Generate the rich listing payload for these product images.
+PRODUCT_DATA_FALLBACK_USER_PROMPT = """Generate the fallback product listing payload from the attached images.
 
 Language for title and all description text: {language_label}.
 
-Multi-image requirements:
-- Treat all images as evidence for the SAME product.
-- Inspect each labelled image (Image 1 of N, Image 2 of N, …) in order and merge complementary details. Do NOT discard later images.
-- Extract precise visible details such as model number, brand, color, size, weight, condition cues, packaging, labels, and included items.
-
-Description requirements (must follow):
-- product_details: include every required field; use "" when unknown.
-- title: at least 80 characters; use verified brand, model, color, size, condition, and visible feature details to extend it when needed.
-- product_intro: 3–5 paragraphs separated by "\\n\\n"; cover overview, key features, advantages, usage scenarios, included items / compatibility. Ground claims in the images.
-- recommendation: 2–3 short benefit-driven lines separated by "\\n".
-- search_keywords: 8–15 distinct strings, no leading "#".
-- Price fields: return tax_excluded, tax_included, and prices. If a direct tax_excluded price is visible, set prices to []; otherwise set direct price fields to null and return 3 ascending inferred reference prices.
-
-If the brand is not clearly visible, set "brand_name" to "".
-
-Return JSON only with title, description, brand_name, tax_excluded, tax_included, and prices. Do NOT wrap the response in markdown or commentary."""
+Treat all attached images as evidence for the same product and follow the fallback system schema exactly."""
 
 CATEGORY_SYSTEM_PROMPT = """You are an e-commerce taxonomy specialist working with a Japanese marketplace taxonomy based on Rakuten categories.
 
@@ -448,6 +344,4 @@ CATEGORY_USER_PROMPT_TEMPLATE = """Product:
 - Top-level category (group_name): {group_name}
 
 Candidate category paths (one per line):
-{candidate_paths}
-
-Return JSON only with best_target_path, confidence, and alternatives. Pick the top 3 matches sorted by confidence (highest first); return fewer than 3 only if the candidate list does not have 3 plausible matches."""
+{candidate_paths}"""

@@ -26,8 +26,8 @@ from .llm.prompts import (
     PRODUCT_DATA_USER_PROMPT,
     PRODUCT_TITLE_CATEGORY_SYSTEM_PROMPT,
     PRODUCT_TITLE_CATEGORY_USER_PROMPT,
-    VISION_SYSTEM_PROMPT_WITH_PRICE,
-    VISION_USER_PROMPT_WITH_PRICE,
+    TITLE_IMAGE_FALLBACK_SYSTEM_PROMPT,
+    TITLE_IMAGE_FALLBACK_USER_PROMPT,
 )
 from .utils import (
     compress_whitespace,
@@ -144,9 +144,11 @@ def _normalize_direct_price(value: Any) -> Optional[int]:
 def _normalize_price_fields(ai_raw: Dict[str, Any]) -> Dict[str, Any]:
     tax_excluded = _normalize_direct_price(ai_raw.get("tax_excluded"))
     tax_included = _normalize_direct_price(ai_raw.get("tax_included"))
-    if tax_excluded is None:
-        tax_included = None
-    prices = [] if tax_excluded is not None else normalize_price_list(ai_raw.get("prices", []))
+    if tax_excluded is not None and tax_included is None:
+        tax_included = tax_excluded
+        tax_excluded = None
+    has_direct_price = tax_excluded is not None or tax_included is not None
+    prices = [] if has_direct_price else normalize_price_list(ai_raw.get("prices", []))
     return {
         "tax_excluded": tax_excluded,
         "tax_included": tax_included,
@@ -661,105 +663,6 @@ class MercariAnalyzer:
             }
         return result
 
-    def analyze(
-        self,
-        images: List[Tuple[bytes, str]],
-        language: str,
-        debug: bool = False,
-        vision_model_override: Optional[str] = None,
-        category_model_override: Optional[str] = None,
-        image_processing: Optional[List[Dict[str, Any]]] = None,
-    ) -> Dict[str, Any]:
-        if language not in SUPPORTED_LANGUAGES:
-            raise BadRequestError("Unsupported language.")
-        if not images:
-            raise BadRequestError("Image list is required.")
-        total_started = time.monotonic()
-        attempts_by_stage: Dict[str, List[AttemptRecord]] = {}
-
-        data_urls = [
-            image_bytes_to_data_url(image_bytes, mime_type)
-            for image_bytes, mime_type in images
-        ]
-        vision_started = time.monotonic()
-        ai_raw, ai_full, vision_attempts = self._call_vision_llm(
-            data_urls,
-            language,
-            model_override=vision_model_override,
-        )
-        attempts_by_stage["vision"] = vision_attempts
-        vision_ms = round((time.monotonic() - vision_started) * 1000, 2)
-
-        title = _clean_string(ai_raw.get("title", ""))
-        description_struct = _normalize_description(ai_raw.get("description"))
-        description_text = _description_to_text(description_struct)
-        price_fields = _normalize_price_fields(ai_raw)
-        top_level_category = _clean_string(ai_raw.get("top_level_category", ""))
-        brand_raw = _clean_string(ai_raw.get("brand_name", ""))
-
-        brand_match = self.brand_store.match(brand_raw)
-        brand_name = brand_match["brand_name"] if brand_match else ""
-        brand_id_obj = dict(brand_match["brand_id_obj"]) if brand_match else empty_brand_id_obj()
-
-        group_name = _map_top_level_category(top_level_category)
-
-        categories: List[Dict[str, str]] = []
-        llm_category_raw: Optional[Dict[str, Any]] = None
-        category_ms = 0.0
-
-        if group_name:
-            category_started = time.monotonic()
-            categories, llm_category_raw, category_attempts = self._choose_categories(
-                title=title or ai_raw.get("title", ""),
-                description=description_text or _description_to_text(ai_raw.get("description", "")),
-                brand_for_prompt=brand_raw or brand_name,
-                group_name=group_name,
-                model_override=category_model_override,
-            )
-            attempts_by_stage["category"] = category_attempts
-            category_ms = round((time.monotonic() - category_started) * 1000, 2)
-
-        title = _extend_title_to_minimum(
-            title,
-            description=description_struct,
-            brand_name=brand_name,
-            brand_raw=brand_raw,
-            language=language,
-        )
-
-        result: Dict[str, Any] = {
-            "title": title,
-            "description": description_struct,
-            **price_fields,
-            "categories": categories,
-            "brand_name": brand_name,
-            "brand_id_obj": brand_id_obj,
-            "timings": {
-                "total_ms": 0.0,
-                "vision_ms": vision_ms,
-                "category_ms": category_ms,
-            },
-        }
-        if image_processing:
-            result["image_processing"] = image_processing
-        path_info = _paths_from_categories(categories, include_alternatives=False)
-        if path_info:
-            result.update(path_info)
-
-        if debug:
-            result["_debug"] = {
-                "ai_raw": ai_raw,
-                "group_name": group_name,
-                "llm_category_raw": llm_category_raw,
-                "attempts": {
-                    stage: [a.__dict__ for a in attempts]
-                    for stage, attempts in attempts_by_stage.items()
-                },
-            }
-
-        result["timings"]["total_ms"] = round((time.monotonic() - total_started) * 1000, 2)
-        return result
-
     def analyze_title(
         self,
         title: str,
@@ -820,7 +723,7 @@ class MercariAnalyzer:
         except ValueError as exc:
             raise BadRequestError(str(exc)) from exc
 
-        fallback_result = self._classify_image_to_paths(
+        fallback_result = self._classify_title_fallback_image_to_paths(
             image_bytes=image_bytes,
             mime_type=mime_type,
             language=language,
@@ -832,7 +735,7 @@ class MercariAnalyzer:
 
         raise BadRequestError("Image recognition failed to return a category path.")
 
-    def _call_vision_llm(
+    def _call_title_image_fallback_llm(
         self,
         image_data_urls: List[str],
         language: str,
@@ -840,7 +743,9 @@ class MercariAnalyzer:
     ) -> Tuple[Dict[str, Any], Dict[str, Any], List[AttemptRecord]]:
         if not image_data_urls:
             raise BadRequestError("Image list is empty.")
-        user_prompt = VISION_USER_PROMPT_WITH_PRICE.format(language_label=_language_label(language))
+        user_prompt = TITLE_IMAGE_FALLBACK_USER_PROMPT.format(
+            language_label=_language_label(language)
+        )
         image_payloads: List[Dict[str, Any]] = []
         image_count = len(image_data_urls)
         for index, url in enumerate(image_data_urls, start=1):
@@ -849,13 +754,13 @@ class MercariAnalyzer:
                     "type": "text",
                     "text": (
                         f"Image {index} of {image_count}: inspect this image carefully. "
-                        "Extract any unique evidence from it before merging with the other images."
+                        "Extract only the evidence needed for category matching."
                     ),
                 }
             )
             image_payloads.append({"type": "image_url", "image_url": {"url": url}})
         messages = [
-            {"role": "system", "content": VISION_SYSTEM_PROMPT_WITH_PRICE},
+            {"role": "system", "content": TITLE_IMAGE_FALLBACK_SYSTEM_PROMPT},
             {
                 "role": "user",
                 "content": [{"type": "text", "text": user_prompt}] + image_payloads,
@@ -866,19 +771,22 @@ class MercariAnalyzer:
 
         try:
             parsed, raw_response, attempts = self.vision_caller.call_and_parse(
-                stage="vision",
+                stage="title_image_fallback",
                 primary_model=primary,
                 fallback_models=fallbacks,
                 messages=messages,
                 temperature=0.2,
-                max_tokens=16000,
+                max_tokens=3000,
             )
         except LLMAllAttemptsFailedError as exc:
-            self._log_raw("vision_attempts", [a.__dict__ for a in exc.attempts])
+            self._log_raw(
+                "title_image_fallback_attempts",
+                [a.__dict__ for a in exc.attempts],
+            )
             raise
-        self._log_raw("vision_parsed", parsed)
-        self._log_raw("vision_raw_response", raw_response)
-        self._log_raw("vision_attempts", [a.__dict__ for a in attempts])
+        self._log_raw("title_image_fallback_parsed", parsed)
+        self._log_raw("title_image_fallback_raw_response", raw_response)
+        self._log_raw("title_image_fallback_attempts", [a.__dict__ for a in attempts])
         return parsed, raw_response, attempts
 
     def _call_fast_classification_llm(
@@ -1214,7 +1122,7 @@ class MercariAnalyzer:
 
         return results, parsed, attempts
 
-    def _classify_image_to_paths(
+    def _classify_title_fallback_image_to_paths(
         self,
         image_bytes: bytes,
         mime_type: str,
@@ -1223,15 +1131,16 @@ class MercariAnalyzer:
         category_model_override: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         data_url = image_bytes_to_data_url(image_bytes, mime_type)
-        ai_raw, _, _ = self._call_vision_llm(
+        ai_raw, _, _ = self._call_title_image_fallback_llm(
             [data_url],
             language,
             model_override=vision_model_override,
         )
 
         title = _clean_string(ai_raw.get("title", ""))
-        description_struct = _normalize_description(ai_raw.get("description"))
-        description_text = _description_to_text(description_struct)
+        description_text = _clean_string(
+            ai_raw.get("simple_description", "") or ai_raw.get("description", "")
+        )
         top_level_category = _clean_string(ai_raw.get("top_level_category", ""))
         brand_raw = _clean_string(ai_raw.get("brand_name", ""))
 

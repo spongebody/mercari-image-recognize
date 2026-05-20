@@ -121,7 +121,7 @@ API_PORT=8010 UI_PORT=8012 ./run.sh
 3. fallback 模型使用 `PRODUCT_DATA_FALLBACK_SYSTEM_PROMPT` + `PRODUCT_DATA_FALLBACK_USER_PROMPT`。
 4. OpenRouter 返回 JSON 后，`app/llm/json_parser.py` 解析，`app/service.py` 规范化标题、描述、品牌、价格等字段。
 5. 品牌识别结果会通过 `BrandStore.match` 在品牌 CSV 中匹配，输出 `brand_name` 和 `brand_id_obj`。
-6. 价格字段始终返回：`tax_excluded` / `tax_included` 表示图片中明确可见的实际价格；如果没有明确价格，则两者为 `null`，`prices` 返回 3 个按成色升序的参考价格。初次 `product_pending` 时字段也会存在，默认是 `null` / `null` / `[]`。
+6. 价格字段始终返回：`tax_excluded` / `tax_included` 表示图片中明确可见的实际价格；如果图片里只识别到一个实际价格，默认作为含税价写入 `tax_included`，`tax_excluded` 为 `null`；只有同时明确看到不含税和含税价格时才同时返回两者。如果没有明确价格，则两者为 `null`，`prices` 返回 3 个按成色升序的参考价格。初次 `product_pending` 时字段也会存在，默认是 `null` / `null` / `[]`。
 7. 轮询时，`main.py::_resolve_product_source` 根据 `PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS` 决定用主模型结果还是 fallback 结果，并返回 `product_data_source=primary|fallback`。
 
 请求 OpenRouter 时统一经过：
@@ -176,8 +176,8 @@ API_PORT=8010 UI_PORT=8012 ./run.sh
 1. `main.py` 校验语言和标题。
 2. `MercariAnalyzer.analyze_title` 调用 `PRODUCT_TITLE_CATEGORY_SYSTEM_PROMPT` + `PRODUCT_TITLE_CATEGORY_USER_PROMPT`，先只根据标题判断顶级类目。
 3. 如果标题能得到有效顶级类目，则复用 `_choose_categories` 从分类 CSV 候选中选出目标路径。
-4. 如果标题分类失败且提供了 `image_url`，`app/utils.py::fetch_image_from_url` 下载图片，再走旧版图片识别链路 `_classify_image_to_paths`。
-5. fallback 图片识别使用 `VISION_SYSTEM_PROMPT_WITH_PRICE` + `VISION_USER_PROMPT_WITH_PRICE`，再进入类目选择链路。
+4. 如果标题分类失败且提供了 `image_url`，`app/utils.py::fetch_image_from_url` 下载图片，再走标题图片兜底链路 `_classify_title_fallback_image_to_paths`。
+5. 标题图片兜底使用 `TITLE_IMAGE_FALLBACK_SYSTEM_PROMPT` + `TITLE_IMAGE_FALLBACK_USER_PROMPT`，只抽取分类所需的 `title`、`simple_description`、`top_level_category`、`brand_name`，再进入类目选择链路。
 
 ### POST `/api/v1/showcase/generate`
 
@@ -261,7 +261,7 @@ API_PORT=8010 UI_PORT=8012 ./run.sh
 - `OPENROUTER_BASE_URL`: OpenRouter Chat Completions 地址，默认 `https://openrouter.ai/api/v1/chat/completions`。
 - `OPENROUTER_REFERER`: 可选，写入 `HTTP-Referer` 请求头。
 - `OPENROUTER_APP_NAME`: 可选，写入 `X-Title` 请求头，默认 `mercari-image-backend`。
-- `VISION_MODEL`: 图片快速识别和旧版图片 fallback 识别的主模型。
+- `VISION_MODEL`: 图片快速分类和标题图片兜底识别的主模型。
 - `CATEGORY_MODEL`: 类目选择和标题顶级类目判断的主模型。
 - `PRODUCT_DATA_MODEL`: 多图商品信息生成的主模型，默认 `google/gemini-2.5-flash`。
 - `PRODUCT_DATA_FALLBACK_MODEL`: 与主商品信息任务并行运行的保底模型；留空可关闭并行保底。
@@ -317,6 +317,6 @@ API_PORT=8010 UI_PORT=8012 ./run.sh
 - `UI_HOST`: 本地 UI 静态服务器监听地址，默认 `0.0.0.0`。
 - `UI_PORT`: 本地 UI 静态服务器端口，默认 `8002`。
 
-### 已废弃变量
+### 重试与 fallback
 
-`.env.example` 中历史遗留的 `CATEGORY_LLM_RETRY_ENABLED` 和 `CATEGORY_LLM_MAX_RETRIES` 当前代码不再读取；重试策略由 `MODEL_CALL_MAX_RETRIES`、`MODEL_CALL_TOTAL_BUDGET_SECONDS` 和各类 fallback 模型链控制。
+重试策略由 `MODEL_CALL_MAX_RETRIES`、`MODEL_CALL_TOTAL_BUDGET_SECONDS` 和各类 fallback 模型链控制。
