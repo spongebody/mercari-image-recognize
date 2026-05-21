@@ -14,3 +14,4 @@ ready/*
 perf_results/
 storage/
 .playwright-cli/
+.worktrees/
