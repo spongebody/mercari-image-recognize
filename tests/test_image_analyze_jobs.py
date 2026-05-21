@@ -31,6 +31,9 @@ class ImageAnalyzeJobsTest(unittest.TestCase):
             "best_target_path": "メンズファッション/トップス",
             "best_category_id": "123",
             "rakuten_id": "123",
+            "tax_excluded": None,
+            "tax_included": 1078,
+            "prices": [],
             "timings": {"total_ms": 100.0, "classification_ms": 100.0},
             "image_processing": [
                 {
@@ -57,7 +60,7 @@ class ImageAnalyzeJobsTest(unittest.TestCase):
         self.assertEqual(body["status"], "product_pending")
         self.assertIn("job_id", body)
         self.assertIsNone(body["tax_excluded"])
-        self.assertIsNone(body["tax_included"])
+        self.assertEqual(body["tax_included"], 1078)
         self.assertEqual(body["prices"], [])
         self.assertNotIn("brand_name", body)
         self.assertNotIn("brand_id_obj", body)
@@ -73,7 +76,7 @@ class ImageAnalyzeJobsTest(unittest.TestCase):
         self.assertEqual(pending_response.status_code, 200)
         self.assertEqual(pending_response.json()["status"], "product_pending")
         self.assertIsNone(pending_response.json()["tax_excluded"])
-        self.assertIsNone(pending_response.json()["tax_included"])
+        self.assertEqual(pending_response.json()["tax_included"], 1078)
         self.assertEqual(pending_response.json()["prices"], [])
         self.assertNotIn("brand_name", pending_response.json())
         self.assertEqual(pending_response.json()["image_processing"][0]["compressed"], True)
@@ -98,9 +101,9 @@ class ImageAnalyzeJobsTest(unittest.TestCase):
                 },
                 "brand_name": "Nike",
                 "brand_id_obj": {"rakuten_brand_id": "nike-r"},
-                "tax_excluded": 980,
-                "tax_included": 1078,
-                "prices": [],
+                "tax_excluded": None,
+                "tax_included": None,
+                "prices": [1000, 1500, 2000],
                 "timings": {"product_data_ms": 250.0},
             }
         )
@@ -111,9 +114,9 @@ class ImageAnalyzeJobsTest(unittest.TestCase):
         self.assertEqual(completed["status"], "completed")
         self.assertEqual(completed["brand_name"], "Nike")
         self.assertEqual(completed["brand_id_obj"]["rakuten_brand_id"], "nike-r")
-        self.assertEqual(completed["tax_excluded"], 980)
+        self.assertIsNone(completed["tax_excluded"])
         self.assertEqual(completed["tax_included"], 1078)
-        self.assertEqual(completed["prices"], [])
+        self.assertEqual(completed["prices"], [1000, 1500, 2000])
         self.assertEqual(completed["categories"][0]["confidence"], 0.92)
         self.assertEqual(completed["image_processing"][0]["compressed"], True)
         self.assertEqual(
@@ -126,6 +129,46 @@ class ImageAnalyzeJobsTest(unittest.TestCase):
                 "product_data_fallback_ms": 250.0,
             },
         )
+
+    def test_merge_prefers_product_data_direct_price_over_fast_price(self):
+        classification = {
+            "status": "product_pending",
+            "categories": [],
+            "tax_excluded": None,
+            "tax_included": 1078,
+            "prices": [],
+            "timings": {"total_ms": 100.0, "classification_ms": 100.0},
+        }
+        product_data = {
+            "title": "シャツ",
+            "description": {
+                "product_details": {
+                    "brand": "",
+                    "product_name": "シャツ",
+                    "model_number": "",
+                    "target": "",
+                    "color": "",
+                    "size": "",
+                    "weight": "",
+                    "condition": "",
+                },
+                "product_intro": "紹介文",
+                "recommendation": "おすすめ",
+                "search_keywords": ["シャツ"],
+            },
+            "brand_name": "",
+            "brand_id_obj": {},
+            "tax_excluded": 980,
+            "tax_included": 1078,
+            "prices": [],
+            "timings": {"product_data_ms": 250.0},
+        }
+
+        merged = main._merge_analysis_payload(classification, product_data)
+
+        self.assertEqual(merged["tax_excluded"], 980)
+        self.assertEqual(merged["tax_included"], 1078)
+        self.assertEqual(merged["prices"], [])
 
     @patch.object(main, "product_data_executor")
     @patch.object(main, "analyzer")

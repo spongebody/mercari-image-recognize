@@ -41,7 +41,7 @@
 - 文本内容使用客户端 `language` 指定的语言。
 
 ### 价格字段
-- 图片识别主接口会在商品数据完成后返回 `tax_excluded`、`tax_included`、`prices`。如果还处于 `product_pending`，这三个字段会以 `null` / `null` / `[]` 的默认值存在。
+- 图片识别主接口会始终返回 `tax_excluded`、`tax_included`、`prices`。首个 `product_pending` 响应会由快速分类链路基于所有上传图片抽取清晰可见的实际价格；看不到明确实际价格时，`tax_excluded` / `tax_included` 为 `null`，`prices` 为 `[]`。后台商品数据完成后，直接价格以商品数据链路为准；如果商品数据没有直接价格但首响应已有直接价格，则保留首响应价格；参考价格 `prices` 仍只由商品数据链路推断。
 
 ## 接口列表
 
@@ -197,7 +197,7 @@ files.forEach((file) => {
 - `status=product_pending` 表示商品数据仍在后台生成；使用 `job_id` 调用轮询接口获取完整商品数据。
 - 如果商品数据在首接口返回前已经完成，首接口会直接返回 `status=completed`，并合并 `title`、`description`、`brand_name`、`brand_id_obj`。
 - `_debug` 仅在 `debug=true` 且服务端允许调试时返回。
-- 首次响应如果仍为 `product_pending`，价格字段为默认值；轮询完成后返回商品数据链路抽取或推断的价格字段。
+- 首次响应如果仍为 `product_pending`，也可能包含快速分类链路从所有上传图片中抽取到的直接价格；快速分类链路不推断 `prices`，因此 `prices` 在首响应通常为 `[]`。
 - `categories` 始终返回置信度从高到低的最多 3 个匹配分类（候选目录中可信匹配少于 3 时可能少于 3 个）；`best_target_path` / `alternatives` 在成功匹配分类路径时返回，同样按置信度降序。
 - `timings.total_ms` 表示从请求开始到当前响应时刻的实际墙钟耗时；`timings.classification_ms` 表示首接口分类链路耗时，单位均为毫秒。由于分类与商品数据并行执行，完成态的 `total_ms ≈ max(classification_ms, product_data_ms)`，而非两者相加。
 - `image_processing` 字段返回每张上传图片的压缩处理结果（是否压缩、原始/处理后字节数等）。
@@ -289,7 +289,8 @@ files.forEach((file) => {
 
 说明：
 - `brand_name` / `brand_id_obj` 只在商品数据完成后返回。
-- `tax_excluded`、`tax_included`、`prices` 始终存在。初次 `product_pending` 时默认返回 `null` / `null` / `[]`；完成后由商品数据生成链路返回价格。
+- `tax_excluded`、`tax_included`、`prices` 始终存在。初次 `product_pending` 时可能包含快速分类链路从所有上传图片中抽取到的直接价格；看不到明确实际价格时返回 `null` / `null` / `[]`。
+- 完成态合并时，如果商品数据链路返回直接价格，则覆盖首响应价格；如果商品数据链路没有直接价格但首响应已有直接价格，则保留首响应价格。
 - 如果图片中只识别到一个明确可见的实际商品价格，默认作为含税价格写入 `tax_included`，`tax_excluded` 为 `null`，并且 `prices` 为 `[]`。
 - 如果图片中同时明确可见不含税和含税价格，`tax_excluded` / `tax_included` 分别返回对应整数日元，并且 `prices` 为 `[]`。
 - 如果没有明确可见的实际商品价格，`tax_excluded` 和 `tax_included` 为 `null`，`prices` 返回 `[poor, average, good]` 三个按成色升序的参考价格。

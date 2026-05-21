@@ -494,9 +494,12 @@ class MercariAnalyzer:
         total_started = time.monotonic()
         attempts_by_stage: Dict[str, List[AttemptRecord]] = {}
 
-        first_data_url = image_bytes_to_data_url(images[0][0], images[0][1])
+        data_urls = [
+            image_bytes_to_data_url(image_bytes, mime_type)
+            for image_bytes, mime_type in images
+        ]
         ai_raw, vision_attempts = self._call_fast_classification_llm(
-            first_data_url,
+            data_urls,
             language,
             model_override=vision_model_override,
         )
@@ -506,6 +509,8 @@ class MercariAnalyzer:
         simple_description = _clean_string(ai_raw.get("simple_description", ""))
         top_level_category = _clean_string(ai_raw.get("top_level_category", ""))
         group_name = _map_top_level_category(top_level_category)
+        price_fields = _normalize_price_fields(ai_raw)
+        price_fields["prices"] = []
 
         categories: List[Dict[str, Any]] = []
         llm_category_raw: Optional[Dict[str, Any]] = None
@@ -523,6 +528,7 @@ class MercariAnalyzer:
         result: Dict[str, Any] = {
             "status": "product_pending",
             "categories": categories,
+            **price_fields,
             "timings": {
                 "total_ms": classification_ms,
                 "classification_ms": classification_ms,
@@ -791,21 +797,36 @@ class MercariAnalyzer:
 
     def _call_fast_classification_llm(
         self,
-        image_data_url: str,
+        image_data_urls: List[str],
         language: str,
         model_override: Optional[str] = None,
     ) -> Tuple[Dict[str, Any], List[AttemptRecord]]:
+        if not image_data_urls:
+            raise BadRequestError("Image list is empty.")
         user_prompt = FAST_CLASSIFICATION_USER_PROMPT.format(
             language_label=_language_label(language)
         )
+        image_payloads: List[Dict[str, Any]] = []
+        image_count = len(image_data_urls)
+        for index, url in enumerate(image_data_urls, start=1):
+            role_text = (
+                "Use this first image as the primary category evidence. "
+                "Also inspect it for visible actual product prices."
+                if index == 1
+                else "Inspect this additional image for visible actual product prices."
+            )
+            image_payloads.append(
+                {
+                    "type": "text",
+                    "text": f"Image {index} of {image_count}: {role_text}",
+                }
+            )
+            image_payloads.append({"type": "image_url", "image_url": {"url": url}})
         messages = [
             {"role": "system", "content": FAST_CLASSIFICATION_SYSTEM_PROMPT},
             {
                 "role": "user",
-                "content": [
-                    {"type": "text", "text": user_prompt},
-                    {"type": "image_url", "image_url": {"url": image_data_url}},
-                ],
+                "content": [{"type": "text", "text": user_prompt}] + image_payloads,
             },
         ]
         primary = model_override or self.settings.vision_model

@@ -97,6 +97,10 @@ def _ensure_price_fields(payload: Dict[str, Any]) -> Dict[str, Any]:
     return payload
 
 
+def _has_direct_price(payload: Dict[str, Any]) -> bool:
+    return payload.get("tax_excluded") is not None or payload.get("tax_included") is not None
+
+
 def _format_attempts_error(exc: LLMAllAttemptsFailedError) -> Dict[str, Any]:
     return {
         "message": f"{exc.stage} stage failed after {len(exc.attempts)} attempt(s).",
@@ -145,6 +149,9 @@ def _merge_analysis_payload(
 ) -> Dict[str, Any]:
     payload = dict(classification)
     payload.update(product_data)
+    if _has_direct_price(classification) and not _has_direct_price(product_data):
+        payload["tax_excluded"] = classification.get("tax_excluded")
+        payload["tax_included"] = classification.get("tax_included")
     if classification.get("image_processing") and "image_processing" not in product_data:
         payload["image_processing"] = classification["image_processing"]
     timings = dict(classification.get("timings") or {})

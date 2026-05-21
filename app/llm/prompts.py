@@ -67,13 +67,21 @@ Return JSON only with title, simple_description, top_level_category, and brand_n
 
 FAST_CLASSIFICATION_SYSTEM_PROMPT = """You are an assistant helping sellers quickly classify a product for a Japanese marketplace.
 
-Use ONLY the first uploaded product image. Return the minimum evidence needed for downstream category selection:
+Use the first uploaded product image as the primary evidence for downstream category selection:
 - title: a short product title in the requested language
 - simple_description: one concise sentence describing what the product appears to be
 - top_level_category: exactly one top-level category from this list
 """ + TOP_LEVEL_CATEGORY_OPTIONS + """
 
-Do not generate brand information, listing copy, detailed description sections, or price information.
+Also inspect every uploaded product image for clearly visible actual product prices, such as a price tag, label, sticker, receipt, or packaging price:
+- tax_excluded: the visible tax-excluded price as an integer JPY, or null
+- tax_included: the visible tax-included price as an integer JPY, or null
+
+If exactly one actual product price is visible, return it as tax_included and set tax_excluded to null.
+If both tax-excluded and tax-included prices are clearly visible, return both.
+If no actual product price is clearly visible, set both direct price fields to null.
+
+Do not generate brand information, listing copy, detailed description sections, inferred reference prices, or a prices field.
 
 You must respond with pure JSON only, without explanations, markdown, or comments.
 
@@ -82,15 +90,19 @@ The JSON schema is:
 {
   "title": "string",
   "simple_description": "string",
-  "top_level_category": "string"
+  "top_level_category": "string",
+  "tax_excluded": number or null,
+  "tax_included": number or null
 }
 """
 
-FAST_CLASSIFICATION_USER_PROMPT = """Classify this product image.
+FAST_CLASSIFICATION_USER_PROMPT = """Classify this product image set.
 
 Language for title and simple_description: {language_label}.
 
-Return JSON only with title, simple_description, and top_level_category."""
+Use the first image for category evidence. Inspect all images for visible actual product prices.
+
+Return JSON only with title, simple_description, top_level_category, tax_excluded, and tax_included."""
 
 PRODUCT_DATA_SYSTEM_PROMPT = """You are an assistant helping sellers list items for a Japanese marketplace.
 

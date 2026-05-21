@@ -91,6 +91,8 @@ class ParallelFlowServiceTest(unittest.TestCase):
                 "title": "Nike シャツ",
                 "simple_description": "Nikeのメンズシャツ",
                 "top_level_category": "メンズファッション",
+                "tax_excluded": None,
+                "tax_included": "税込 1,078円",
             }
         )
         category_client = RecordingChatClient(
@@ -124,14 +126,20 @@ class ParallelFlowServiceTest(unittest.TestCase):
         vision_content = vision_client.calls[0]["messages"][1]["content"]
         image_parts = [part for part in vision_content if part["type"] == "image_url"]
         prompt_text = vision_content[0]["text"]
+        system_prompt = vision_client.calls[0]["messages"][0]["content"]
         category_prompt = category_client.calls[0]["messages"][1]["content"]
-        self.assertEqual(len(image_parts), 1)
+        self.assertEqual(len(image_parts), 2)
         self.assertNotIn("product_intro", prompt_text)
-        self.assertNotIn("tax_excluded", prompt_text)
+        self.assertIn("tax_excluded", system_prompt)
+        self.assertIn("tax_included", system_prompt)
+        self.assertNotIn('"prices"', system_prompt)
         self.assertNotIn("brand_name", prompt_text)
         self.assertIn("- Brand (may be empty): \n", category_prompt)
         self.assertEqual(result["status"], "product_pending")
         self.assertNotIn("brand_name", result)
+        self.assertIsNone(result["tax_excluded"])
+        self.assertEqual(result["tax_included"], 1078)
+        self.assertEqual(result["prices"], [])
         self.assertEqual(result["categories"][0]["confidence"], 0.91)
         self.assertEqual(result["categories"][1]["confidence"], 0.53)
         self.assertEqual(set(result["timings"].keys()), {"total_ms", "classification_ms"})
