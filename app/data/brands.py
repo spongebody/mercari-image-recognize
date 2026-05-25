@@ -26,7 +26,7 @@ def _clean_brand_id(value: str) -> str:
 
 
 def _pick_brand_name(record: Dict[str, str]) -> str:
-    for field in ("name_jp", "name_en", "name_cn", "name"):
+    for field in ("name", "name_en", "name_jp"):
         value = record.get(field, "").strip()
         if value:
             return value

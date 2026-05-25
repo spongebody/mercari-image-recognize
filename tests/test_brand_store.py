@@ -51,7 +51,7 @@ class BrandStoreTest(unittest.TestCase):
             record = store.match("アクメ")
 
         self.assertIsNotNone(record)
-        self.assertEqual(record["brand_name"], "アクメ")
+        self.assertEqual(record["brand_name"], "Acme")
         self.assertEqual(
             record["brand_id_obj"],
             {
@@ -65,6 +65,51 @@ class BrandStoreTest(unittest.TestCase):
                 "qoo10_brand_id": "q-1",
             },
         )
+
+    def test_brand_name_falls_back_to_name_en_then_name_jp(self):
+        fieldnames = [
+            "id",
+            "name",
+            "name_jp",
+            "name_en",
+            "rakuten_id",
+            "yshop_id",
+            "yauc_id",
+            "meru_id",
+            "ebay_id",
+            "rakuma_id",
+            "amazon_id",
+            "qoo10_id",
+        ]
+        rows = [
+            {
+                "id": "mercari-2",
+                "name": "",
+                "name_jp": "名無しブランド",
+                "name_en": "Nameless Brand",
+                "rakuten_id": "",
+                "yshop_id": "",
+                "yauc_id": "",
+                "meru_id": "",
+                "ebay_id": "",
+                "rakuma_id": "",
+                "amazon_id": "",
+                "qoo10_id": "",
+            }
+        ]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csv_path = Path(tmpdir) / "mercari_brand.csv"
+            with csv_path.open("w", newline="", encoding="utf-8-sig") as fh:
+                writer = csv.DictWriter(fh, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(rows)
+
+            store = BrandStore(str(csv_path))
+            record = store.match("名無しブランド")
+
+        self.assertIsNotNone(record)
+        self.assertEqual(record["brand_name"], "Nameless Brand")
 
     def test_settings_default_brand_csv_path_is_mercari_brand(self):
         self.assertEqual(Settings().brand_csv_path, "data/mercari_brand.csv")
