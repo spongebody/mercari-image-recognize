@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app.observability.recorder import Recorder
-from app.observability.retention import prune
+from app.observability.retention import clear_all, prune
 from app.observability.store import Store
 
 
@@ -55,3 +55,38 @@ def test_prune_purges_fts_rows(tmp_path: Path):
     with recorder.store.connect() as conn:
         rows = list(conn.execute("SELECT request_id FROM requests_fts WHERE request_id='old'"))
     assert rows == []
+
+
+def test_clear_all_drops_rows_and_artifacts(tmp_path: Path):
+    recorder = _make_recorder(tmp_path)
+    _seed_request(recorder, "a", days_ago=0)
+    _seed_request(recorder, "b", days_ago=5)
+    # seed an LLM call + FTS row to confirm cascade
+    recorder.record_llm_stage(
+        request_id="a", stage="category",
+        attempts=[{"model": "m", "attempt": 1, "error_kind": "ok",
+                   "message": "", "latency_ms": 1.0, "status_code": 200}],
+        messages=[{"role": "user", "content": "x"}],
+        raw_response={"usage": {"total_tokens": 1}},
+        parsed={},
+    )
+    stats = clear_all(recorder.store, recorder.store_root)
+    assert stats.rows_deleted == 2
+    with recorder.store.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) AS n FROM requests").fetchone()["n"] == 0
+        assert conn.execute("SELECT COUNT(*) AS n FROM llm_calls").fetchone()["n"] == 0
+        assert conn.execute("SELECT COUNT(*) AS n FROM requests_fts").fetchone()["n"] == 0
+        assert conn.execute("SELECT COUNT(*) AS n FROM llm_fts").fetchone()["n"] == 0
+    # date dirs are gone
+    date_dirs = [p for p in recorder.store_root.iterdir() if p.is_dir() and not p.name.startswith("_")]
+    assert date_dirs == []
+
+
+def test_clear_all_preserves_dead_letter(tmp_path: Path):
+    recorder = _make_recorder(tmp_path)
+    recorder._dead_letter("test", {"k": "v"})
+    _seed_request(recorder, "x", days_ago=0)
+    clear_all(recorder.store, recorder.store_root)
+    dead = recorder.store_root / "_dead_letter"
+    assert dead.exists()
+    assert any(dead.iterdir()), "_dead_letter contents should be preserved"

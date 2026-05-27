@@ -206,4 +206,11 @@ def build_router(*, store: Store, store_root: Path, auth_dep) -> APIRouter:
         stats = _prune(store, store_root, s.log_retention_days, s.log_max_total_bytes)
         return {"rows_deleted": stats.rows_deleted, "bytes_freed": stats.bytes_freed}
 
+    @router.post("/clear")
+    def manual_clear():
+        """Destructive: wipe every request row and artifact. Preserves _dead_letter."""
+        from .retention import clear_all as _clear_all
+        stats = _clear_all(store, store_root)
+        return {"rows_deleted": stats.rows_deleted, "bytes_freed": stats.bytes_freed}
+
     return router
