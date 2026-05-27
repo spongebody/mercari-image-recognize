@@ -85,3 +85,18 @@ def test_logs_page_requires_auth(set_password):
         r = client.get("/logs", headers=_auth())
     assert r.status_code == 200
     assert "<html" in r.text.lower()
+
+
+def test_config_page_requires_auth(set_password):
+    with TestClient(set_password.app) as client:
+        r = client.get("/config")
+    assert r.status_code == 401
+    with TestClient(set_password.app) as client:
+        r = client.get("/config", headers=_auth())
+    assert r.status_code == 200
+
+
+def test_put_config_requires_auth(set_password):
+    with TestClient(set_password.app) as client:
+        r = client.put("/api/v1/config", json={})
+    assert r.status_code == 401

@@ -442,7 +442,8 @@ def _parse_original_product_data(raw: Optional[str]) -> Optional[Dict[str, Any]]
     return parsed
 
 
-@app.get("/config", response_class=HTMLResponse)
+@app.get("/config", response_class=HTMLResponse,
+         dependencies=[Depends(require_logs_auth(settings.logs_password))])
 def config_page() -> HTMLResponse:
     try:
         return HTMLResponse(CONFIG_PAGE_PATH.read_text(encoding="utf-8"))
@@ -461,7 +462,8 @@ def read_config() -> Dict[str, Any]:
     return get_public_config(settings)
 
 
-@app.put("/api/v1/config")
+@app.put("/api/v1/config",
+         dependencies=[Depends(require_logs_auth(settings.logs_password))])
 def save_config(payload: Dict[str, Any], request: Request) -> Dict[str, Any]:
     origin = request.headers.get("origin")
     if origin:
