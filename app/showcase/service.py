@@ -126,10 +126,18 @@ class ShowcaseService:
             logger.exception("Showcase generation failed for request_id=%s", request_id)
             if _svc_module.recorder is not None:
                 try:
+                    synthetic_attempt = {
+                        "model": effective_model,
+                        "attempt": 1,
+                        "error_kind": "exception",
+                        "message": str(exc)[:1000],
+                        "latency_ms": latency_ms,
+                        "status_code": status_code,
+                    }
                     _svc_module.recorder.record_llm_stage(
                         request_id=request_id,
                         stage="showcase_generate",
-                        attempts=[],
+                        attempts=[synthetic_attempt],
                         messages=[{"role": "user", "content": final_prompt}],
                         raw_response=None,
                         parsed=None,
