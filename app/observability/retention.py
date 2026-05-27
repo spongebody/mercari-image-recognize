@@ -90,3 +90,28 @@ def prune(store: Store, store_root: Path, retention_days: int, max_total_bytes: 
 
     _logger.info("observability.prune deleted=%d freed_bytes=%d", rows_deleted, bytes_freed)
     return PruneStats(rows_deleted=rows_deleted, bytes_freed=bytes_freed)
+
+
+def clear_all(store: Store, store_root: Path) -> PruneStats:
+    """Wipe every recorded request and its artifacts.
+
+    Drops all rows from requests / llm_calls / requests_fts / llm_fts, then
+    removes every per-date directory under store_root. Leaves _dead_letter/
+    intact so diagnostic info from logging failures survives a manual wipe.
+    """
+    with store.connect() as conn:
+        rows_deleted = conn.execute("SELECT COUNT(*) AS n FROM requests").fetchone()["n"]
+        conn.execute("DELETE FROM requests_fts")
+        conn.execute("DELETE FROM llm_fts")
+        conn.execute("DELETE FROM requests")  # cascades llm_calls
+
+    bytes_freed = 0
+    if store_root.exists():
+        for entry in store_root.iterdir():
+            if not entry.is_dir() or entry.name.startswith("_"):
+                continue
+            bytes_freed += _dir_size(entry)
+            shutil.rmtree(entry, ignore_errors=True)
+
+    _logger.info("observability.clear_all deleted=%d freed_bytes=%d", rows_deleted, bytes_freed)
+    return PruneStats(rows_deleted=rows_deleted, bytes_freed=bytes_freed)

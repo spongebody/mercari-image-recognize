@@ -107,3 +107,26 @@ def test_invalid_fts_query_returns_400(set_password):
         client.get("/api/v1/config", headers=_auth())  # seed a log row
         r = client.get('/api/v1/logs/requests?q=AND OR', headers=_auth())
     assert r.status_code == 400
+
+
+def test_clear_endpoint_requires_auth(set_password):
+    with TestClient(set_password.app) as client:
+        r = client.post("/api/v1/logs/clear")
+    assert r.status_code == 401
+
+
+def test_clear_endpoint_wipes_rows(set_password):
+    with TestClient(set_password.app) as client:
+        # seed: hit /api/v1/config so the middleware records a row
+        client.get("/api/v1/config", headers=_auth())
+        listed = client.get("/api/v1/logs/requests", headers=_auth()).json()
+        assert len(listed["items"]) >= 1
+        r = client.post("/api/v1/logs/clear", headers=_auth())
+        assert r.status_code == 200
+        body = r.json()
+        assert body["rows_deleted"] >= 1
+        assert "bytes_freed" in body
+        # subsequent list should be empty (or contain only the clear-call's own log)
+        after = client.get("/api/v1/logs/requests", headers=_auth()).json()
+        # Note: middleware skips /api/v1/logs/* paths, so the clear call itself is not logged
+        assert after["items"] == []

@@ -31,6 +31,8 @@
   .image-grid figcaption { font-size: 11px; color: #57606a; margin-top: 2px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 9999; cursor: zoom-out; }
   .lightbox img { max-width: 92vw; max-height: 92vh; box-shadow: 0 4px 24px rgba(0,0,0,0.5); border-radius: 4px; }
+  button.danger { background: #fff; border: 1px solid #cf222e; color: #cf222e; }
+  button.danger:hover { background: #ffebe9; }
 </style>
 </head>
 <body>
@@ -66,6 +68,7 @@
   <label><input id="include-llm" type="checkbox"> 含 prompt/response</label>
   <span id="job-filter-pill" style="display:none"></span>
   <button id="refresh">刷新</button>
+  <button id="clear-all" class="danger" title="清空全部日志">清空</button>
   <span class="stats" id="stats"></span>
 </div>
 <table>
@@ -276,7 +279,18 @@ function openLightbox(src) {
   document.body.appendChild(box);
 }
 function copyText(t) { navigator.clipboard.writeText(t); }
+async function clearAllLogs() {
+  if (!confirm('确定清空所有日志？此操作不可恢复，将删除所有请求记录、LLM 调用记录和归档文件。')) return;
+  const r = await fetch('/api/v1/logs/clear', {method: 'POST', credentials: 'include'});
+  if (!r.ok) { alert('清空失败: ' + r.status); return; }
+  const result = await r.json();
+  const mb = (result.bytes_freed / 1024 / 1024).toFixed(2);
+  alert(`已删除 ${result.rows_deleted} 条记录，释放 ${mb} MB。`);
+  setJobFilter('');  // also clears the pill if any
+  fetchList(true);
+}
 document.getElementById('refresh').addEventListener('click', () => fetchList(true));
+document.getElementById('clear-all').addEventListener('click', clearAllLogs);
 document.getElementById('load-more').addEventListener('click', () => fetchList(false));
 document.querySelectorAll('#time-range,#endpoint,#error-kind').forEach(el =>
   el.addEventListener('change', () => fetchList(true)));
