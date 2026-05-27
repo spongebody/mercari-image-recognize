@@ -40,6 +40,8 @@ settings = load_settings()
 _obs_store = ObsStore(BASE_DIR / "logs" / "observability.db")
 _obs_store.init_schema()
 recorder = Recorder(store=_obs_store, store_root=BASE_DIR / "logs" / "store")
+from app import service as _svc_module
+_svc_module.set_recorder(recorder)
 brand_store = BrandStore(settings.brand_csv_path)
 category_store = CategoryStore(settings.category_csv_path)
 vision_client = OpenRouterClient(
