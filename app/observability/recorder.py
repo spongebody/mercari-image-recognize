@@ -113,11 +113,21 @@ class Recorder:
                 request_payload["body"] = {"json": parsed}
             elif body_bytes:
                 request_payload["body"] = {"size_bytes": len(body_bytes)}
+            saved_images: List[Dict[str, Any]] = []
             for idx, img in enumerate(uploaded_images):
                 data = img.get("bytes")
                 if data:
                     suffix = img.get("suffix", ".bin")
-                    (d / f"image_{idx}{suffix}").write_bytes(data)
+                    saved_as = f"image_{idx}{suffix}"
+                    (d / saved_as).write_bytes(data)
+                    saved_images.append({
+                        "filename": img.get("filename", ""),
+                        "content_type": img.get("content_type", ""),
+                        "saved_as": saved_as,
+                        "size_bytes": len(data),
+                    })
+            if saved_images:
+                request_payload["images"] = saved_images
             (d / "request.json").write_text(json.dumps(request_payload, ensure_ascii=False, indent=2))
         except Exception as exc:
             _logger.exception("observability.start_request failed: %s", exc)
