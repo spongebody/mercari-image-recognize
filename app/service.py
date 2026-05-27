@@ -487,6 +487,25 @@ class MercariAnalyzer:
             per_attempt_timeout_s=settings.request_timeout,
         )
 
+    def _record_stage(
+        self,
+        stage: str,
+        attempts: list,
+        messages: list,
+        raw_response: Optional[Dict[str, Any]] = None,
+        parsed: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        if recorder is None:
+            return
+        recorder.record_llm_stage(
+            request_id=obs_ctx.get_request_id() or "",
+            stage=stage,
+            attempts=attempts,
+            messages=messages,
+            raw_response=raw_response,
+            parsed=parsed,
+        )
+
     def classify_first_image_categories(
         self,
         images: List[Tuple[bytes, str]],
@@ -794,27 +813,19 @@ class MercariAnalyzer:
                 max_tokens=3000,
             )
         except LLMAllAttemptsFailedError as exc:
-            if recorder is not None:
-                request_id = obs_ctx.get_request_id() or ""
-                recorder.record_llm_stage(
-                    request_id=request_id,
-                    stage="title_image_fallback",
-                    attempts=[a.__dict__ for a in exc.attempts],
-                    messages=messages,
-                    raw_response=None,
-                    parsed=None,
-                )
-            raise
-        if recorder is not None:
-            request_id = obs_ctx.get_request_id() or ""
-            recorder.record_llm_stage(
-                request_id=request_id,
+            self._record_stage(
                 stage="title_image_fallback",
-                attempts=[a.__dict__ for a in attempts],
+                attempts=[a.__dict__ for a in exc.attempts],
                 messages=messages,
-                raw_response=raw_response,
-                parsed=parsed,
             )
+            raise
+        self._record_stage(
+            stage="title_image_fallback",
+            attempts=[a.__dict__ for a in attempts],
+            messages=messages,
+            raw_response=raw_response,
+            parsed=parsed,
+        )
         return parsed, raw_response, attempts
 
     def _call_fast_classification_llm(
@@ -864,27 +875,19 @@ class MercariAnalyzer:
                 max_tokens=2000,
             )
         except LLMAllAttemptsFailedError as exc:
-            if recorder is not None:
-                request_id = obs_ctx.get_request_id() or ""
-                recorder.record_llm_stage(
-                    request_id=request_id,
-                    stage="fast_vision",
-                    attempts=[a.__dict__ for a in exc.attempts],
-                    messages=messages,
-                    raw_response=None,
-                    parsed=None,
-                )
-            raise
-        if recorder is not None:
-            request_id = obs_ctx.get_request_id() or ""
-            recorder.record_llm_stage(
-                request_id=request_id,
+            self._record_stage(
                 stage="fast_vision",
-                attempts=[a.__dict__ for a in attempts],
+                attempts=[a.__dict__ for a in exc.attempts],
                 messages=messages,
-                raw_response=raw_response,
-                parsed=parsed,
             )
+            raise
+        self._record_stage(
+            stage="fast_vision",
+            attempts=[a.__dict__ for a in attempts],
+            messages=messages,
+            raw_response=raw_response,
+            parsed=parsed,
+        )
         return parsed, attempts
 
     def _call_product_data_llm(
@@ -949,27 +952,19 @@ class MercariAnalyzer:
                 max_tokens=12000,
             )
         except LLMAllAttemptsFailedError as exc:
-            if recorder is not None:
-                request_id = obs_ctx.get_request_id() or ""
-                recorder.record_llm_stage(
-                    request_id=request_id,
-                    stage=stage,
-                    attempts=[a.__dict__ for a in exc.attempts],
-                    messages=messages,
-                    raw_response=None,
-                    parsed=None,
-                )
-            raise
-        if recorder is not None:
-            request_id = obs_ctx.get_request_id() or ""
-            recorder.record_llm_stage(
-                request_id=request_id,
+            self._record_stage(
                 stage=stage,
-                attempts=[a.__dict__ for a in attempts],
+                attempts=[a.__dict__ for a in exc.attempts],
                 messages=messages,
-                raw_response=raw_response,
-                parsed=parsed,
             )
+            raise
+        self._record_stage(
+            stage=stage,
+            attempts=[a.__dict__ for a in attempts],
+            messages=messages,
+            raw_response=raw_response,
+            parsed=parsed,
+        )
         return parsed, raw_response, attempts
 
     def _call_product_data_regeneration_llm(
@@ -1024,27 +1019,19 @@ class MercariAnalyzer:
                 max_tokens=12000,
             )
         except LLMAllAttemptsFailedError as exc:
-            if recorder is not None:
-                request_id = obs_ctx.get_request_id() or ""
-                recorder.record_llm_stage(
-                    request_id=request_id,
-                    stage="product_data_regeneration",
-                    attempts=[a.__dict__ for a in exc.attempts],
-                    messages=messages,
-                    raw_response=None,
-                    parsed=None,
-                )
-            raise
-        if recorder is not None:
-            request_id = obs_ctx.get_request_id() or ""
-            recorder.record_llm_stage(
-                request_id=request_id,
+            self._record_stage(
                 stage="product_data_regeneration",
-                attempts=[a.__dict__ for a in attempts],
+                attempts=[a.__dict__ for a in exc.attempts],
                 messages=messages,
-                raw_response=raw_response,
-                parsed=parsed,
             )
+            raise
+        self._record_stage(
+            stage="product_data_regeneration",
+            attempts=[a.__dict__ for a in attempts],
+            messages=messages,
+            raw_response=raw_response,
+            parsed=parsed,
+        )
         return parsed, raw_response, attempts
 
     def _product_data_primary_chain(self, primary_model: str) -> List[str]:
@@ -1093,27 +1080,19 @@ class MercariAnalyzer:
                 max_tokens=16000,
             )
         except LLMAllAttemptsFailedError as exc:
-            if recorder is not None:
-                request_id = obs_ctx.get_request_id() or ""
-                recorder.record_llm_stage(
-                    request_id=request_id,
-                    stage="title_category",
-                    attempts=[a.__dict__ for a in exc.attempts],
-                    messages=messages,
-                    raw_response=None,
-                    parsed=None,
-                )
-            raise
-        if recorder is not None:
-            request_id = obs_ctx.get_request_id() or ""
-            recorder.record_llm_stage(
-                request_id=request_id,
+            self._record_stage(
                 stage="title_category",
-                attempts=[a.__dict__ for a in attempts],
+                attempts=[a.__dict__ for a in exc.attempts],
                 messages=messages,
-                raw_response=raw_response,
-                parsed=parsed,
             )
+            raise
+        self._record_stage(
+            stage="title_category",
+            attempts=[a.__dict__ for a in attempts],
+            messages=messages,
+            raw_response=raw_response,
+            parsed=parsed,
+        )
         return parsed, attempts
 
     def _choose_categories(
@@ -1155,27 +1134,19 @@ class MercariAnalyzer:
                 max_tokens=16000,
             )
         except LLMAllAttemptsFailedError as exc:
-            if recorder is not None:
-                request_id = obs_ctx.get_request_id() or ""
-                recorder.record_llm_stage(
-                    request_id=request_id,
-                    stage="category",
-                    attempts=[a.__dict__ for a in exc.attempts],
-                    messages=messages,
-                    raw_response=None,
-                    parsed=None,
-                )
-            raise
-        if recorder is not None:
-            request_id = obs_ctx.get_request_id() or ""
-            recorder.record_llm_stage(
-                request_id=request_id,
+            self._record_stage(
                 stage="category",
-                attempts=[a.__dict__ for a in attempts],
+                attempts=[a.__dict__ for a in exc.attempts],
                 messages=messages,
-                raw_response=raw_response,
-                parsed=parsed,
             )
+            raise
+        self._record_stage(
+            stage="category",
+            attempts=[a.__dict__ for a in attempts],
+            messages=messages,
+            raw_response=raw_response,
+            parsed=parsed,
+        )
 
         ordered_paths: List[Tuple[str, float]] = []
         best = parsed.get("best_target_path")

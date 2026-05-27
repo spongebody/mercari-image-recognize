@@ -29,6 +29,7 @@ from app.observability.recorder import Recorder
 from app.observability.retention import prune as obs_prune
 from app.observability.store import Store as ObsStore
 from app.runtime_config import get_public_config, update_runtime_config
+from app import service as _svc_module
 from app.service import MercariAnalyzer
 from app.showcase.archive import ArchiveWriter as ShowcaseArchiveWriter
 from app.showcase.openrouter_image_client import OpenRouterImageClient
@@ -40,7 +41,6 @@ settings = load_settings()
 _obs_store = ObsStore(BASE_DIR / "logs" / "observability.db")
 _obs_store.init_schema()
 recorder = Recorder(store=_obs_store, store_root=BASE_DIR / "logs" / "store")
-from app import service as _svc_module
 _svc_module.set_recorder(recorder)
 brand_store = BrandStore(settings.brand_csv_path)
 category_store = CategoryStore(settings.category_csv_path)

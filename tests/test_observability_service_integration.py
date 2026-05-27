@@ -21,6 +21,7 @@ def test_choose_categories_records_llm_stage(monkeypatch, tmp_path):
     analyzer.settings = MagicMock(category_model="m", category_fallback_models=[])
     analyzer.category_store = MagicMock()
     analyzer.category_store.get_categories_by_group.return_value = [{"name": "x"}]
+    analyzer._record_stage = svc.MercariAnalyzer._record_stage.__get__(analyzer)
 
     token = obs_ctx.set_request_id("rid-service")
     try:
