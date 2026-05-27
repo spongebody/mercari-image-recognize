@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from starlette.datastructures import UploadFile as _Upload
 from starlette.requests import Request as _SReq
@@ -448,6 +448,12 @@ def config_page() -> HTMLResponse:
         return HTMLResponse(CONFIG_PAGE_PATH.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Config page not found.") from exc
+
+
+@app.get("/logs", response_class=HTMLResponse,
+         dependencies=[Depends(require_logs_auth(settings.logs_password))])
+def logs_page():
+    return FileResponse(BASE_DIR / "web" / "logs.html")
 
 
 @app.get("/api/v1/config")

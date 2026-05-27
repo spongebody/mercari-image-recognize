@@ -74,3 +74,14 @@ def test_fts_query_capped_at_500(set_password, monkeypatch):
         client.get("/api/v1/config", headers=_auth())
         r = client.get("/api/v1/logs/requests?q=config", headers=_auth())
     assert r.status_code == 200
+
+
+def test_logs_page_requires_auth(set_password):
+    with TestClient(set_password.app) as client:
+        r = client.get("/logs")
+    assert r.status_code == 401
+
+    with TestClient(set_password.app) as client:
+        r = client.get("/logs", headers=_auth())
+    assert r.status_code == 200
+    assert "<html" in r.text.lower()
