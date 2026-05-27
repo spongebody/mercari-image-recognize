@@ -179,3 +179,57 @@ def test_record_llm_stage_failure_only(recorder: Recorder):
         rows = list(conn.execute("SELECT status, parsed_file FROM llm_calls WHERE request_id='rid_fail' ORDER BY attempt"))
     assert [r["status"] for r in rows] == ["failed", "failed"]
     assert all(r["parsed_file"] is None for r in rows)
+
+
+def test_record_llm_stage_mixed_attempts(recorder: Recorder):
+    """Failed attempt followed by a successful retry — only the ok row gets parsed/cost/tokens."""
+    recorder.start_request(
+        request_id="rid_mix", method="POST", endpoint="/x",
+        client_ip="", user_agent="", language="", headers={},
+        body_bytes=b"", content_type="", uploaded_images=[],
+    )
+    attempts = [
+        {"model": "m1", "attempt": 1, "error_kind": "request_failed",
+         "message": "timeout", "latency_ms": 5000.0, "status_code": 504},
+        {"model": "m2", "attempt": 2, "error_kind": "ok",
+         "message": "", "latency_ms": 800.0, "status_code": 200},
+    ]
+    raw = {"usage": {"total_tokens": 250, "prompt_tokens": 200, "completion_tokens": 50}, "cost": 0.001}
+    recorder.record_llm_stage(
+        request_id="rid_mix", stage="category",
+        attempts=attempts, messages=[{"role": "user", "content": "x"}],
+        raw_response=raw, parsed={"category": "x"},
+    )
+    with recorder.store.connect() as conn:
+        rows = list(conn.execute(
+            "SELECT attempt, status, total_tokens, cost_usd, parsed_file FROM llm_calls "
+            "WHERE request_id='rid_mix' ORDER BY attempt"))
+    assert [r["status"] for r in rows] == ["failed", "ok"]
+    # failed attempt: no tokens, no cost, no parsed_file
+    assert rows[0]["total_tokens"] is None
+    assert rows[0]["cost_usd"] is None
+    assert rows[0]["parsed_file"] is None
+    # ok attempt: gets the tokens/cost/parsed
+    assert rows[1]["total_tokens"] == 250
+    assert abs(rows[1]["cost_usd"] - 0.001) < 1e-9
+    assert rows[1]["parsed_file"].endswith("llm_category_2_parsed.json")
+
+
+def test_record_llm_stage_cost_in_usage_field(recorder: Recorder):
+    """OpenRouter sometimes reports cost under usage.cost — confirm we pick it up."""
+    recorder.start_request(
+        request_id="rid_cu", method="POST", endpoint="/x",
+        client_ip="", user_agent="", language="", headers={},
+        body_bytes=b"", content_type="", uploaded_images=[],
+    )
+    raw = {"usage": {"total_tokens": 100, "cost": 0.0099}}
+    recorder.record_llm_stage(
+        request_id="rid_cu", stage="category",
+        attempts=[{"model": "m", "attempt": 1, "error_kind": "ok",
+                   "message": "", "latency_ms": 10.0, "status_code": 200}],
+        messages=[{"role": "user", "content": "y"}],
+        raw_response=raw, parsed={"k": "v"},
+    )
+    with recorder.store.connect() as conn:
+        row = conn.execute("SELECT cost_usd FROM llm_calls WHERE request_id='rid_cu'").fetchone()
+    assert abs(row["cost_usd"] - 0.0099) < 1e-9

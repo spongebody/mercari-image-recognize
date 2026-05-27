@@ -211,15 +211,38 @@ class Recorder:
             d = self._find_request_dir(request_id)
             if d is None:
                 # no parent: create a tombstone day-dir under today
-                from datetime import datetime as _dt
-                date_str = _dt.now(timezone.utc).strftime("%Y-%m-%d")
+                date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
                 d = artifact_dir(self.store_root, date_str, request_id)
                 d.mkdir(parents=True, exist_ok=True)
 
             usage = (raw_response or {}).get("usage") or {}
-            cost = (raw_response or {}).get("cost")
-            if isinstance(cost, dict):
-                cost = cost.get("total")
+            # OpenRouter has reported cost in several shapes across versions:
+            #   {"cost": 0.0042}                           # top-level float
+            #   {"cost": {"total": 0.0042, ...}}           # top-level dict
+            #   {"usage": {"cost": 0.0042, ...}}           # nested under usage
+            #   {"cost_details": {"total_cost": 0.0042}}   # nested cost_details
+            # Try each in priority order; first hit wins.
+            cost: Optional[float] = None
+            raw_cost = (raw_response or {}).get("cost")
+            if isinstance(raw_cost, (int, float)):
+                cost = float(raw_cost)
+            elif isinstance(raw_cost, dict):
+                inner = raw_cost.get("total")
+                if isinstance(inner, (int, float)):
+                    cost = float(inner)
+            if cost is None:
+                usage_cost = usage.get("cost")
+                if isinstance(usage_cost, (int, float)):
+                    cost = float(usage_cost)
+            if cost is None:
+                cd = (raw_response or {}).get("cost_details") or {}
+                total_cost = cd.get("total_cost") if isinstance(cd, dict) else None
+                if isinstance(total_cost, (int, float)):
+                    cost = float(total_cost)
+
+            date_str = d.parent.name
+            def _rel(name: Optional[str]) -> Optional[str]:
+                return f"{date_str}/{request_id}/{name}" if name else None
 
             for idx, attempt in enumerate(attempts):
                 attempt_idx = int(attempt.get("attempt") or (idx + 1))
@@ -246,12 +269,7 @@ class Recorder:
                     attempt_prompt_tokens = usage.get("prompt_tokens")
                     attempt_completion_tokens = usage.get("completion_tokens")
                     attempt_total_tokens = usage.get("total_tokens")
-                    attempt_cost = float(cost) if cost is not None else None
-
-                # store path relative to store_root
-                date_str = d.parent.name
-                def _rel(name):
-                    return f"{date_str}/{request_id}/{name}" if name else None
+                    attempt_cost = cost
 
                 llm_call_id = self.store.insert_llm_call(
                     request_id=request_id,
