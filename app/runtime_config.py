@@ -27,7 +27,6 @@ CONFIG_FIELDS = (
         min_value=0.1,
     ),
     ConfigField("SHOWCASE_MODEL", "showcase_model", "str"),
-    ConfigField("LOG_LLM_RAW", "log_llm_raw", "bool"),
     ConfigField("LOG_REQUESTS", "log_requests", "bool"),
     ConfigField("ENABLE_DEBUG", "enable_debug_param", "bool"),
     ConfigField("IMAGE_COMPRESSION_THRESHOLD_MB", "image_compression_threshold_mb", "int"),

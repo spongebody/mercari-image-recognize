@@ -65,7 +65,7 @@ def _build_analyzer(
         product_data_model="primary-product-data",
         product_data_fallback_model="explicit-fallback-model",
         product_data_fallback_models=list(fallback_models),
-        log_llm_raw=False,
+        log_requests=False,
         vision_fallback_models=list(primary_fallback_models),
         category_fallback_models=[],
         model_call_max_retries=0,  # no retries inside ResilientCaller, just go to next model

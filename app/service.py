@@ -1037,7 +1037,7 @@ class MercariAnalyzer:
         return parsed, attempts
 
     def _log_raw(self, name: str, payload: Any) -> None:
-        if not self.settings.log_llm_raw:
+        if not self.settings.log_requests:
             return
         try:
             self._logs_dir.mkdir(parents=True, exist_ok=True)

@@ -73,7 +73,7 @@ class RakutenIdResponseTest(unittest.TestCase):
             request_timeout=60,
             max_image_bytes=1024,
             allowed_mime_types={"image/png"},
-            log_llm_raw=False,
+            log_requests=False,
             vision_fallback_models=[],
             category_fallback_models=[],
             model_call_max_retries=0,

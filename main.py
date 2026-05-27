@@ -473,8 +473,8 @@ async def log_requests(request: Request, call_next):
                 status_code=status_code,
                 duration_ms=duration_ms,
                 error=error_message,
-                retention_days=settings.log_requests_retention_days,
-                max_files=settings.log_requests_max_files,
+                retention_days=7,
+                max_files=1000,
             )
         except Exception:
             pass
