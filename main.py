@@ -11,6 +11,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
+from starlette.datastructures import UploadFile as _Upload
+from starlette.requests import Request as _SReq
+from starlette.responses import Response as _Resp
 
 from app.config import BASE_DIR, load_settings
 from app.constants import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES
@@ -496,9 +499,6 @@ async def observe_request(request: Request, call_next):
         uploaded_images: List[Dict[str, Any]] = []
         if "multipart/form-data" in content_type and body:
             # parse to capture image bytes for archive
-            from starlette.datastructures import UploadFile as _Upload
-            from starlette.requests import Request as _SReq
-
             async def _recv():
                 return {"type": "http.request", "body": body, "more_body": False}
 
@@ -541,20 +541,19 @@ async def observe_request(request: Request, call_next):
         response = await call_next(request)
         status_code = response.status_code
 
-        # buffer response body (cap at LOG_RESPONSE_MAX_BYTES)
-        cap = settings.log_response_max_bytes
-        chunks: List[bytes] = []
-        total = 0
+        # buffer full response body for re-emission, keep capped slice for logging
+        full_chunks: List[bytes] = []
         async for chunk in response.body_iterator:
-            chunks.append(chunk)
-            total += len(chunk)
-            if total > cap:
-                break
-        response_body_bytes = b"".join(chunks)
+            full_chunks.append(chunk)
+        full_body_bytes = b"".join(full_chunks)
+        cap = settings.log_response_max_bytes
+        if cap > 0 and len(full_body_bytes) > cap:
+            response_body_bytes = full_body_bytes[:cap]
+        else:
+            response_body_bytes = full_body_bytes
 
-        from starlette.responses import Response as _Resp
         new_response = _Resp(
-            content=response_body_bytes,
+            content=full_body_bytes,
             status_code=response.status_code,
             headers={k: v for k, v in response.headers.items() if k.lower() != "content-length"},
             media_type=response.media_type,
