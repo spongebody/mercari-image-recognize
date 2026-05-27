@@ -5,7 +5,7 @@ import logging
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, List, Optional
 
 from .paths import artifact_dir
 from .store import Store
@@ -127,7 +127,7 @@ class Recorder:
         self,
         *,
         request_id: str,
-        status_code: int,
+        status_code: Optional[int],
         duration_ms: float,
         error: str,
         response_body: bytes,
@@ -183,6 +183,9 @@ class Recorder:
         try:
             d = self.store_root / "_dead_letter"
             d.mkdir(parents=True, exist_ok=True)
+            # Best-effort cap. The count→write window is racy under concurrent
+            # writers, so the directory may briefly exceed _MAX_DEAD_LETTERS; the
+            # goal is bounded disk usage during a logging outage, not exact limit.
             existing = list(d.iterdir())
             if len(existing) >= _MAX_DEAD_LETTERS:
                 return

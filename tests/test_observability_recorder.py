@@ -74,3 +74,41 @@ def test_error_kind_classification(recorder: Recorder):
         with recorder.store.connect() as conn:
             kind = conn.execute("SELECT error_kind FROM requests WHERE request_id=?", (rid,)).fetchone()["error_kind"]
         assert kind == expected_kind, f"case {i}: got {kind}"
+
+
+def test_error_kind_llm_failed_when_http_5xx_and_llm_attempts_failed(recorder: Recorder):
+    """A 5xx HTTP response with an llm_calls row marked failed promotes error_kind to 'llm_failed'."""
+    recorder.start_request(
+        request_id="rid_llm_fail", method="POST", endpoint="/x",
+        client_ip="", user_agent="", language="", headers={},
+        body_bytes=b"", content_type="", uploaded_images=[],
+    )
+    # seed a failed llm_call directly via the store
+    recorder.store.insert_llm_call(
+        request_id="rid_llm_fail",
+        timestamp_utc="2026-05-26T00:00:00",
+        stage="category",
+        attempt=1,
+        model="m",
+        status="failed",
+        error_kind="request_failed",
+        error_message="upstream 500",
+        latency_ms=10.0,
+        http_status_code=500,
+        prompt_tokens=None,
+        completion_tokens=None,
+        total_tokens=None,
+        cost_usd=None,
+        prompt_file=None,
+        response_file=None,
+        parsed_file=None,
+    )
+    recorder.finalize_request(
+        request_id="rid_llm_fail",
+        status_code=502, duration_ms=1.0,
+        error="",  # no Python exception — HTTP-level llm failure
+        response_body=b"", job_id="",
+    )
+    with recorder.store.connect() as conn:
+        kind = conn.execute("SELECT error_kind FROM requests WHERE request_id='rid_llm_fail'").fetchone()["error_kind"]
+    assert kind == "llm_failed"
