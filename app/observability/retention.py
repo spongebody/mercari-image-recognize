@@ -5,7 +5,6 @@ import shutil
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import List, Tuple
 
 from .store import Store
 
@@ -75,14 +74,18 @@ def prune(store: Store, store_root: Path, retention_days: int, max_total_bytes: 
             bytes_freed += _delete_one(store, store_root, rid)
             rows_deleted += 1
 
-    # 2) capacity-based
+    # 2) capacity-based: snapshot total once then subtract per-delete to avoid
+    # walking the filesystem on every iteration (O(N*K) → O(N+K)).
     if max_total_bytes > 0:
-        while _total_store_bytes(store_root) > max_total_bytes:
+        current_bytes = _total_store_bytes(store_root)
+        while current_bytes > max_total_bytes:
             with store.connect() as conn:
                 row = conn.execute("SELECT request_id FROM requests ORDER BY timestamp_utc ASC LIMIT 1").fetchone()
             if row is None:
                 break
-            bytes_freed += _delete_one(store, store_root, row["request_id"])
+            freed = _delete_one(store, store_root, row["request_id"])
+            bytes_freed += freed
+            current_bytes -= freed
             rows_deleted += 1
 
     _logger.info("observability.prune deleted=%d freed_bytes=%d", rows_deleted, bytes_freed)
