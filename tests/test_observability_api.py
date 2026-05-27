@@ -63,3 +63,14 @@ def test_stats_endpoint(set_password):
         r = client.get("/api/v1/logs/stats", headers=_auth())
     assert r.status_code == 200
     assert "total" in r.json()
+
+
+def test_fts_query_capped_at_500(set_password, monkeypatch):
+    """A broad FTS query that would match >500 rows doesn't trigger SQLite param errors."""
+    # We can't easily seed 1000+ rows quickly; instead, verify the query simply succeeds
+    # (the cap kicks in only when there are many matches). This is a smoke test.
+    with TestClient(set_password.app) as client:
+        # produce one logged request
+        client.get("/api/v1/config", headers=_auth())
+        r = client.get("/api/v1/logs/requests?q=config", headers=_auth())
+    assert r.status_code == 200

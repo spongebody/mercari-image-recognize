@@ -54,19 +54,39 @@ def build_router(*, store: Store, store_root: Path, auth_dep) -> APIRouter:
             where.append("job_id = ?")
             params.append(job_id)
 
-        matched_ids: Optional[set] = None
+        # SQLite's compiled parameter limit (default 999, max 32766) caps how
+        # many ids we can put in the IN-clause. For broad FTS matches we keep
+        # only the most recent N ids before expansion.
+        _FTS_MAX_IDS = 500
+        matched_ids: Optional[list] = None
         if q:
-            matched_ids = set()
+            ids: list = []
+            seen: set = set()
             with store.connect() as conn:
-                for row in conn.execute(
-                    "SELECT request_id FROM requests_fts WHERE requests_fts MATCH ?", (q,)
-                ):
-                    matched_ids.add(row["request_id"])
-                if include_llm_text:
-                    for row in conn.execute(
-                        "SELECT request_id FROM llm_fts WHERE llm_fts MATCH ?", (q,)
-                    ):
-                        matched_ids.add(row["request_id"])
+                # SELECT order is undefined for FTS; prefer recency by joining requests
+                fts_sql = (
+                    "SELECT r.request_id, r.timestamp_utc FROM requests r "
+                    "JOIN requests_fts f ON r.request_id = f.request_id "
+                    "WHERE requests_fts MATCH ? "
+                    "ORDER BY r.timestamp_utc DESC LIMIT ?"
+                )
+                for row in conn.execute(fts_sql, (q, _FTS_MAX_IDS)):
+                    if row["request_id"] not in seen:
+                        seen.add(row["request_id"])
+                        ids.append(row["request_id"])
+                if include_llm_text and len(ids) < _FTS_MAX_IDS:
+                    remaining = _FTS_MAX_IDS - len(ids)
+                    llm_sql = (
+                        "SELECT r.request_id FROM requests r "
+                        "JOIN llm_fts l ON r.request_id = l.request_id "
+                        "WHERE llm_fts MATCH ? "
+                        "ORDER BY r.timestamp_utc DESC LIMIT ?"
+                    )
+                    for row in conn.execute(llm_sql, (q, remaining)):
+                        if row["request_id"] not in seen:
+                            seen.add(row["request_id"])
+                            ids.append(row["request_id"])
+            matched_ids = ids
             if not matched_ids:
                 return {"items": [], "next_cursor": None}
             placeholders = ",".join("?" * len(matched_ids))
