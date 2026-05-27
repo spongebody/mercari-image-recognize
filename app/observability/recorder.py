@@ -5,7 +5,7 @@ import logging
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from .paths import artifact_dir
 from .store import Store
@@ -193,3 +193,97 @@ class Recorder:
             (d / f"{ts}_{kind}.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2))
         except Exception:
             pass
+
+    def record_llm_stage(
+        self,
+        *,
+        request_id: str,
+        stage: str,
+        attempts: Iterable[Dict[str, Any]],
+        messages: List[Dict[str, Any]],
+        raw_response: Optional[Dict[str, Any]],
+        parsed: Optional[Dict[str, Any]],
+    ) -> None:
+        try:
+            attempts = list(attempts)
+            if not attempts:
+                return
+            d = self._find_request_dir(request_id)
+            if d is None:
+                # no parent: create a tombstone day-dir under today
+                from datetime import datetime as _dt
+                date_str = _dt.now(timezone.utc).strftime("%Y-%m-%d")
+                d = artifact_dir(self.store_root, date_str, request_id)
+                d.mkdir(parents=True, exist_ok=True)
+
+            usage = (raw_response or {}).get("usage") or {}
+            cost = (raw_response or {}).get("cost")
+            if isinstance(cost, dict):
+                cost = cost.get("total")
+
+            for idx, attempt in enumerate(attempts):
+                attempt_idx = int(attempt.get("attempt") or (idx + 1))
+                error_kind = attempt.get("error_kind") or "ok"
+                status = "ok" if error_kind == "ok" else "failed"
+
+                # prompt file: write per attempt (cheap, simplifies UI)
+                prompt_rel = f"llm_{stage}_{attempt_idx}_prompt.json"
+                (d / prompt_rel).write_text(json.dumps({"messages": messages}, ensure_ascii=False, indent=2))
+
+                response_rel = None
+                parsed_rel = None
+                attempt_prompt_tokens = None
+                attempt_completion_tokens = None
+                attempt_total_tokens = None
+                attempt_cost = None
+                if status == "ok":
+                    if raw_response is not None:
+                        response_rel = f"llm_{stage}_{attempt_idx}_response.json"
+                        (d / response_rel).write_text(json.dumps(raw_response, ensure_ascii=False, indent=2))
+                    if parsed is not None:
+                        parsed_rel = f"llm_{stage}_{attempt_idx}_parsed.json"
+                        (d / parsed_rel).write_text(json.dumps(parsed, ensure_ascii=False, indent=2))
+                    attempt_prompt_tokens = usage.get("prompt_tokens")
+                    attempt_completion_tokens = usage.get("completion_tokens")
+                    attempt_total_tokens = usage.get("total_tokens")
+                    attempt_cost = float(cost) if cost is not None else None
+
+                # store path relative to store_root
+                date_str = d.parent.name
+                def _rel(name):
+                    return f"{date_str}/{request_id}/{name}" if name else None
+
+                llm_call_id = self.store.insert_llm_call(
+                    request_id=request_id,
+                    timestamp_utc=_utcnow_iso(),
+                    stage=stage,
+                    attempt=attempt_idx,
+                    model=attempt.get("model") or "",
+                    status=status,
+                    error_kind=None if status == "ok" else error_kind,
+                    error_message=None if status == "ok" else (attempt.get("message") or ""),
+                    latency_ms=float(attempt.get("latency_ms") or 0.0),
+                    http_status_code=attempt.get("status_code"),
+                    prompt_tokens=attempt_prompt_tokens,
+                    completion_tokens=attempt_completion_tokens,
+                    total_tokens=attempt_total_tokens,
+                    cost_usd=attempt_cost,
+                    prompt_file=_rel(prompt_rel),
+                    response_file=_rel(response_rel),
+                    parsed_file=_rel(parsed_rel),
+                )
+
+                prompt_text = json.dumps(messages, ensure_ascii=False)
+                response_text = json.dumps(raw_response, ensure_ascii=False) if (raw_response and status == "ok") else ""
+                self.store.insert_llm_fts(
+                    request_id=request_id,
+                    llm_call_id=llm_call_id,
+                    stage=stage,
+                    model=attempt.get("model") or "",
+                    error_message=attempt.get("message") or "",
+                    prompt_text=prompt_text,
+                    response_text=response_text,
+                )
+        except Exception as exc:
+            _logger.exception("observability.record_llm_stage failed: %s", exc)
+            self._dead_letter("record_llm_stage", {"request_id": request_id, "stage": stage, "error": repr(exc)})

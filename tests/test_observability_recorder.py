@@ -112,3 +112,70 @@ def test_error_kind_llm_failed_when_http_5xx_and_llm_attempts_failed(recorder: R
     with recorder.store.connect() as conn:
         kind = conn.execute("SELECT error_kind FROM requests WHERE request_id='rid_llm_fail'").fetchone()["error_kind"]
     assert kind == "llm_failed"
+
+
+def test_record_llm_stage_writes_rows_and_files(recorder: Recorder):
+    # need a parent request row first
+    recorder.start_request(
+        request_id="rid_llm", method="POST", endpoint="/api/v1/x",
+        client_ip="", user_agent="", language="", headers={},
+        body_bytes=b"", content_type="", uploaded_images=[],
+    )
+    attempts = [
+        {"model": "openai/gpt-4o-mini", "attempt": 1, "error_kind": "ok",
+         "message": "", "latency_ms": 800.0, "status_code": 200},
+    ]
+    raw_response = {
+        "choices": [{"message": {"content": "{\"category\":\"shoes\"}"}}],
+        "usage": {"prompt_tokens": 100, "completion_tokens": 30, "total_tokens": 130},
+        "cost": 0.0021,
+    }
+    parsed = {"category": "shoes"}
+    messages = [{"role": "user", "content": "hello"}]
+    recorder.record_llm_stage(
+        request_id="rid_llm",
+        stage="category",
+        attempts=attempts,
+        messages=messages,
+        raw_response=raw_response,
+        parsed=parsed,
+    )
+    with recorder.store.connect() as conn:
+        row = conn.execute("SELECT * FROM llm_calls WHERE request_id='rid_llm'").fetchone()
+    assert row["stage"] == "category"
+    assert row["status"] == "ok"
+    assert row["total_tokens"] == 130
+    assert abs(row["cost_usd"] - 0.0021) < 1e-9
+    assert row["prompt_file"].endswith("llm_category_1_prompt.json")
+    assert row["response_file"].endswith("llm_category_1_response.json")
+    assert row["parsed_file"].endswith("llm_category_1_parsed.json")
+    d = next(recorder.store_root.rglob("rid_llm"))
+    assert (d / "llm_category_1_prompt.json").exists()
+    assert (d / "llm_category_1_response.json").exists()
+    assert (d / "llm_category_1_parsed.json").exists()
+
+
+def test_record_llm_stage_failure_only(recorder: Recorder):
+    recorder.start_request(
+        request_id="rid_fail", method="POST", endpoint="/x",
+        client_ip="", user_agent="", language="", headers={},
+        body_bytes=b"", content_type="", uploaded_images=[],
+    )
+    attempts = [
+        {"model": "openai/gpt-4o-mini", "attempt": 1, "error_kind": "request_failed",
+         "message": "OpenRouter returned 500", "latency_ms": 50.0, "status_code": 500},
+        {"model": "openai/gpt-4o-mini", "attempt": 2, "error_kind": "request_failed",
+         "message": "OpenRouter returned 500", "latency_ms": 70.0, "status_code": 500},
+    ]
+    recorder.record_llm_stage(
+        request_id="rid_fail",
+        stage="category",
+        attempts=attempts,
+        messages=[{"role": "user", "content": "x"}],
+        raw_response=None,
+        parsed=None,
+    )
+    with recorder.store.connect() as conn:
+        rows = list(conn.execute("SELECT status, parsed_file FROM llm_calls WHERE request_id='rid_fail' ORDER BY attempt"))
+    assert [r["status"] for r in rows] == ["failed", "failed"]
+    assert all(r["parsed_file"] is None for r in rows)
