@@ -1036,6 +1036,9 @@ class MercariAnalyzer:
         self._log_raw("title_category_attempts", [a.__dict__ for a in attempts])
         return parsed, attempts
 
+    # NOTE: legacy raw-log writer. Task 12 deletes this method entirely and
+    # routes all LLM logging through Recorder.record_llm_stage. Gate now uses
+    # log_requests because log_llm_raw was retired in Task 8.
     def _log_raw(self, name: str, payload: Any) -> None:
         if not self.settings.log_requests:
             return

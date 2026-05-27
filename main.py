@@ -468,6 +468,9 @@ async def log_requests(request: Request, call_next):
         duration_ms = (time.monotonic() - start) * 1000
         try:
             entry = await build_request_log(request, body=body)
+            # NOTE: Task 10 replaces this entire middleware with the new
+            # observability recorder; the literal 7 / 1000 below are placeholders
+            # pending that swap and intentionally do not read settings.
             write_request_log(
                 entry,
                 status_code=status_code,
