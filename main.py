@@ -1,16 +1,21 @@
+import asyncio
 import json
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import suppress
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
+from starlette.datastructures import UploadFile as _Upload
+from starlette.requests import Request as _SReq
+from starlette.responses import Response as _Resp
 
 from app.config import BASE_DIR, load_settings
 from app.constants import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES
@@ -20,8 +25,14 @@ from app.errors import BadRequestError, LLMAllAttemptsFailedError
 from app.image_processing import compress_image_if_needed
 from app.jobs import AnalysisJobStore
 from app.llm.client import OpenRouterClient
-from app.request_logging import build_request_log, write_request_log
+from app.observability import context as obs_ctx
+from app.observability.api import build_router as build_obs_router
+from app.observability.auth import require_logs_auth
+from app.observability.recorder import Recorder
+from app.observability.retention import prune as obs_prune
+from app.observability.store import Store as ObsStore
 from app.runtime_config import get_public_config, update_runtime_config
+from app import service as _svc_module
 from app.service import MercariAnalyzer
 from app.showcase.archive import ArchiveWriter as ShowcaseArchiveWriter
 from app.showcase.openrouter_image_client import OpenRouterImageClient
@@ -30,6 +41,10 @@ from app.showcase.storage import StorageManager as ShowcaseStorageManager
 from app.utils import parse_bool_param
 
 settings = load_settings()
+_obs_store = ObsStore(BASE_DIR / "logs" / "observability.db")
+_obs_store.init_schema()
+recorder = Recorder(store=_obs_store, store_root=BASE_DIR / "logs" / "store")
+_svc_module.set_recorder(recorder)
 brand_store = BrandStore(settings.brand_csv_path)
 category_store = CategoryStore(settings.category_csv_path)
 vision_client = OpenRouterClient(
@@ -57,6 +72,20 @@ analyzer = MercariAnalyzer(
     category_client=category_client,
 )
 product_data_executor = ThreadPoolExecutor(max_workers=4)
+
+
+def _submit_with_request_id(fn, /, *args, **kwargs):
+    rid = obs_ctx.get_request_id()
+    def _runner():
+        token = obs_ctx.set_request_id(rid) if rid else None
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            if token is not None:
+                obs_ctx.reset_request_id(token)
+    return product_data_executor.submit(_runner)
+
+
 analysis_job_store = AnalysisJobStore()
 
 
@@ -121,7 +150,31 @@ def _format_attempts_error(exc: LLMAllAttemptsFailedError) -> Dict[str, Any]:
     }
 
 
-app = FastAPI(title="Mercari Image Analyzer", version="1.0.0")
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async def prune_loop():
+        while True:
+            try:
+                obs_prune(_obs_store, BASE_DIR / "logs" / "store",
+                          settings.log_retention_days, settings.log_max_total_bytes)
+            except Exception:
+                pass
+            await asyncio.sleep(settings.log_prune_interval_minutes * 60)
+
+    task = asyncio.create_task(prune_loop())
+    app.state.prune_task = task
+    try:
+        yield
+    finally:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+
+
+app = FastAPI(lifespan=lifespan, title="Mercari Image Analyzer", version="1.0.0")
 CONFIG_ENV_PATH = BASE_DIR / ".env"
 CONFIG_PAGE_PATH = BASE_DIR / "web" / "config.html"
 
@@ -133,6 +186,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(build_obs_router(
+    store=_obs_store,
+    store_root=BASE_DIR / "logs" / "store",
+    auth_dep=require_logs_auth(settings.logs_password),
+))
 
 
 def _sync_runtime_clients() -> None:
@@ -409,7 +468,8 @@ def _parse_original_product_data(raw: Optional[str]) -> Optional[Dict[str, Any]]
     return parsed
 
 
-@app.get("/config", response_class=HTMLResponse)
+@app.get("/config", response_class=HTMLResponse,
+         dependencies=[Depends(require_logs_auth(settings.logs_password))])
 def config_page() -> HTMLResponse:
     try:
         return HTMLResponse(CONFIG_PAGE_PATH.read_text(encoding="utf-8"))
@@ -417,12 +477,19 @@ def config_page() -> HTMLResponse:
         raise HTTPException(status_code=404, detail="Config page not found.") from exc
 
 
+@app.get("/logs", response_class=HTMLResponse,
+         dependencies=[Depends(require_logs_auth(settings.logs_password))])
+def logs_page():
+    return FileResponse(BASE_DIR / "web" / "logs.html")
+
+
 @app.get("/api/v1/config")
 def read_config() -> Dict[str, Any]:
     return get_public_config(settings)
 
 
-@app.put("/api/v1/config")
+@app.put("/api/v1/config",
+         dependencies=[Depends(require_logs_auth(settings.logs_password))])
 def save_config(payload: Dict[str, Any], request: Request) -> Dict[str, Any]:
     origin = request.headers.get("origin")
     if origin:
@@ -441,15 +508,46 @@ def save_config(payload: Dict[str, Any], request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+_JOB_ID_PATH_PREFIX = "/api/v1/mercari/image/analyze/"
+
+
+def _job_id_from_path(path: str) -> str:
+    if path.startswith(_JOB_ID_PATH_PREFIX):
+        return path[len(_JOB_ID_PATH_PREFIX):].split("/", 1)[0]
+    return ""
+
+
+def _job_id_from_response(body: bytes) -> str:
+    try:
+        obj = json.loads(body or b"{}")
+    except Exception:
+        return ""
+    if isinstance(obj, dict):
+        for key in ("job_id", "id"):
+            v = obj.get(key)
+            if isinstance(v, str):
+                return v
+    return ""
+
+
 @app.middleware("http")
-async def log_requests(request: Request, call_next):
-    if not settings.log_requests:
+async def observe_request(request: Request, call_next):
+    if (
+        not settings.log_requests
+        or request.url.path == "/health"
+        or request.url.path.startswith("/api/v1/logs/")
+        or request.url.path == "/logs"
+    ):
         return await call_next(request)
+
+    request_id = uuid.uuid4().hex
+    token = obs_ctx.set_request_id(request_id)
     start = time.monotonic()
-    response = None
-    error_message = ""
-    status_code = 500
     body = b""
+    status_code = 500
+    error_message = ""
+    response_body_bytes = b""
+
     try:
         if request.method in {"POST", "PUT", "PATCH"}:
             body = await request.body()
@@ -458,26 +556,91 @@ async def log_requests(request: Request, call_next):
                 return {"type": "http.request", "body": body, "more_body": False}
 
             request = Request(request.scope, receive)
-        response = await call_next(request)
-        status_code = response.status_code
-        return response
-    except Exception as exc:
-        error_message = str(exc)
-        raise
-    finally:
-        duration_ms = (time.monotonic() - start) * 1000
+
+        content_type = request.headers.get("content-type", "")
+        uploaded_images: List[Dict[str, Any]] = []
+        if "multipart/form-data" in content_type and body:
+            # parse to capture image bytes for archive
+            async def _recv():
+                return {"type": "http.request", "body": body, "more_body": False}
+
+            tmp_req = _SReq(request.scope, _recv)
+            try:
+                form = await tmp_req.form()
+                for key, value in form.multi_items():
+                    if isinstance(value, _Upload):
+                        data = await value.read()
+                        suffix = "." + (value.content_type.rsplit("/", 1)[-1] if value.content_type else "bin")
+                        uploaded_images.append({
+                            "filename": value.filename or "",
+                            "content_type": value.content_type or "",
+                            "suffix": suffix,
+                            "bytes": data,
+                        })
+            except Exception:
+                pass
+
         try:
-            entry = await build_request_log(request, body=body)
-            write_request_log(
-                entry,
-                status_code=status_code,
-                duration_ms=duration_ms,
-                error=error_message,
-                retention_days=settings.log_requests_retention_days,
-                max_files=settings.log_requests_max_files,
+            recorder.start_request(
+                request_id=request_id,
+                method=request.method,
+                endpoint=request.url.path,
+                client_ip=(request.client.host if request.client else ""),
+                user_agent=request.headers.get("user-agent", ""),
+                language=request.query_params.get("language", "") or "",
+                headers={
+                    "content-type": content_type,
+                    "user-agent": request.headers.get("user-agent", ""),
+                    "content-length": request.headers.get("content-length", ""),
+                },
+                body_bytes=body,
+                content_type=content_type,
+                uploaded_images=uploaded_images,
             )
         except Exception:
             pass
+
+        response = await call_next(request)
+        status_code = response.status_code
+
+        # buffer full response body for re-emission, keep capped slice for logging
+        full_chunks: List[bytes] = []
+        async for chunk in response.body_iterator:
+            full_chunks.append(chunk)
+        full_body_bytes = b"".join(full_chunks)
+        cap = settings.log_response_max_bytes
+        if cap > 0 and len(full_body_bytes) > cap:
+            response_body_bytes = full_body_bytes[:cap]
+        else:
+            response_body_bytes = full_body_bytes
+
+        new_response = _Resp(
+            content=full_body_bytes,
+            status_code=response.status_code,
+            headers={k: v for k, v in response.headers.items() if k.lower() != "content-length"},
+            media_type=response.media_type,
+        )
+        new_response.headers["X-Request-Id"] = request_id
+        return new_response
+
+    except Exception as exc:
+        error_message = repr(exc)
+        raise
+    finally:
+        duration_ms = (time.monotonic() - start) * 1000.0
+        try:
+            job_id = _job_id_from_path(request.url.path) or _job_id_from_response(response_body_bytes)
+            recorder.finalize_request(
+                request_id=request_id,
+                status_code=status_code,
+                duration_ms=duration_ms,
+                error=error_message,
+                response_body=response_body_bytes,
+                job_id=job_id,
+            )
+        except Exception:
+            pass
+        obs_ctx.reset_request_id(token)
 
 
 @app.post("/api/v1/mercari/image/analyze")
@@ -504,7 +667,7 @@ async def analyze_image(
         # decision logic. Aligning both on submit time means the timeout the
         # user configures actually maps to the elapsed time they observe.
         primary_submitted_at = time.monotonic()
-        product_future = product_data_executor.submit(
+        product_future = _submit_with_request_id(
             analyzer.generate_product_data,
             images=image_payloads,
             language=language,
@@ -516,7 +679,7 @@ async def analyze_image(
         fallback_future = None
         if fallback_model:
             fallback_submitted_at = time.monotonic()
-            fallback_future = product_data_executor.submit(
+            fallback_future = _submit_with_request_id(
                 analyzer.generate_product_data,
                 images=image_payloads,
                 language=language,
@@ -690,3 +853,5 @@ def health() -> dict:
             "showcase_model": settings.showcase_model,
         },
     }
+
+

@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>日志查看 - mercari-image-recognize</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; padding: 16px; background: #f6f7f9; color: #1f2328; }
+  h1 { font-size: 18px; margin: 0 0 12px; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; background: #fff; border: 1px solid #d0d7de; border-radius: 6px; margin-bottom: 12px; }
+  .toolbar label { font-size: 13px; }
+  .toolbar input, .toolbar select { padding: 4px 6px; border: 1px solid #d0d7de; border-radius: 4px; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #d0d7de; border-radius: 6px; overflow: hidden; }
+  th, td { padding: 8px 10px; text-align: left; font-size: 13px; border-bottom: 1px solid #eaeef2; }
+  tr.row { cursor: pointer; }
+  tr.row:hover { background: #f6f8fa; }
+  .status-ok { color: #1a7f37; }
+  .status-bad { color: #cf222e; }
+  .details { background: #fafbfc; padding: 12px 24px; }
+  .details h3 { font-size: 14px; margin: 8px 0 4px; }
+  .llm-table th, .llm-table td { font-size: 12px; padding: 4px 8px; }
+  pre.json { background: #f6f8fa; padding: 8px; max-height: 360px; overflow: auto; border-radius: 4px; font-size: 12px; }
+  button { font-size: 12px; padding: 2px 8px; cursor: pointer; }
+  .stats { color: #57606a; font-size: 12px; margin-left: auto; }
+</style>
+</head>
+<body>
+<h1>日志查看</h1>
+<div class="toolbar">
+  <label>时间: <select id="time-range">
+    <option value="today">今天</option>
+    <option value="24h">24小时</option>
+    <option value="7d" selected>7天</option>
+    <option value="">全部</option>
+  </select></label>
+  <label>端点:
+    <select id="endpoint">
+      <option value="">全部</option>
+      <option>/api/v1/mercari/image/analyze</option>
+      <option>/api/v1/mercari/title/analyze</option>
+      <option>/api/v1/mercari/product-data/regenerate</option>
+      <option>/api/v1/showcase/generate</option>
+    </select>
+  </label>
+  <label>状态:
+    <select id="error-kind">
+      <option value="">全部</option>
+      <option value="ok">成功</option>
+      <option value="http_4xx">4xx</option>
+      <option value="http_5xx">5xx</option>
+      <option value="llm_failed">LLM失败</option>
+      <option value="exception">异常</option>
+    </select>
+  </label>
+  <label>慢请求(ms): <input id="min-duration" type="number" placeholder="0" style="width:80px"></label>
+  <label>搜索: <input id="q" type="text" placeholder="error / brand / request_id" style="width:240px"></label>
+  <label><input id="include-llm" type="checkbox"> 含 prompt/response</label>
+  <button id="refresh">刷新</button>
+  <span class="stats" id="stats"></span>
+</div>
+<table>
+  <thead>
+    <tr><th>时间(UTC)</th><th>端点</th><th>状态</th><th>耗时</th><th>token</th><th>$</th><th>错误</th><th>request_id</th></tr>
+  </thead>
+  <tbody id="rows"></tbody>
+</table>
+<div style="text-align:center; padding:12px;"><button id="load-more">加载更多</button></div>
+
+<script>
+let nextCursor = null;
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function timeFilter() {
+  const sel = document.getElementById('time-range').value;
+  if (!sel) return {};
+  const now = new Date();
+  const start = new Date(now);
+  if (sel === 'today') start.setUTCHours(0,0,0,0);
+  else if (sel === '24h') start.setTime(now.getTime() - 24*3600*1000);
+  else if (sel === '7d') start.setTime(now.getTime() - 7*24*3600*1000);
+  return {from: start.toISOString()};
+}
+function qs(params) {
+  return Object.entries(params).filter(([,v])=>v!=='' && v!=null).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
+}
+async function fetchList(reset) {
+  if (reset) { nextCursor = null; document.getElementById('rows').innerHTML = ''; }
+  const params = Object.assign(
+    {limit: 50},
+    timeFilter(),
+    {endpoint: document.getElementById('endpoint').value,
+     error_kind: document.getElementById('error-kind').value,
+     min_duration_ms: document.getElementById('min-duration').value,
+     q: document.getElementById('q').value,
+     include_llm_text: document.getElementById('include-llm').checked,
+     cursor: nextCursor || ''}
+  );
+  const r = await fetch('/api/v1/logs/requests?' + qs(params), {credentials:'include'});
+  if (!r.ok) { alert('请求失败: ' + r.status); return; }
+  const body = await r.json();
+  body.items.forEach(item => appendRow(item));
+  nextCursor = body.next_cursor;
+  document.getElementById('load-more').style.display = nextCursor ? 'inline' : 'none';
+  refreshStats();
+}
+async function refreshStats() {
+  const params = Object.assign({}, timeFilter());
+  const r = await fetch('/api/v1/logs/stats?' + qs(params), {credentials:'include'});
+  if (!r.ok) return;
+  const s = await r.json();
+  document.getElementById('stats').textContent =
+    `总数 ${s.total} · 失败 ${(s.by_error_kind.http_4xx||0)+(s.by_error_kind.http_5xx||0)+(s.by_error_kind.llm_failed||0)+(s.by_error_kind.exception||0)} · tokens ${s.sum_tokens} · $${(s.sum_cost_usd||0).toFixed(4)}`;
+}
+function appendRow(item) {
+  const tr = document.createElement('tr');
+  tr.className = 'row';
+  const statusClass = item.error_kind === 'ok' ? 'status-ok' : 'status-bad';
+  tr.innerHTML = `
+    <td>${esc(item.timestamp_utc).replace('T',' ').slice(0,19)}</td>
+    <td>${esc(item.endpoint)}</td>
+    <td class="${statusClass}">${esc(item.status_code||'')}</td>
+    <td>${(item.duration_ms||0).toFixed(0)}ms</td>
+    <td>${esc(item.total_tokens||'')}</td>
+    <td>${(item.total_cost_usd||0).toFixed(4)}</td>
+    <td class="${statusClass}">${esc(item.error_kind!=='ok'?item.error_kind:'')}</td>
+    <td><code style="font-size:11px">${esc(item.request_id).slice(0,8)}…</code></td>`;
+  tr.addEventListener('click', () => toggleDetails(tr, item.request_id));
+  document.getElementById('rows').appendChild(tr);
+}
+async function toggleDetails(row, request_id) {
+  const next = row.nextElementSibling;
+  if (next && next.classList.contains('details-row')) {
+    next.remove();
+    return;
+  }
+  const r = await fetch('/api/v1/logs/requests/' + request_id, {credentials:'include'});
+  if (!r.ok) return;
+  const data = await r.json();
+  const dr = document.createElement('tr');
+  dr.className = 'details-row';
+  const td = document.createElement('td');
+  td.colSpan = 8;
+  td.className = 'details';
+  td.innerHTML = renderDetails(data);
+  dr.appendChild(td);
+  row.parentNode.insertBefore(dr, row.nextSibling);
+}
+function renderDetails(data) {
+  const rid = data.request.request_id;
+  const links = `
+    <button onclick="openFile('${rid}','request.json')">request.json</button>
+    <button onclick="openFile('${rid}','response.json')">response.json</button>
+    <button onclick="copyText('${rid}')">复制 request_id</button>
+  `;
+  let html = `<h3>${esc(data.request.endpoint)} · ${esc(rid)}</h3>${links}`;
+  if (data.job_siblings && data.job_siblings.length) {
+    html += `<h3>同 job 兄弟请求 (${data.job_siblings.length})</h3>`;
+    html += '<ul>' + data.job_siblings.map(s =>
+      `<li>${esc(s.timestamp_utc).slice(11,19)} · ${esc(s.method)} ${esc(s.endpoint)} · ${esc(s.status_code)}</li>`).join('') + '</ul>';
+  }
+  if (data.llm_calls && data.llm_calls.length) {
+    html += '<h3>LLM 调用</h3><table class="llm-table"><tr><th>时间</th><th>stage</th><th>attempt</th><th>model</th><th>状态</th><th>耗时</th><th>token</th><th>文件</th></tr>';
+    for (const c of data.llm_calls) {
+      const files = ['prompt_file','response_file','parsed_file']
+        .filter(k => c[k]).map(k => {
+          const name = c[k].split('/').pop();
+          return `<button onclick="openFile('${esc(rid)}','${esc(name)}')">${esc(k.replace('_file',''))}</button>`;
+        }).join(' ');
+      html += `<tr><td>${esc(c.timestamp_utc).slice(11,19)}</td><td>${esc(c.stage)}</td><td>${esc(c.attempt)}</td><td>${esc(c.model)}</td><td>${esc(c.status)}</td><td>${(c.latency_ms||0).toFixed(0)}ms</td><td>${esc(c.total_tokens||'')}</td><td>${files}</td></tr>`;
+    }
+    html += '</table>';
+  }
+  return html;
+}
+async function openFile(rid, name) {
+  const r = await fetch(`/api/v1/logs/requests/${rid}/files/${name}`, {credentials:'include'});
+  if (!r.ok) { alert('文件读取失败: '+r.status); return; }
+  const text = await r.text();
+  const w = window.open('', '_blank');
+  w.document.write('<pre style="font:12px ui-monospace,monospace; white-space:pre-wrap">'+ text.replace(/</g,'&lt;') +'</pre>');
+}
+function copyText(t) { navigator.clipboard.writeText(t); }
+document.getElementById('refresh').addEventListener('click', () => fetchList(true));
+document.getElementById('load-more').addEventListener('click', () => fetchList(false));
+document.querySelectorAll('#time-range,#endpoint,#error-kind').forEach(el =>
+  el.addEventListener('change', () => fetchList(true)));
+document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter') fetchList(true); });
+fetchList(true);
+</script>
+</body>
+</html>

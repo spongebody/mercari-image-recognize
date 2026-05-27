@@ -120,10 +120,12 @@ class Settings:
     max_image_bytes: int = _env_int("MAX_IMAGE_BYTES", 5 * 1024 * 1024)
     image_compression_threshold_mb: int = _env_int("IMAGE_COMPRESSION_THRESHOLD_MB", 1)
     allowed_mime_types: Set[str] = field(default_factory=lambda: set(ALLOWED_MIME_TYPES))
-    log_llm_raw: bool = _env_bool("LOG_LLM_RAW", False)
     log_requests: bool = _env_bool("LOG_REQUESTS", True)
-    log_requests_retention_days: int = _env_int("LOG_REQUESTS_RETENTION_DAYS", 7)
-    log_requests_max_files: int = _env_int("LOG_REQUESTS_MAX_FILES", 1000)
+    log_retention_days: int = field(default_factory=lambda: _env_int_min("LOG_RETENTION_DAYS", 7, 1))
+    log_max_total_bytes: int = field(default_factory=lambda: _env_int_min("LOG_MAX_TOTAL_BYTES", 5 * 1024 ** 3, 1024 ** 2))
+    log_prune_interval_minutes: int = field(default_factory=lambda: _env_int_min("LOG_PRUNE_INTERVAL_MINUTES", 60, 1))
+    log_response_max_bytes: int = field(default_factory=lambda: _env_int_min("LOG_RESPONSE_MAX_BYTES", 2 * 1024 * 1024, 0))
+    logs_password: str = field(default_factory=lambda: os.getenv("LOGS_PASSWORD", ""))
 
     vision_fallback_models: List[str] = field(
         default_factory=lambda: _env_str_list("VISION_FALLBACK_MODELS", DEFAULT_FALLBACK_MODELS)

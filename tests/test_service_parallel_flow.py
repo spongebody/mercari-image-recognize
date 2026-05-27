@@ -75,7 +75,7 @@ def _settings():
         vision_model="vision-test",
         category_model="category-test",
         product_data_model="product-data-test",
-        log_llm_raw=False,
+        log_requests=False,
         vision_fallback_models=[],
         category_fallback_models=[],
         model_call_max_retries=0,

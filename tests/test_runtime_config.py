@@ -14,7 +14,6 @@ def _fake_settings(**overrides):
         product_data_fallback_model="openai/gpt-4o-mini",
         product_data_fallback_timeout_seconds=10.0,
         showcase_model="old-showcase",
-        log_llm_raw=False,
         log_requests=False,
         enable_debug_param=True,
         image_compression_threshold_mb=1,

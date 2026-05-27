@@ -82,3 +82,33 @@ class SettingsConfigTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_new_observability_settings_defaults(monkeypatch):
+    monkeypatch.delenv("LOGS_PASSWORD", raising=False)
+    monkeypatch.delenv("LOG_RETENTION_DAYS", raising=False)
+    monkeypatch.delenv("LOG_MAX_TOTAL_BYTES", raising=False)
+    monkeypatch.delenv("LOG_PRUNE_INTERVAL_MINUTES", raising=False)
+    monkeypatch.delenv("LOG_RESPONSE_MAX_BYTES", raising=False)
+    from app.config import Settings
+    s = Settings()
+    assert s.logs_password == ""
+    assert s.log_retention_days == 7
+    assert s.log_max_total_bytes == 5 * 1024 ** 3
+    assert s.log_prune_interval_minutes == 60
+    assert s.log_response_max_bytes == 2 * 1024 * 1024
+
+
+def test_new_observability_settings_env_override(monkeypatch):
+    monkeypatch.setenv("LOGS_PASSWORD", "hunter2")
+    monkeypatch.setenv("LOG_RETENTION_DAYS", "30")
+    monkeypatch.setenv("LOG_MAX_TOTAL_BYTES", "1073741824")
+    monkeypatch.setenv("LOG_PRUNE_INTERVAL_MINUTES", "10")
+    monkeypatch.setenv("LOG_RESPONSE_MAX_BYTES", "65536")
+    from app.config import Settings
+    s = Settings()
+    assert s.logs_password == "hunter2"
+    assert s.log_retention_days == 30
+    assert s.log_max_total_bytes == 1073741824
+    assert s.log_prune_interval_minutes == 10
+    assert s.log_response_max_bytes == 65536

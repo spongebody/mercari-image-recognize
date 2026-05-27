@@ -1,3 +1,6 @@
+import base64
+import importlib
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,8 +11,21 @@ from fastapi.testclient import TestClient
 import main
 
 
+def _auth():
+    creds = base64.b64encode(b"admin:testpass").decode()
+    return {"Authorization": f"Basic {creds}"}
+
+
 class ConfigApiTest(unittest.TestCase):
     def setUp(self):
+        # Ensure LOGS_PASSWORD is set so auth dep works (not 503)
+        self._env_patcher = patch.dict(os.environ, {"LOGS_PASSWORD": "testpass"})
+        self._env_patcher.start()
+        # Reload settings and main so the auth dep captures the new password
+        import app.config
+        importlib.reload(app.config)
+        importlib.reload(main)
+
         self.original_values = {
             "vision_model": main.settings.vision_model,
             "category_model": main.settings.category_model,
@@ -32,6 +48,7 @@ class ConfigApiTest(unittest.TestCase):
         main.category_client.timeout = self.original_values["category_client_timeout"]
         main.showcase_image_client.model = self.original_values["showcase_client_model"]
         main.showcase_service.model = self.original_values["showcase_service_model"]
+        self._env_patcher.stop()
 
     def test_config_api_updates_runtime_settings_and_env_file(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -42,6 +59,7 @@ class ConfigApiTest(unittest.TestCase):
                 client = TestClient(main.app)
                 response = client.put(
                     "/api/v1/config",
+                    headers=_auth(),
                     json={
                         "VISION_MODEL": "api-vision",
                         "CATEGORY_MODEL": "api-category",
@@ -69,6 +87,7 @@ class ConfigApiTest(unittest.TestCase):
                 client = TestClient(main.app)
                 response = client.put(
                     "/api/v1/config",
+                    headers=_auth(),
                     json={"SHOWCASE_MODEL": "openai/gpt-image-1"},
                 )
 
@@ -88,7 +107,7 @@ class ConfigApiTest(unittest.TestCase):
 
         response = client.put(
             "/api/v1/config",
-            headers={"Origin": "https://evil.example", "Host": "api.example"},
+            headers={**_auth(), "Origin": "https://evil.example", "Host": "api.example"},
             json={"VISION_MODEL": "api-vision"},
         )
 
@@ -97,7 +116,7 @@ class ConfigApiTest(unittest.TestCase):
     def test_config_page_served_by_api_app(self):
         client = TestClient(main.app)
 
-        response = client.get("/config")
+        response = client.get("/config", headers=_auth())
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("text/html", response.headers["content-type"])
