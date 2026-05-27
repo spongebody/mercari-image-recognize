@@ -24,6 +24,7 @@ from app.image_processing import compress_image_if_needed
 from app.jobs import AnalysisJobStore
 from app.llm.client import OpenRouterClient
 from app.observability import context as obs_ctx
+from app.observability.api import build_router as build_obs_router
 from app.observability.auth import require_logs_auth
 from app.observability.recorder import Recorder
 from app.observability.retention import prune as obs_prune
@@ -159,6 +160,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(build_obs_router(
+    store=_obs_store,
+    store_root=BASE_DIR / "logs" / "store",
+    auth_dep=require_logs_auth(settings.logs_password),
+))
 
 
 def _sync_runtime_clients() -> None:
