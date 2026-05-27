@@ -67,6 +67,10 @@
 
 <script>
 let nextCursor = null;
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 function timeFilter() {
   const sel = document.getElementById('time-range').value;
   if (!sel) return {};
@@ -113,14 +117,14 @@ function appendRow(item) {
   tr.className = 'row';
   const statusClass = item.error_kind === 'ok' ? 'status-ok' : 'status-bad';
   tr.innerHTML = `
-    <td>${item.timestamp_utc.replace('T',' ').slice(0,19)}</td>
-    <td>${item.endpoint}</td>
-    <td class="${statusClass}">${item.status_code||''}</td>
+    <td>${esc(item.timestamp_utc).replace('T',' ').slice(0,19)}</td>
+    <td>${esc(item.endpoint)}</td>
+    <td class="${statusClass}">${esc(item.status_code||'')}</td>
     <td>${(item.duration_ms||0).toFixed(0)}ms</td>
-    <td>${item.total_tokens||''}</td>
+    <td>${esc(item.total_tokens||'')}</td>
     <td>${(item.total_cost_usd||0).toFixed(4)}</td>
-    <td class="${statusClass}">${item.error_kind!=='ok'?item.error_kind:''}</td>
-    <td><code style="font-size:11px">${item.request_id.slice(0,8)}…</code></td>`;
+    <td class="${statusClass}">${esc(item.error_kind!=='ok'?item.error_kind:'')}</td>
+    <td><code style="font-size:11px">${esc(item.request_id).slice(0,8)}…</code></td>`;
   tr.addEventListener('click', () => toggleDetails(tr, item.request_id));
   document.getElementById('rows').appendChild(tr);
 }
@@ -149,11 +153,11 @@ function renderDetails(data) {
     <button onclick="openFile('${rid}','response.json')">response.json</button>
     <button onclick="copyText('${rid}')">复制 request_id</button>
   `;
-  let html = `<h3>${data.request.endpoint} · ${rid}</h3>${links}`;
+  let html = `<h3>${esc(data.request.endpoint)} · ${esc(rid)}</h3>${links}`;
   if (data.job_siblings && data.job_siblings.length) {
     html += `<h3>同 job 兄弟请求 (${data.job_siblings.length})</h3>`;
     html += '<ul>' + data.job_siblings.map(s =>
-      `<li>${s.timestamp_utc.slice(11,19)} · ${s.method} ${s.endpoint} · ${s.status_code}</li>`).join('') + '</ul>';
+      `<li>${esc(s.timestamp_utc).slice(11,19)} · ${esc(s.method)} ${esc(s.endpoint)} · ${esc(s.status_code)}</li>`).join('') + '</ul>';
   }
   if (data.llm_calls && data.llm_calls.length) {
     html += '<h3>LLM 调用</h3><table class="llm-table"><tr><th>时间</th><th>stage</th><th>attempt</th><th>model</th><th>状态</th><th>耗时</th><th>token</th><th>文件</th></tr>';
@@ -161,9 +165,9 @@ function renderDetails(data) {
       const files = ['prompt_file','response_file','parsed_file']
         .filter(k => c[k]).map(k => {
           const name = c[k].split('/').pop();
-          return `<button onclick="openFile('${rid}','${name}')">${k.replace('_file','')}</button>`;
+          return `<button onclick="openFile('${esc(rid)}','${esc(name)}')">${esc(k.replace('_file',''))}</button>`;
         }).join(' ');
-      html += `<tr><td>${c.timestamp_utc.slice(11,19)}</td><td>${c.stage}</td><td>${c.attempt}</td><td>${c.model}</td><td>${c.status}</td><td>${(c.latency_ms||0).toFixed(0)}ms</td><td>${c.total_tokens||''}</td><td>${files}</td></tr>`;
+      html += `<tr><td>${esc(c.timestamp_utc).slice(11,19)}</td><td>${esc(c.stage)}</td><td>${esc(c.attempt)}</td><td>${esc(c.model)}</td><td>${esc(c.status)}</td><td>${(c.latency_ms||0).toFixed(0)}ms</td><td>${esc(c.total_tokens||'')}</td><td>${files}</td></tr>`;
     }
     html += '</table>';
   }
