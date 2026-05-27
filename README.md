@@ -321,3 +321,18 @@ API_PORT=8010 UI_PORT=8012 ./run.sh
 ### 重试与 fallback
 
 重试策略由 `MODEL_CALL_MAX_RETRIES`、`MODEL_CALL_TOTAL_BUDGET_SECONDS` 和各类 fallback 模型链控制。
+
+## Observability
+
+The service writes structured logs to SQLite (`logs/observability.db`) and per-request files in `logs/store/<date>/<request_id>/`. View them at `http://<host>:8000/logs`.
+
+Set `LOGS_PASSWORD` to enable the viewer (the `/config` page uses the same credential):
+
+```sh
+export LOGS_PASSWORD=hunter2
+./run.sh
+```
+
+Retention is age + total-size double bottom: `LOG_RETENTION_DAYS` (default 7), `LOG_MAX_TOTAL_BYTES` (default 5 GiB). The prune task runs every `LOG_PRUNE_INTERVAL_MINUTES` (default 60).
+
+Every HTTP response carries `X-Request-Id` — paste it in the viewer search box for instant lookup.
