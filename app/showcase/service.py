@@ -4,6 +4,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
+from app import service as _svc_module
+
 from .archive import ArchiveWriter
 from .openrouter_image_client import OpenRouterImageClient, OpenRouterImageClientError
 from .prompt import build_showcase_prompt
@@ -57,7 +59,9 @@ class ShowcaseService:
     ) -> Dict[str, Any]:
         started_at = time.perf_counter()
         now = datetime.now(_resolve_timezone(self.timezone_name))
-        request_id = f"{now.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        from app.observability import context as obs_ctx
+        existing = obs_ctx.get_request_id()
+        request_id = existing or f"{now.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
         override = (model_override or "").strip() or None
         effective_model = override or self.model
@@ -120,6 +124,18 @@ class ShowcaseService:
                 now=now,
             )
             logger.exception("Showcase generation failed for request_id=%s", request_id)
+            if _svc_module.recorder is not None:
+                try:
+                    _svc_module.recorder.record_llm_stage(
+                        request_id=request_id,
+                        stage="showcase_generate",
+                        attempts=[],
+                        messages=[{"role": "user", "content": final_prompt}],
+                        raw_response=None,
+                        parsed=None,
+                    )
+                except Exception:
+                    pass
             return response
 
         output_path = self.storage_manager.save_output_image(
@@ -167,4 +183,16 @@ class ShowcaseService:
             now=now,
         )
         logger.info("Showcase generation succeeded for request_id=%s", request_id)
+        if _svc_module.recorder is not None:
+            try:
+                _svc_module.recorder.record_llm_stage(
+                    request_id=request_id,
+                    stage="showcase_generate",
+                    attempts=[a.__dict__ for a in result.attempt_records],
+                    messages=[{"role": "user", "content": final_prompt}],
+                    raw_response=result.response_body,
+                    parsed=None,
+                )
+            except Exception:
+                pass
         return response
