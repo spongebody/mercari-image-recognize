@@ -150,7 +150,31 @@ def _format_attempts_error(exc: LLMAllAttemptsFailedError) -> Dict[str, Any]:
     }
 
 
-app = FastAPI(title="Mercari Image Analyzer", version="1.0.0")
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async def prune_loop():
+        while True:
+            try:
+                obs_prune(_obs_store, BASE_DIR / "logs" / "store",
+                          settings.log_retention_days, settings.log_max_total_bytes)
+            except Exception:
+                pass
+            await asyncio.sleep(settings.log_prune_interval_minutes * 60)
+
+    task = asyncio.create_task(prune_loop())
+    app.state.prune_task = task
+    try:
+        yield
+    finally:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+
+
+app = FastAPI(lifespan=lifespan, title="Mercari Image Analyzer", version="1.0.0")
 CONFIG_ENV_PATH = BASE_DIR / ".env"
 CONFIG_PAGE_PATH = BASE_DIR / "web" / "config.html"
 
@@ -508,7 +532,12 @@ def _job_id_from_response(body: bytes) -> str:
 
 @app.middleware("http")
 async def observe_request(request: Request, call_next):
-    if not settings.log_requests or request.url.path == "/health":
+    if (
+        not settings.log_requests
+        or request.url.path == "/health"
+        or request.url.path.startswith("/api/v1/logs/")
+        or request.url.path == "/logs"
+    ):
         return await call_next(request)
 
     request_id = uuid.uuid4().hex
@@ -826,24 +855,3 @@ def health() -> dict:
     }
 
 
-@app.on_event("startup")
-async def _start_prune_loop(_app=app):
-    async def loop():
-        while True:
-            try:
-                obs_prune(_obs_store, BASE_DIR / "logs" / "store",
-                          settings.log_retention_days, settings.log_max_total_bytes)
-            except Exception:
-                pass
-            await asyncio.sleep(settings.log_prune_interval_minutes * 60)
-
-    _app.state.prune_task = asyncio.create_task(loop())
-
-
-@app.on_event("shutdown")
-async def _stop_prune_loop(_app=app):
-    task = getattr(_app.state, "prune_task", None)
-    if task:
-        task.cancel()
-        with suppress(asyncio.CancelledError):
-            await task

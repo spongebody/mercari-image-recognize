@@ -100,3 +100,10 @@ def test_put_config_requires_auth(set_password):
     with TestClient(set_password.app) as client:
         r = client.put("/api/v1/config", json={})
     assert r.status_code == 401
+
+
+def test_invalid_fts_query_returns_400(set_password):
+    with TestClient(set_password.app) as client:
+        client.get("/api/v1/config", headers=_auth())  # seed a log row
+        r = client.get('/api/v1/logs/requests?q=AND OR', headers=_auth())
+    assert r.status_code == 400
