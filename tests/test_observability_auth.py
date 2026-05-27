@@ -50,3 +50,9 @@ def test_bearer_token_also_accepted():
     client = TestClient(_app("hunter2"))
     r = client.get("/secret", headers={"Authorization": "Bearer hunter2"})
     assert r.status_code == 200
+
+
+def test_malformed_base64_returns_401():
+    client = TestClient(_app("hunter2"))
+    r = client.get("/secret", headers={"Authorization": "Basic !!!"})
+    assert r.status_code == 401
