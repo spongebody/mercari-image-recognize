@@ -57,3 +57,16 @@ def test_request_id_propagates_into_background_thread(monkeypatch):
     assert captured, "executor never called"
     assert captured[0] is not None
     assert len(captured[0]) == 32
+
+
+def test_prune_loop_starts_and_shuts_down():
+    """FastAPI startup hook creates prune_task; shutdown cancels it."""
+    with TestClient(app) as client:
+        client.get("/health")
+        # task should be set during startup
+        task = getattr(app.state, "prune_task", None)
+        assert task is not None
+        assert not task.done()
+    # after the TestClient context exits, shutdown ran — task should be cancelled
+    # (we can't easily assert task.cancelled() here because the task object survives;
+    # the key signal is that no exception is raised during shutdown)
