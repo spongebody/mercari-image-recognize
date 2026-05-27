@@ -73,16 +73,27 @@ class ProductDataFallbackTest(_BaseFallbackTest):
     def test_dispatches_primary_and_fallback_calls_in_parallel(self, analyzer, executor):
         primary_future = concurrent.futures.Future()
         fallback_future = concurrent.futures.Future()
+        # _submit_with_request_id delegates to product_data_executor.submit(_runner)
+        # so the mock receives a single positional callable; return the right futures.
         executor.submit.side_effect = [primary_future, fallback_future]
         analyzer.classify_first_image_categories.return_value = self._classification_payload()
 
-        response = self._post_analyze()
+        # Capture _submit_with_request_id calls to inspect original fn kwargs.
+        original_submit = main._submit_with_request_id
+        captured_calls = []
+
+        def recording_submit(fn, /, *args, **kwargs):
+            captured_calls.append({"fn": fn, "args": args, "kwargs": kwargs})
+            return original_submit(fn, *args, **kwargs)
+
+        with patch.object(main, "_submit_with_request_id", side_effect=recording_submit):
+            response = self._post_analyze()
+
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(captured_calls), 2)
 
-        self.assertEqual(executor.submit.call_count, 2)
-
-        primary_call_kwargs = executor.submit.call_args_list[0].kwargs
-        fallback_call_kwargs = executor.submit.call_args_list[1].kwargs
+        primary_call_kwargs = captured_calls[0]["kwargs"]
+        fallback_call_kwargs = captured_calls[1]["kwargs"]
         self.assertNotIn("model_override", primary_call_kwargs)
         self.assertEqual(
             fallback_call_kwargs.get("model_override"),

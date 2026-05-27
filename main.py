@@ -67,6 +67,20 @@ analyzer = MercariAnalyzer(
     category_client=category_client,
 )
 product_data_executor = ThreadPoolExecutor(max_workers=4)
+
+
+def _submit_with_request_id(fn, /, *args, **kwargs):
+    rid = obs_ctx.get_request_id()
+    def _runner():
+        token = obs_ctx.set_request_id(rid) if rid else None
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            if token is not None:
+                obs_ctx.reset_request_id(token)
+    return product_data_executor.submit(_runner)
+
+
 analysis_job_store = AnalysisJobStore()
 
 
@@ -605,7 +619,7 @@ async def analyze_image(
         # decision logic. Aligning both on submit time means the timeout the
         # user configures actually maps to the elapsed time they observe.
         primary_submitted_at = time.monotonic()
-        product_future = product_data_executor.submit(
+        product_future = _submit_with_request_id(
             analyzer.generate_product_data,
             images=image_payloads,
             language=language,
@@ -617,7 +631,7 @@ async def analyze_image(
         fallback_future = None
         if fallback_model:
             fallback_submitted_at = time.monotonic()
-            fallback_future = product_data_executor.submit(
+            fallback_future = _submit_with_request_id(
                 analyzer.generate_product_data,
                 images=image_payloads,
                 language=language,
