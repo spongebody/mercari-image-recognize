@@ -35,6 +35,38 @@ def test_start_request_creates_row_and_files(recorder: Recorder):
     assert json.loads(request_file.read_text())["body"]["json"] == {"foo": "bar"}
 
 
+def test_start_request_records_image_manifest(recorder: Recorder):
+    """Uploaded images are saved AND listed in request.json so the UI can render them."""
+    recorder.start_request(
+        request_id="rid_img",
+        method="POST",
+        endpoint="/api/v1/mercari/image/analyze",
+        client_ip="", user_agent="", language="ja",
+        headers={"content-type": "multipart/form-data; boundary=---"},
+        body_bytes=b"",
+        content_type="multipart/form-data",
+        uploaded_images=[
+            {"filename": "shirt.jpg", "content_type": "image/jpeg",
+             "suffix": ".jpg", "bytes": b"\xff\xd8\xff\xe0fake"},
+            {"filename": "tag.png", "content_type": "image/png",
+             "suffix": ".png", "bytes": b"\x89PNG\r\n\x1a\nfake"},
+        ],
+    )
+    request_file = next(recorder.store_root.rglob("rid_img/request.json"))
+    payload = json.loads(request_file.read_text())
+    assert "images" in payload
+    assert len(payload["images"]) == 2
+    assert payload["images"][0]["filename"] == "shirt.jpg"
+    assert payload["images"][0]["content_type"] == "image/jpeg"
+    assert payload["images"][0]["saved_as"] == "image_0.jpg"
+    assert payload["images"][0]["size_bytes"] > 0
+    assert payload["images"][1]["saved_as"] == "image_1.png"
+    # actual bytes are on disk
+    d = request_file.parent
+    assert (d / "image_0.jpg").exists()
+    assert (d / "image_1.png").exists()
+
+
 def test_finalize_request_writes_response_and_status(recorder: Recorder):
     recorder.start_request(
         request_id="rid2", method="POST", endpoint="/x",
