@@ -20,7 +20,11 @@ from app.errors import BadRequestError, LLMAllAttemptsFailedError
 from app.image_processing import compress_image_if_needed
 from app.jobs import AnalysisJobStore
 from app.llm.client import OpenRouterClient
-from app.request_logging import build_request_log, write_request_log
+from app.observability import context as obs_ctx
+from app.observability.auth import require_logs_auth
+from app.observability.recorder import Recorder
+from app.observability.retention import prune as obs_prune
+from app.observability.store import Store as ObsStore
 from app.runtime_config import get_public_config, update_runtime_config
 from app.service import MercariAnalyzer
 from app.showcase.archive import ArchiveWriter as ShowcaseArchiveWriter
@@ -30,6 +34,9 @@ from app.showcase.storage import StorageManager as ShowcaseStorageManager
 from app.utils import parse_bool_param
 
 settings = load_settings()
+_obs_store = ObsStore(BASE_DIR / "logs" / "observability.db")
+_obs_store.init_schema()
+recorder = Recorder(store=_obs_store, store_root=BASE_DIR / "logs" / "store")
 brand_store = BrandStore(settings.brand_csv_path)
 category_store = CategoryStore(settings.category_csv_path)
 vision_client = OpenRouterClient(
@@ -441,15 +448,41 @@ def save_config(payload: Dict[str, Any], request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+_JOB_ID_PATH_PREFIX = "/api/v1/mercari/image/analyze/"
+
+
+def _job_id_from_path(path: str) -> str:
+    if path.startswith(_JOB_ID_PATH_PREFIX):
+        return path[len(_JOB_ID_PATH_PREFIX):].split("/", 1)[0]
+    return ""
+
+
+def _job_id_from_response(body: bytes) -> str:
+    try:
+        obj = json.loads(body or b"{}")
+    except Exception:
+        return ""
+    if isinstance(obj, dict):
+        for key in ("job_id", "id"):
+            v = obj.get(key)
+            if isinstance(v, str):
+                return v
+    return ""
+
+
 @app.middleware("http")
-async def log_requests(request: Request, call_next):
-    if not settings.log_requests:
+async def observe_request(request: Request, call_next):
+    if not settings.log_requests or request.url.path == "/health":
         return await call_next(request)
+
+    request_id = uuid.uuid4().hex
+    token = obs_ctx.set_request_id(request_id)
     start = time.monotonic()
-    response = None
-    error_message = ""
-    status_code = 500
     body = b""
+    status_code = 500
+    error_message = ""
+    response_body_bytes = b""
+
     try:
         if request.method in {"POST", "PUT", "PATCH"}:
             body = await request.body()
@@ -458,29 +491,95 @@ async def log_requests(request: Request, call_next):
                 return {"type": "http.request", "body": body, "more_body": False}
 
             request = Request(request.scope, receive)
-        response = await call_next(request)
-        status_code = response.status_code
-        return response
-    except Exception as exc:
-        error_message = str(exc)
-        raise
-    finally:
-        duration_ms = (time.monotonic() - start) * 1000
+
+        content_type = request.headers.get("content-type", "")
+        uploaded_images: List[Dict[str, Any]] = []
+        if "multipart/form-data" in content_type and body:
+            # parse to capture image bytes for archive
+            from starlette.datastructures import UploadFile as _Upload
+            from starlette.requests import Request as _SReq
+
+            async def _recv():
+                return {"type": "http.request", "body": body, "more_body": False}
+
+            tmp_req = _SReq(request.scope, _recv)
+            try:
+                form = await tmp_req.form()
+                for key, value in form.multi_items():
+                    if isinstance(value, _Upload):
+                        data = await value.read()
+                        suffix = "." + (value.content_type.rsplit("/", 1)[-1] if value.content_type else "bin")
+                        uploaded_images.append({
+                            "filename": value.filename or "",
+                            "content_type": value.content_type or "",
+                            "suffix": suffix,
+                            "bytes": data,
+                        })
+            except Exception:
+                pass
+
         try:
-            entry = await build_request_log(request, body=body)
-            # NOTE: Task 10 replaces this entire middleware with the new
-            # observability recorder; the literal 7 / 1000 below are placeholders
-            # pending that swap and intentionally do not read settings.
-            write_request_log(
-                entry,
-                status_code=status_code,
-                duration_ms=duration_ms,
-                error=error_message,
-                retention_days=7,
-                max_files=1000,
+            recorder.start_request(
+                request_id=request_id,
+                method=request.method,
+                endpoint=request.url.path,
+                client_ip=(request.client.host if request.client else ""),
+                user_agent=request.headers.get("user-agent", ""),
+                language=request.query_params.get("language", "") or "",
+                headers={
+                    "content-type": content_type,
+                    "user-agent": request.headers.get("user-agent", ""),
+                    "content-length": request.headers.get("content-length", ""),
+                },
+                body_bytes=body,
+                content_type=content_type,
+                uploaded_images=uploaded_images,
             )
         except Exception:
             pass
+
+        response = await call_next(request)
+        status_code = response.status_code
+
+        # buffer response body (cap at LOG_RESPONSE_MAX_BYTES)
+        cap = settings.log_response_max_bytes
+        chunks: List[bytes] = []
+        total = 0
+        async for chunk in response.body_iterator:
+            chunks.append(chunk)
+            total += len(chunk)
+            if total > cap:
+                break
+        response_body_bytes = b"".join(chunks)
+
+        from starlette.responses import Response as _Resp
+        new_response = _Resp(
+            content=response_body_bytes,
+            status_code=response.status_code,
+            headers={k: v for k, v in response.headers.items() if k.lower() != "content-length"},
+            media_type=response.media_type,
+        )
+        new_response.headers["X-Request-Id"] = request_id
+        return new_response
+
+    except Exception as exc:
+        error_message = repr(exc)
+        raise
+    finally:
+        duration_ms = (time.monotonic() - start) * 1000.0
+        try:
+            job_id = _job_id_from_path(request.url.path) or _job_id_from_response(response_body_bytes)
+            recorder.finalize_request(
+                request_id=request_id,
+                status_code=status_code,
+                duration_ms=duration_ms,
+                error=error_message,
+                response_body=response_body_bytes,
+                job_id=job_id,
+            )
+        except Exception:
+            pass
+        obs_ctx.reset_request_id(token)
 
 
 @app.post("/api/v1/mercari/image/analyze")
