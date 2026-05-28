@@ -53,22 +53,29 @@ DESCRIPTION_DETAIL_FIELDS = (
     "brand",
     "product_name",
     "model_number",
-    "target",
     "color",
-    "size",
-    "weight",
-    "condition",
 )
 DESCRIPTION_DETAIL_LEGACY_MAP = {
     "brand": ("ブランド",),
     "product_name": ("商品名",),
     "model_number": ("型番",),
-    "target": ("対象",),
     "color": ("カラー",),
+}
+TITLE_EXCLUDED_DETAIL_FIELDS = {
+    "target": ("対象",),
     "size": ("サイズ",),
     "weight": ("重量",),
-    "condition": ("程度",),
+    "condition": ("程度", "状態", "成色"),
 }
+TITLE_EXCLUDED_PATTERNS = (
+    r"(?<![A-Za-z0-9])\d+(?:\.\d+)?\s?(?:g|kg|グラム|キログラム)(?![A-Za-z0-9])",
+    r"(?:S|M|L|XL|XXL)サイズ",
+    r"サイズ(?:S|M|L|XL|XXL)",
+    r"(?:メンズ|レディース|ユニセックス)",
+    r"(?:新品|未使用|中古|美品|良品|良好|傷なし|目立つ傷なし|使用感(?:あり|なし)?)",
+    r"(?:成色|状態|程度)[:：]?\s?\S+",
+    r"\S+向け",
+)
 DESCRIPTION_SECTION_KEYS = {
     "details": ("product_details", "details", "商品详情", "商品詳細"),
     "intro": (
@@ -325,6 +332,66 @@ def _title_snippet(value: Any, max_chars: int = 60) -> str:
     return text[:max_chars].rstrip(" 、,.;；。")
 
 
+def _extract_title_exclusion_snippets(description_raw: Any) -> List[str]:
+    if isinstance(description_raw, str):
+        raw = description_raw.strip()
+        if raw.startswith("{") and raw.endswith("}"):
+            try:
+                return _extract_title_exclusion_snippets(json.loads(raw))
+            except json.JSONDecodeError:
+                return []
+        return []
+
+    if not isinstance(description_raw, dict):
+        return []
+
+    details_raw = None
+    for key in DESCRIPTION_SECTION_KEYS["details"]:
+        if key in description_raw:
+            details_raw = description_raw[key]
+            break
+    if not isinstance(details_raw, dict):
+        return []
+
+    snippets: List[str] = []
+    for field, legacy_labels in TITLE_EXCLUDED_DETAIL_FIELDS.items():
+        keys = [field, f"◆{field}"]
+        for legacy in legacy_labels:
+            keys.extend([legacy, f"◆{legacy}"])
+        for key in keys:
+            if key in details_raw and details_raw[key] is not None:
+                snippet = _title_snippet(details_raw[key], max_chars=80)
+                if len(snippet) > 1:
+                    snippets.append(snippet)
+                break
+    return snippets
+
+
+def _strip_title_excluded_terms(title: str, excluded_snippets: List[str]) -> str:
+    cleaned = _clean_string(title)
+    for snippet in excluded_snippets:
+        if len(snippet) == 1:
+            cleaned = re.sub(
+                rf"(?<![A-Za-z0-9]){re.escape(snippet)}(?![A-Za-z0-9])",
+                " ",
+                cleaned,
+            )
+        elif snippet:
+            cleaned = cleaned.replace(snippet, " ")
+    for pattern in TITLE_EXCLUDED_PATTERNS:
+        cleaned = re.sub(pattern, " ", cleaned, flags=re.IGNORECASE)
+    return _clean_string(cleaned)
+
+
+def _title_source_snippet(
+    value: Any,
+    excluded_snippets: List[str],
+    max_chars: int = 60,
+) -> str:
+    stripped = _strip_title_excluded_terms(_stringify_value(value), excluded_snippets)
+    return _title_snippet(stripped, max_chars=max_chars)
+
+
 def _extend_title_to_minimum(
     title: str,
     *,
@@ -333,8 +400,9 @@ def _extend_title_to_minimum(
     brand_raw: str = "",
     language: str = DEFAULT_LANGUAGE,
     min_chars: int = MIN_PRODUCT_TITLE_CHARS,
+    excluded_snippets: Optional[List[str]] = None,
 ) -> str:
-    title_clean = _clean_string(title)
+    title_clean = _strip_title_excluded_terms(title, excluded_snippets or [])
     if len(title_clean) >= min_chars:
         return title_clean
 
@@ -342,6 +410,7 @@ def _extend_title_to_minimum(
     details = description.get("product_details") if isinstance(description, dict) else {}
     if not isinstance(details, dict):
         details = {}
+    excluded = excluded_snippets or []
 
     for value in (
         brand_name,
@@ -349,11 +418,7 @@ def _extend_title_to_minimum(
         details.get("brand"),
         details.get("product_name"),
         details.get("model_number"),
-        details.get("target"),
         details.get("color"),
-        details.get("size"),
-        details.get("weight"),
-        details.get("condition"),
     ):
         part = _title_snippet(value)
         if part:
@@ -361,30 +426,37 @@ def _extend_title_to_minimum(
 
     keywords = description.get("search_keywords") if isinstance(description, dict) else []
     if isinstance(keywords, list):
-        parts.extend(_title_snippet(item, max_chars=30) for item in keywords)
+        parts.extend(
+            _title_source_snippet(item, excluded, max_chars=30)
+            for item in keywords
+        )
 
     if isinstance(description, dict):
-        parts.append(_title_snippet(description.get("product_intro"), max_chars=50))
-        parts.append(_title_snippet(description.get("recommendation"), max_chars=50))
+        parts.append(
+            _title_source_snippet(description.get("recommendation"), excluded, max_chars=50)
+        )
+        parts.append(
+            _title_source_snippet(description.get("product_intro"), excluded, max_chars=50)
+        )
 
     generic_parts_by_language = {
         "ja": [
             "画像確認商品",
-            "ブランド カラー 型番 サイズ 状態 情報入り",
+            "ブランド カラー 型番 情報入り",
             "メルカリ出品向け詳細タイトル",
             "写真から確認できる特徴を反映",
             "商品説明と合わせて確認しやすい出品タイトル",
         ],
         "zh": [
             "图片识别商品",
-            "品牌 颜色 型号 尺寸 成色 信息补充",
+            "品牌 颜色 型号 信息补充",
             "适合商品发布的详细标题",
             "结合图片可确认特征",
             "便于买家检索和理解的发布标题",
         ],
         "en": [
             "image verified item",
-            "brand color model size condition details included",
+            "brand color model details included",
             "marketplace listing title",
             "visible product features reflected",
             "buyer friendly searchable listing title",
@@ -608,7 +680,8 @@ class MercariAnalyzer:
         )
 
         brand_raw = _clean_string(ai_raw.get("brand_name", ""))
-        description_struct = _normalize_description(ai_raw.get("description"))
+        description_raw = ai_raw.get("description")
+        description_struct = _normalize_description(description_raw)
         brand_match = self.brand_store.match(brand_raw)
         brand_name = brand_match["brand_name"] if brand_match else ""
         brand_id_obj = dict(brand_match["brand_id_obj"]) if brand_match else empty_brand_id_obj()
@@ -618,6 +691,7 @@ class MercariAnalyzer:
             brand_name=brand_name,
             brand_raw=brand_raw,
             language=language,
+            excluded_snippets=_extract_title_exclusion_snippets(description_raw),
         )
 
         result: Dict[str, Any] = {
@@ -666,7 +740,8 @@ class MercariAnalyzer:
         )
 
         brand_raw = _clean_string(ai_raw.get("brand_name", ""))
-        description_struct = _normalize_description(ai_raw.get("description"))
+        description_raw = ai_raw.get("description")
+        description_struct = _normalize_description(description_raw)
         brand_match = self.brand_store.match(brand_raw)
         brand_name = brand_match["brand_name"] if brand_match else ""
         brand_id_obj = dict(brand_match["brand_id_obj"]) if brand_match else empty_brand_id_obj()
@@ -676,6 +751,7 @@ class MercariAnalyzer:
             brand_name=brand_name,
             brand_raw=brand_raw,
             language=language,
+            excluded_snippets=_extract_title_exclusion_snippets(description_raw),
         )
 
         result: Dict[str, Any] = {

@@ -22,11 +22,7 @@
       "brand": "string", // 品牌
       "product_name": "string", // 商品名
       "model_number": "string", // 型号
-      "target": "string", // 对象
-      "color": "string", // 颜色
-      "size": "string", // 尺寸
-      "weight": "string", // 重量
-      "condition": "string" // 成色
+      "color": "string" // 颜色
     },
     "product_intro": "string", // 商品介绍
     "recommendation": "string", // 推荐语
@@ -36,7 +32,8 @@
 ```
 
 规则：
-- `product_details` 必须包含 8 个字段；未知字段用空字符串。
+- `title` 优先使用品牌、商品名、型号、颜色；长度不够时可从 `search_keywords`、`product_intro`、`recommendation` 提取商品识别相关的关键内容补足，但不能包含成色、重量、尺寸、对象、材质、配件等描述。
+- `product_details` 只返回 4 个字段：`brand`、`product_name`、`model_number`、`color`；未知字段用空字符串。
 - `search_keywords` 为字符串数组。
 - 文本内容使用客户端 `language` 指定的语言。
 
@@ -111,7 +108,7 @@
 说明：
 - `image_list` 是**文件列表字段**
 - 传值方式：`multipart/form-data` 中**同名字段重复出现**，每个字段为一个文件。
-- 支持多张图片同时分析，优先从正反面、标签、包装细节中提取型号、品牌、颜色、尺寸、重量、成色等信息。
+- 支持多张图片同时分析，优先从正反面、标签、包装细节中识别商品信息；`title` 和 `product_details` 的字段限制见通用说明。
 
 示例：
 
@@ -237,11 +234,7 @@ files.forEach((file) => {
       "brand": "...",
       "product_name": "...",
       "model_number": "...",
-      "target": "...",
-      "color": "...",
-      "size": "...",
-      "weight": "...",
-      "condition": "..."
+      "color": "..."
     },
     "product_intro": "...",
     "recommendation": "...",
@@ -377,11 +370,7 @@ curl -X POST "http://localhost:8000/api/v1/mercari/product-data/regenerate" \
       "brand": "...",
       "product_name": "...",
       "model_number": "...",
-      "target": "...",
-      "color": "...",
-      "size": "...",
-      "weight": "...",
-      "condition": "..."
+      "color": "..."
     },
     "product_intro": "...",
     "recommendation": "...",

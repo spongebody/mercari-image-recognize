@@ -51,7 +51,11 @@ class ProductDataRegenerateRouteTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertEqual(body["brand_name"], "Nike")
-        self.assertEqual(body["description"]["product_details"]["condition"], "目立つ傷なし")
+        self.assertEqual(
+            set(body["description"]["product_details"].keys()),
+            {"brand", "product_name", "model_number", "color"},
+        )
+        self.assertEqual(body["description"]["product_details"]["color"], "ブラック")
         analyzer.regenerate_product_data.assert_called_once()
         call_kwargs = analyzer.regenerate_product_data.call_args.kwargs
         self.assertEqual(len(call_kwargs["images"]), 1)

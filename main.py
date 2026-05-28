@@ -87,6 +87,7 @@ def _submit_with_request_id(fn, /, *args, **kwargs):
 
 
 analysis_job_store = AnalysisJobStore()
+PRODUCT_DETAIL_FIELDS = ("brand", "product_name", "model_number", "color")
 
 
 def _resolve_showcase_path(value: str) -> Path:
@@ -124,6 +125,24 @@ def _ensure_price_fields(payload: Dict[str, Any]) -> Dict[str, Any]:
     payload.setdefault("tax_included", None)
     payload.setdefault("prices", [])
     return payload
+
+
+def _sanitize_product_details(payload: Dict[str, Any]) -> Dict[str, Any]:
+    description = payload.get("description")
+    if not isinstance(description, dict):
+        return payload
+    details = description.get("product_details")
+    if not isinstance(details, dict):
+        return payload
+
+    sanitized = dict(payload)
+    sanitized_description = dict(description)
+    sanitized_description["product_details"] = {
+        field: details.get(field) if details.get(field) is not None else ""
+        for field in PRODUCT_DETAIL_FIELDS
+    }
+    sanitized["description"] = sanitized_description
+    return sanitized
 
 
 def _has_direct_price(payload: Dict[str, Any]) -> bool:
@@ -235,6 +254,7 @@ def _merge_analysis_payload(
             debug_payload["attempts"] = attempts
         payload["_debug"] = debug_payload
     payload["status"] = "completed"
+    payload = _sanitize_product_details(payload)
     return _ensure_price_fields(payload)
 
 
@@ -758,6 +778,7 @@ async def regenerate_product_data(
     except Exception as exc:
         raise HTTPException(status_code=500, detail="Internal server error.") from exc
 
+    result = _sanitize_product_details(result)
     return JSONResponse(result)
 
 

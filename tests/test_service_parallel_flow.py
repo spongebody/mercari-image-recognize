@@ -204,6 +204,58 @@ class ParallelFlowServiceTest(unittest.TestCase):
         self.assertEqual(result["brand_id_obj"]["rakuten_brand_id"], "nike-r")
         self.assertEqual(set(result["timings"].keys()), {"product_data_ms"})
 
+    def test_generate_product_data_returns_only_current_product_detail_fields(self):
+        vision_client = RecordingChatClient(
+            {
+                "title": "Nike シャツ",
+                "description": {
+                    "product_details": {
+                        "brand": "Nike",
+                        "product_name": "シャツ",
+                        "model_number": "DV1234-010",
+                        "target": "メンズ",
+                        "color": "黒",
+                        "size": "M",
+                        "weight": "200g",
+                        "condition": "良好",
+                    },
+                    "product_intro": "商品紹介",
+                    "recommendation": "おすすめ",
+                    "search_keywords": ["Nike", "シャツ"],
+                },
+                "brand_name": "Nike",
+            }
+        )
+        analyzer = MercariAnalyzer(
+            settings=_settings(),
+            brand_store=FakeBrandStore(),
+            category_store=FakeCategoryStore(),
+            vision_client=vision_client,
+            category_client=SequenceChatClient([]),
+        )
+
+        result = analyzer.generate_product_data(
+            images=[(b"front-image", "image/png")],
+            language="ja",
+        )
+
+        system_prompt = vision_client.calls[0]["messages"][0]["content"]
+        product_details = result["description"]["product_details"]
+        self.assertEqual(
+            set(product_details.keys()),
+            {"brand", "product_name", "model_number", "color"},
+        )
+        self.assertEqual(product_details["brand"], "Nike")
+        self.assertEqual(product_details["product_name"], "シャツ")
+        self.assertEqual(product_details["model_number"], "DV1234-010")
+        self.assertEqual(product_details["color"], "黒")
+        self.assertIn("brand, product_name, model_number, color", system_prompt)
+        self.assertIn("Do NOT include condition, weight, size", system_prompt)
+        self.assertNotIn('"target": "string"', system_prompt)
+        self.assertNotIn('"size": "string"', system_prompt)
+        self.assertNotIn('"weight": "string"', system_prompt)
+        self.assertNotIn('"condition": "string"', system_prompt)
+
     def test_generate_product_data_preserves_inferred_prices_when_no_direct_price(self):
         vision_client = RecordingChatClient(
             {
@@ -369,6 +421,93 @@ class ParallelFlowServiceTest(unittest.TestCase):
         self.assertTrue(result["title"].startswith("Nike シャツ"))
         self.assertIn("DV1234-010", result["title"])
         self.assertIn("ブラック", result["title"])
+
+    def test_generate_product_data_title_extension_excludes_condition_weight_and_size(self):
+        vision_client = RecordingChatClient(
+            {
+                "title": "Nike シャツ",
+                "description": {
+                    "product_details": {
+                        "brand": "Nike",
+                        "product_name": "Dri-FIT トレーニングシャツ",
+                        "model_number": "DV1234-010",
+                        "target": "メンズ",
+                        "color": "ブラック",
+                        "size": "Mサイズ",
+                        "weight": "200g",
+                        "condition": "目立つ傷なし",
+                    },
+                    "product_intro": "目立つ傷なしの200g軽量ウェアです。",
+                    "recommendation": "Mサイズを探している方におすすめです。",
+                    "search_keywords": ["Nike", "目立つ傷なし", "200g", "Mサイズ", "メンズ"],
+                },
+                "brand_name": "Nike",
+            }
+        )
+        analyzer = MercariAnalyzer(
+            settings=_settings(),
+            brand_store=FakeBrandStore(),
+            category_store=FakeCategoryStore(),
+            vision_client=vision_client,
+            category_client=SequenceChatClient([]),
+        )
+
+        result = analyzer.generate_product_data(
+            images=[(b"front-image", "image/png")],
+            language="ja",
+        )
+
+        self.assertGreaterEqual(len(result["title"]), 80)
+        self.assertIn("Nike", result["title"])
+        self.assertIn("DV1234-010", result["title"])
+        self.assertIn("ブラック", result["title"])
+        self.assertNotIn("目立つ傷なし", result["title"])
+        self.assertNotIn("200g", result["title"])
+        self.assertNotIn("Mサイズ", result["title"])
+        self.assertNotIn("メンズ", result["title"])
+
+    def test_generate_product_data_title_extension_uses_filtered_keywords_intro_and_recommendation(self):
+        vision_client = RecordingChatClient(
+            {
+                "title": "Sony ヘッドホン",
+                "description": {
+                    "product_details": {
+                        "brand": "Sony",
+                        "product_name": "ワイヤレスノイズキャンセリングヘッドホン",
+                        "model_number": "WH-1000XM5",
+                        "color": "ブラック",
+                        "weight": "250g",
+                        "condition": "美品",
+                    },
+                    "product_intro": "高音質ノイズキャンセリングとBluetooth接続に対応したヘッドホンです。250gの軽量設計です。",
+                    "recommendation": "音楽鑑賞やオンライン会議にも使いやすいモデルです。美品を探している方にもおすすめです。",
+                    "search_keywords": ["Sony", "ノイズキャンセリング", "Bluetooth", "高音質", "250g", "美品"],
+                },
+                "brand_name": "Sony",
+            }
+        )
+        analyzer = MercariAnalyzer(
+            settings=_settings(),
+            brand_store=FakeBrandStore(),
+            category_store=FakeCategoryStore(),
+            vision_client=vision_client,
+            category_client=SequenceChatClient([]),
+        )
+
+        result = analyzer.generate_product_data(
+            images=[(b"front-image", "image/png")],
+            language="ja",
+        )
+
+        self.assertGreaterEqual(len(result["title"]), 80)
+        self.assertIn("WH-1000XM5", result["title"])
+        self.assertIn("ブラック", result["title"])
+        self.assertIn("ノイズキャンセリング", result["title"])
+        self.assertIn("Bluetooth", result["title"])
+        self.assertIn("高音質", result["title"])
+        self.assertIn("オンライン会議", result["title"])
+        self.assertNotIn("250g", result["title"])
+        self.assertNotIn("美品", result["title"])
 
     def test_generate_product_data_supports_model_override_for_fallback(self):
         vision_client = RecordingChatClient(
