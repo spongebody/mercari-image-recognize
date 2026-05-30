@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from ..errors import LLMAllAttemptsFailedError, LLMParseError, LLMRequestError
-from .client import OpenRouterClient
+from .client import OpenRouterClient, USE_CLIENT_REASONING
 from .json_parser import parse_llm_json
 
 
@@ -58,6 +58,7 @@ class ResilientCaller:
         messages: List[Dict[str, Any]],
         temperature: float,
         max_tokens: int,
+        reasoning: Any = USE_CLIENT_REASONING,
     ) -> Tuple[Dict[str, Any], Dict[str, Any], List[AttemptRecord]]:
         attempts: List[AttemptRecord] = []
         if not primary_model:
@@ -98,6 +99,7 @@ class ResilientCaller:
                         temperature=temperature,
                         max_tokens=max_tokens,
                         timeout=effective_timeout,
+                        reasoning=reasoning,
                     )
                 except LLMRequestError as exc:
                     attempts.append(

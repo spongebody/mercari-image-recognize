@@ -100,6 +100,7 @@ def _env_str_list(name: str, default: Sequence[str]) -> List[str]:
 class Settings:
     openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "")
     vision_model: str = os.getenv("VISION_MODEL", "")
+    price_model: str = os.getenv("PRICE_MODEL", "google/gemini-2.5-flash")
     category_model: str = os.getenv("CATEGORY_MODEL", "")
     product_data_model: str = os.getenv("PRODUCT_DATA_MODEL", "google/gemini-2.5-flash")
     product_data_fallback_model: str = os.getenv(
@@ -173,6 +174,12 @@ class Settings:
             {"auto", "concise", "detailed"},
         )
     )
+    # When False (default), the classification stages (fast vision + category
+    # selection) send reasoning disabled so they return quickly. When True they
+    # use the same global reasoning settings as the other stages.
+    classification_reasoning_enabled: bool = _env_bool(
+        "CLASSIFICATION_REASONING_ENABLED", False
+    )
 
     @property
     def reasoning(self) -> Optional[Dict[str, Any]]:
@@ -186,6 +193,17 @@ class Settings:
         if self.reasoning_summary is not None:
             reasoning["summary"] = self.reasoning_summary
         return reasoning or None
+
+    @property
+    def classification_reasoning(self) -> Optional[Dict[str, Any]]:
+        """Reasoning payload to send for the classification stages.
+
+        Disabled by default (``{"enabled": False}``) for speed; falls back to the
+        global reasoning settings when classification reasoning is turned on.
+        """
+        if self.classification_reasoning_enabled:
+            return self.reasoning
+        return {"enabled": False}
 
     @property
     def image_compression_threshold_bytes(self) -> int:

@@ -67,21 +67,13 @@ Return JSON only with title, simple_description, top_level_category, and brand_n
 
 FAST_CLASSIFICATION_SYSTEM_PROMPT = """You are an assistant helping sellers quickly classify a product for a Japanese marketplace.
 
-Use the first uploaded product image as the primary evidence for downstream category selection:
+Use the uploaded product image as the primary evidence for downstream category selection:
 - title: a short product title in the requested language
 - simple_description: one concise sentence describing what the product appears to be
 - top_level_category: exactly one top-level category from this list
 """ + TOP_LEVEL_CATEGORY_OPTIONS + """
 
-Also inspect every uploaded product image for clearly visible actual product prices, such as a price tag, label, sticker, receipt, or packaging price:
-- tax_excluded: the visible tax-excluded price as an integer JPY, or null
-- tax_included: the visible tax-included price as an integer JPY, or null
-
-If exactly one actual product price is visible, return it as tax_included and set tax_excluded to null.
-If both tax-excluded and tax-included prices are clearly visible, return both.
-If no actual product price is clearly visible, set both direct price fields to null.
-
-Do not generate brand information, listing copy, detailed description sections, inferred reference prices, or a prices field.
+Do not generate brand information, listing copy, detailed description sections, or any price fields.
 
 You must respond with pure JSON only, without explanations, markdown, or comments.
 
@@ -90,19 +82,45 @@ The JSON schema is:
 {
   "title": "string",
   "simple_description": "string",
-  "top_level_category": "string",
+  "top_level_category": "string"
+}
+"""
+
+FAST_CLASSIFICATION_USER_PROMPT = """Classify this product image for category matching.
+
+Language for title and simple_description: {language_label}.
+
+Return JSON only with title, simple_description, and top_level_category."""
+
+PRICE_ONLY_SYSTEM_PROMPT = """You are an assistant that reads product prices from images for a Japanese marketplace.
+
+Your ONLY job is to extract a clearly visible ACTUAL product price from the uploaded images, such as a price tag, label, sticker, receipt, or packaging price.
+
+Return:
+- tax_excluded: the visible tax-excluded price as an integer JPY, or null
+- tax_included: the visible tax-included price as an integer JPY, or null
+
+Rules:
+- If exactly one actual product price is visible, return it as tax_included and set tax_excluded to null.
+- If both tax-excluded and tax-included prices are clearly visible, return both.
+- If NO actual product price is clearly visible in any image, set both tax_excluded and tax_included to null. Do NOT guess, infer, or estimate a price from the product itself.
+- Inspect every uploaded image; a price may appear on any of them.
+
+Do not generate a title, brand, description, category, keywords, or any other field. Do not use web search or browsing.
+
+You must respond with pure JSON only, without explanations, markdown, or comments.
+
+The JSON schema is:
+
+{
   "tax_excluded": number or null,
   "tax_included": number or null
 }
 """
 
-FAST_CLASSIFICATION_USER_PROMPT = """Classify this product image set.
+PRICE_ONLY_USER_PROMPT = """Extract only the actual visible product price from the attached images.
 
-Language for title and simple_description: {language_label}.
-
-Use the first image for category evidence. Inspect all images for visible actual product prices.
-
-Return JSON only with title, simple_description, top_level_category, tax_excluded, and tax_included."""
+Return JSON only with tax_excluded and tax_included. Set both to null if no real price is visible. Do not include any other fields."""
 
 PRODUCT_DATA_SYSTEM_PROMPT = """You are an assistant helping sellers list items for a Japanese marketplace.
 
@@ -116,23 +134,14 @@ Generate:
    - recommendation: short persuasive selling points.
    - search_keywords: array of relevant search keywords.
 3. brand_name: visible brand name exactly as printed, or "" if unclear.
-4. Price fields:
-   - First look for a clearly visible actual product price in every image, such as a price tag, label, sticker, receipt, or packaging price.
-   - If exactly one actual product price is visible, return it as tax_included (integer JPY), set tax_excluded to null, and set prices to [].
-   - If both tax-excluded and tax-included prices are clearly visible, return both as integers in JPY and set prices to [].
-   - If no actual product price is clearly visible, set tax_excluded and tax_included to null, then return 3 inferred reference prices in JPY (integers) for [poor, average, good] condition based only on the images and typical second-hand pricing in Japan. Keep prices realistic and ascending.
 
-Do not use web search or browsing.
+Do not generate any price fields. Do not infer or estimate prices. Do not use web search or browsing.
 
 IMPORTANT:
 - Use the requested language for title and all description text.
 - Use information from all images, especially the first two images.
 - The title must be at least 80 characters. It may use concise product-identifying keywords or key content from product_intro/recommendation when needed, but must not include condition, weight, size, target user, material, included items, or generic selling-point wording.
 - If you are not sure about the brand, do not guess; return "".
-- tax_excluded and tax_included must be integers in Japanese Yen when visible, otherwise null.
-- If tax_excluded or tax_included is not null, prices must be [].
-- If exactly one direct price is visible, it belongs in tax_included, not tax_excluded.
-- If both direct price fields are null, prices must be integers in Japanese Yen, in ascending order [poor, average, good].
 
 You must respond with pure JSON only, without explanations, markdown, or comments.
 
@@ -151,10 +160,7 @@ The JSON schema is:
     "recommendation": "string",
     "search_keywords": ["string"]
   },
-  "brand_name": "string",
-  "tax_excluded": number or null,
-  "tax_included": number or null,
-  "prices": [] or [number, number, number]
+  "brand_name": "string"
 }
 """
 
@@ -251,13 +257,8 @@ Generate:
    - recommendation: 2–3 short, punchy selling-point lines. Each line is one persuasive sentence (≤ 60 Japanese characters / ≤ 20 English words). Separate lines with "\\n". Use buyer-facing benefit language ("毎日のデスクワークが快適に", "premium feel out of the box"), not generic praise.
    - search_keywords: an array of 8–15 distinct keywords. Include brand, brand variants (Japanese/English), product name, model number, product type, common synonyms, and 1–2 audience/use-case tags. Strings only — do NOT prefix with "#".
 3. brand_name — the visible brand exactly as printed (e.g., "Nintendo", "UNIQLO"). Return "" if no brand is clearly visible. Do NOT guess.
-4. Price fields:
-   - First look for a clearly visible actual product price in every image, such as a price tag, label, sticker, receipt, or packaging price.
-   - If exactly one actual product price is visible, return it as tax_included (integer JPY), set tax_excluded to null, and set prices to [].
-   - If both tax-excluded and tax-included prices are clearly visible, return both as integers in JPY and set prices to [].
-   - If no actual product price is clearly visible, set tax_excluded and tax_included to null, then return 3 inferred reference prices in JPY (integers) for [poor, average, good] condition based only on the images and typical second-hand pricing in Japan.
 
-Do NOT use web search or browsing.
+Do NOT generate any price fields. Do NOT infer or estimate prices. Do NOT use web search or browsing.
 
 QUALITY CHECKLIST before responding:
 - Did you populate exactly the four product_details fields: brand, product_name, model_number, color (using "" only when truly unknown)?
@@ -266,7 +267,6 @@ QUALITY CHECKLIST before responding:
 - Are recommendation lines benefit-driven, not generic?
 - Does search_keywords contain 8–15 distinct, relevant entries with no leading "#"?
 - Did you avoid inventing facts you cannot verify from the images?
-- Did you put a single visible direct price in tax_included, and use prices only when no direct price is visible?
 
 You MUST respond with pure JSON only — no explanations, no markdown fences, no comments.
 
@@ -285,10 +285,7 @@ The JSON schema is:
     "recommendation": "string",
     "search_keywords": ["string"]
   },
-  "brand_name": "string",
-  "tax_excluded": number or null,
-  "tax_included": number or null,
-  "prices": [] or [number, number, number]
+  "brand_name": "string"
 }
 """
 

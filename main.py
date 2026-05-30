@@ -488,6 +488,31 @@ def _parse_original_product_data(raw: Optional[str]) -> Optional[Dict[str, Any]]
     return parsed
 
 
+WEB_DIR = BASE_DIR / "web"
+
+
+@app.get("/", response_class=HTMLResponse)
+def index_page():
+    """Serve the test UI from the same origin as the API.
+
+    Because the page is served here, its relative API paths (e.g.
+    /api/v1/mercari/image/price) resolve to this server automatically, so the
+    endpoint field can be left blank.
+    """
+    index_path = WEB_DIR / "index.html"
+    if not index_path.exists():
+        raise HTTPException(status_code=404, detail="Test UI not found.")
+    return FileResponse(index_path)
+
+
+@app.get("/favicon.ico")
+def favicon():
+    icon = WEB_DIR / "favicon.ico"
+    if icon.exists():
+        return FileResponse(icon)
+    return _Resp(status_code=204)
+
+
 @app.get("/config", response_class=HTMLResponse,
          dependencies=[Depends(require_logs_auth(settings.logs_password))])
 def config_page() -> HTMLResponse:
@@ -556,7 +581,7 @@ async def observe_request(request: Request, call_next):
         not settings.log_requests
         or request.url.path == "/health"
         or request.url.path.startswith("/api/v1/logs/")
-        or request.url.path == "/logs"
+        or request.url.path in {"/logs", "/", "/favicon.ico", "/config"}
     ):
         return await call_next(request)
 
@@ -745,6 +770,39 @@ async def analyze_image(
     return JSONResponse(result)
 
 
+@app.post("/api/v1/mercari/image/price")
+async def analyze_image_price(
+    image_list: List[UploadFile] = File(...),
+    debug: str = Form("false"),
+    vision_model: str = Form(None),
+):
+    """Standalone fast price link: one vision call returning visible prices.
+
+    Independent of the /analyze flow — the app can call this directly to obtain
+    a price quickly. Returns only visible prices (null when none is visible).
+    """
+    image_payloads, image_processing = await _prepare_image_payloads(image_list)
+    debug_enabled = settings.enable_debug_param and parse_bool_param(debug, False)
+
+    try:
+        result = await run_in_threadpool(
+            analyzer.extract_prices,
+            images=image_payloads,
+            debug=debug_enabled,
+            model_override=vision_model,
+        )
+    except BadRequestError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except LLMAllAttemptsFailedError as exc:
+        raise HTTPException(status_code=502, detail=_format_attempts_error(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Internal server error.") from exc
+
+    result = _ensure_price_fields(result)
+    result["image_processing"] = image_processing
+    return JSONResponse(result)
+
+
 @app.post("/api/v1/mercari/product-data/regenerate")
 async def regenerate_product_data(
     image_list: List[UploadFile] = File(...),
@@ -870,6 +928,7 @@ def health() -> dict:
         "status": "ok",
         "models": {
             "vision_model": settings.vision_model,
+            "price_model": settings.price_model,
             "category_model": settings.category_model,
             "showcase_model": settings.showcase_model,
         },

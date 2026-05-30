@@ -13,7 +13,7 @@ from .observability.recorder import Recorder
 from .data.brands import BrandStore, empty_brand_id_obj
 from .data.categories import CategoryStore
 from .errors import BadRequestError, LLMAllAttemptsFailedError
-from .llm.client import OpenRouterClient
+from .llm.client import OpenRouterClient, USE_CLIENT_REASONING
 from .llm.resilient import AttemptRecord, ResilientCaller
 from .llm.prompts import (
     CATEGORY_SYSTEM_PROMPT,
@@ -22,6 +22,8 @@ from .llm.prompts import (
     FAST_CLASSIFICATION_USER_PROMPT,
     PRODUCT_DATA_FALLBACK_SYSTEM_PROMPT,
     PRODUCT_DATA_FALLBACK_USER_PROMPT,
+    PRICE_ONLY_SYSTEM_PROMPT,
+    PRICE_ONLY_USER_PROMPT,
     PRODUCT_DATA_REGENERATION_SYSTEM_PROMPT,
     PRODUCT_DATA_REGENERATION_USER_PROMPT,
     PRODUCT_DATA_SYSTEM_PROMPT,
@@ -559,6 +561,14 @@ class MercariAnalyzer:
             per_attempt_timeout_s=settings.request_timeout,
         )
 
+    def _classification_reasoning(self) -> Any:
+        """Reasoning override for the classification stages (read live).
+
+        Defaults to the client's reasoning when the settings object predates the
+        classification reasoning switch (e.g. lightweight test doubles).
+        """
+        return getattr(self.settings, "classification_reasoning", USE_CLIENT_REASONING)
+
     def _record_stage(
         self,
         stage: str,
@@ -594,10 +604,12 @@ class MercariAnalyzer:
         total_started = time.monotonic()
         attempts_by_stage: Dict[str, List[AttemptRecord]] = {}
 
-        data_urls = [
-            image_bytes_to_data_url(image_bytes, mime_type)
-            for image_bytes, mime_type in images
-        ]
+        # Category is decided from the first image only (the prompt already treats
+        # it as the primary evidence). Sending just the first image keeps the
+        # vision call lean and fast; prices are handled by the dedicated price
+        # link, so the extra images are no longer needed here.
+        first_image_bytes, first_mime = images[0]
+        data_urls = [image_bytes_to_data_url(first_image_bytes, first_mime)]
         ai_raw, vision_attempts = self._call_fast_classification_llm(
             data_urls,
             language,
@@ -609,8 +621,6 @@ class MercariAnalyzer:
         simple_description = _clean_string(ai_raw.get("simple_description", ""))
         top_level_category = _clean_string(ai_raw.get("top_level_category", ""))
         group_name = _map_top_level_category(top_level_category)
-        price_fields = _normalize_price_fields(ai_raw)
-        price_fields["prices"] = []
 
         categories: List[Dict[str, Any]] = []
         llm_category_raw: Optional[Dict[str, Any]] = None
@@ -628,7 +638,11 @@ class MercariAnalyzer:
         result: Dict[str, Any] = {
             "status": "product_pending",
             "categories": categories,
-            **price_fields,
+            # Price now comes from the dedicated price link; these fields are kept
+            # (null/empty) only so existing clients do not break.
+            "tax_excluded": None,
+            "tax_included": None,
+            "prices": [],
             "timings": {
                 "total_ms": classification_ms,
                 "classification_ms": classification_ms,
@@ -648,6 +662,45 @@ class MercariAnalyzer:
                     stage: [a.__dict__ for a in attempts]
                     for stage, attempts in attempts_by_stage.items()
                 },
+            }
+        return result
+
+    def extract_prices(
+        self,
+        images: List[Tuple[bytes, str]],
+        debug: bool = False,
+        model_override: Optional[str] = None,
+        started_at: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """Standalone fast price link: a single vision call reading visible prices.
+
+        Returns only price fields (no title/brand/category/description), so the
+        app can show a price quickly without waiting on the full analyze flow.
+        Only real, visible prices are returned — no inferred reference prices.
+        """
+        if not images:
+            raise BadRequestError("Image list is required.")
+        started = float(started_at) if started_at is not None else time.monotonic()
+        data_urls = [
+            image_bytes_to_data_url(image_bytes, mime_type)
+            for image_bytes, mime_type in images
+        ]
+        ai_raw, attempts = self._call_price_only_llm(
+            data_urls,
+            model_override=model_override,
+        )
+        # The price-only prompt never returns a `prices` list, so this yields
+        # visible tax_excluded/tax_included with an empty `prices`.
+        result: Dict[str, Any] = {
+            **_normalize_price_fields(ai_raw),
+            "timings": {
+                "price_ms": round((time.monotonic() - started) * 1000, 2),
+            },
+        }
+        if debug:
+            result["_debug"] = {
+                "price_ai_raw": ai_raw,
+                "attempts": {"price_only": [a.__dict__ for a in attempts]},
             }
         return result
 
@@ -699,7 +752,11 @@ class MercariAnalyzer:
             "description": description_struct,
             "brand_name": brand_name,
             "brand_id_obj": brand_id_obj,
-            **_normalize_price_fields(ai_raw),
+            # Price is handled by the dedicated price link; kept null/empty here
+            # only so the merged response preserves the fields for clients.
+            "tax_excluded": None,
+            "tax_included": None,
+            "prices": [],
             "timings": {
                 "product_data_ms": round((time.monotonic() - started) * 1000, 2),
             },
@@ -916,18 +973,11 @@ class MercariAnalyzer:
             language_label=_language_label(language)
         )
         image_payloads: List[Dict[str, Any]] = []
-        image_count = len(image_data_urls)
-        for index, url in enumerate(image_data_urls, start=1):
-            role_text = (
-                "Use this first image as the primary category evidence. "
-                "Also inspect it for visible actual product prices."
-                if index == 1
-                else "Inspect this additional image for visible actual product prices."
-            )
+        for url in image_data_urls:
             image_payloads.append(
                 {
                     "type": "text",
-                    "text": f"Image {index} of {image_count}: {role_text}",
+                    "text": "Use this image as the primary category evidence.",
                 }
             )
             image_payloads.append({"type": "image_url", "image_url": {"url": url}})
@@ -949,6 +999,7 @@ class MercariAnalyzer:
                 messages=messages,
                 temperature=0.1,
                 max_tokens=2000,
+                reasoning=self._classification_reasoning(),
             )
         except LLMAllAttemptsFailedError as exc:
             self._record_stage(
@@ -959,6 +1010,65 @@ class MercariAnalyzer:
             raise
         self._record_stage(
             stage="fast_vision",
+            attempts=[a.__dict__ for a in attempts],
+            messages=messages,
+            raw_response=raw_response,
+            parsed=parsed,
+        )
+        return parsed, attempts
+
+    def _call_price_only_llm(
+        self,
+        image_data_urls: List[str],
+        model_override: Optional[str] = None,
+    ) -> Tuple[Dict[str, Any], List[AttemptRecord]]:
+        if not image_data_urls:
+            raise BadRequestError("Image list is empty.")
+        image_payloads: List[Dict[str, Any]] = []
+        image_count = len(image_data_urls)
+        for index, url in enumerate(image_data_urls, start=1):
+            image_payloads.append(
+                {
+                    "type": "text",
+                    "text": (
+                        f"Image {index} of {image_count}: inspect this image for any "
+                        "clearly visible actual product price."
+                    ),
+                }
+            )
+            image_payloads.append({"type": "image_url", "image_url": {"url": url}})
+        messages = [
+            {"role": "system", "content": PRICE_ONLY_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": PRICE_ONLY_USER_PROMPT}] + image_payloads,
+            },
+        ]
+        primary = (
+            model_override
+            or getattr(self.settings, "price_model", "")
+            or self.settings.vision_model
+        )
+        fallbacks = self.settings.vision_fallback_models
+
+        try:
+            parsed, raw_response, attempts = self.vision_caller.call_and_parse(
+                stage="price_only",
+                primary_model=primary,
+                fallback_models=fallbacks,
+                messages=messages,
+                temperature=0.1,
+                max_tokens=300,
+            )
+        except LLMAllAttemptsFailedError as exc:
+            self._record_stage(
+                stage="price_only",
+                attempts=[a.__dict__ for a in exc.attempts],
+                messages=messages,
+            )
+            raise
+        self._record_stage(
+            stage="price_only",
             attempts=[a.__dict__ for a in attempts],
             messages=messages,
             raw_response=raw_response,
@@ -1154,6 +1264,7 @@ class MercariAnalyzer:
                 messages=messages,
                 temperature=0.3,
                 max_tokens=16000,
+                reasoning=self._classification_reasoning(),
             )
         except LLMAllAttemptsFailedError as exc:
             self._record_stage(
@@ -1208,6 +1319,7 @@ class MercariAnalyzer:
                 messages=messages,
                 temperature=0.1,
                 max_tokens=16000,
+                reasoning=self._classification_reasoning(),
             )
         except LLMAllAttemptsFailedError as exc:
             self._record_stage(

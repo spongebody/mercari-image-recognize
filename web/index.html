@@ -1129,6 +1129,9 @@
               </button>
               <button class="secondary" id="clear-files-btn">清空图片</button>
             </div>
+            <button id="price-btn" style="width: 100%; margin-top: 12px;">
+              <span id="price-button-text">⚡ 快速识别价格</span>
+            </button>
 
             <!-- 进度显示 -->
             <div id="progress-section" style="display: none;">
@@ -1334,6 +1337,8 @@
           categoryModelPlaceholder: "留空使用默认分类模型",
           startButton: "开始识别",
           clearImages: "清空图片",
+          priceButton: "⚡ 快速识别价格",
+          pricingButton: "识别价格中...",
           progressLabel: "处理进度",
           resultsTitle: "识别结果",
           statsTitle: "测试统计",
@@ -1360,6 +1365,7 @@
           fieldStatus: "状态",
           productDataPending: "商品数据仍在生成中，正在轮询完整结果...",
           timingTotal: "总耗时",
+          timingPrice: "价格接口",
           timingClassification: "分类接口",
           timingProductData: "商品数据接口",
           timingProductDataPrimary: "主模型耗时",
@@ -1501,6 +1507,8 @@
           categoryModelPlaceholder: "空欄なら既定モデルを使用",
           startButton: "解析を開始",
           clearImages: "画像をクリア",
+          priceButton: "⚡ 価格だけ高速取得",
+          pricingButton: "価格を取得中...",
           progressLabel: "処理進捗",
           resultsTitle: "解析結果",
           statsTitle: "テスト統計",
@@ -1527,6 +1535,7 @@
           fieldStatus: "ステータス",
           productDataPending: "商品データを生成中です。完全な結果をポーリングしています...",
           timingTotal: "総時間",
+          timingPrice: "価格API",
           timingClassification: "カテゴリ分類API",
           timingProductData: "商品データAPI",
           timingProductDataPrimary: "メインモデル所要時間",
@@ -1673,6 +1682,7 @@
       let selectedFiles = [];
       let testResults = [];
       let processing = false;
+      let pricing = false;
       let resultRatings = {}; // 跟踪每个结果的评价状态 { resultId: 'accurate' | 'moderate' | 'inaccurate' | null }
       let titleProcessing = false;
       let showcaseProcessing = false;
@@ -1706,6 +1716,8 @@
       const apiInput = document.getElementById("api-endpoint");
       const submitBtn = document.getElementById("submit-btn");
       const buttonText = document.getElementById("button-text");
+      const priceBtn = document.getElementById("price-btn");
+      const priceButtonText = document.getElementById("price-button-text");
       const clearFilesBtn = document.getElementById("clear-files-btn");
       const progressSection = document.getElementById("progress-section");
       const progressLabel = document.getElementById("progress-label");
@@ -1816,6 +1828,7 @@
         buttonText.innerHTML = processing
           ? `<span class="spinner"></span> ${t("processingButton")}`
           : t("startButton");
+        if (priceButtonText && !pricing) priceButtonText.textContent = t("priceButton");
         clearFilesBtn.textContent = t("clearImages");
         progressLabel.textContent = t("progressLabel");
         resultsTitle.textContent = t("resultsTitle");
@@ -1956,6 +1969,9 @@
         const stats = [];
         if (Number.isFinite(timings.total_ms)) {
           stats.push(`<span>⏱️ ${t("timingTotal")} ${formatDuration(timings.total_ms)}</span>`);
+        }
+        if (Number.isFinite(timings.price_ms)) {
+          stats.push(`<span>💴 ${t("timingPrice")} ${formatDuration(timings.price_ms)}</span>`);
         }
         if (Number.isFinite(timings.classification_ms)) {
           stats.push(`<span>🏷️ ${t("timingClassification")} ${formatDuration(timings.classification_ms)}</span>`);
@@ -2634,6 +2650,56 @@
         setStatus("done");
       }
 
+      function buildPriceEndpoint() {
+        const base = (apiInput.value.trim() || "/api/v1/mercari/image/analyze").replace(/\/$/, "");
+        if (base.includes("/api/v1/mercari/image/analyze")) {
+          return base.replace("/api/v1/mercari/image/analyze", "/api/v1/mercari/image/price");
+        }
+        return "/api/v1/mercari/image/price";
+      }
+
+      async function processPriceOnly() {
+        if (pricing || processing) return;
+        if (selectedFiles.length === 0) {
+          alert(t("alertNoFiles"));
+          return;
+        }
+
+        const endpoint = buildPriceEndpoint();
+        pricing = true;
+        priceBtn.disabled = true;
+        submitBtn.disabled = true;
+        priceButtonText.innerHTML = `<span class="spinner"></span> ${t("pricingButton")}`;
+        setStatus("processing");
+
+        const batchFileObj = buildBatchFileObj(selectedFiles);
+        try {
+          const formData = new FormData();
+          selectedFiles.forEach((fileObj) => {
+            formData.append("image_list", fileObj.file);
+          });
+          if (visionModelInput?.value.trim()) formData.append("vision_model", visionModelInput.value.trim());
+
+          const resp = await fetch(endpoint, { method: "POST", body: formData });
+          const text = await resp.text();
+          let payload = {};
+          try {
+            payload = JSON.parse(text);
+          } catch (err) {
+            payload = { error: t("jsonParseFailed"), raw: text };
+          }
+          addResultCard(batchFileObj, payload, resp.ok);
+        } catch (err) {
+          addResultCard(batchFileObj, { error: String(err?.message || err) }, false);
+        }
+
+        pricing = false;
+        priceBtn.disabled = false;
+        submitBtn.disabled = false;
+        priceButtonText.textContent = t("priceButton");
+        setStatus("done");
+      }
+
       async function submitTitleRequest() {
         const endpoint = titleApiInput.value.trim() || "/api/v1/mercari/title/analyze";
         const titleValue = titleInput.value.trim();
@@ -3262,6 +3328,7 @@
 
       // 提交处理
       submitBtn.addEventListener("click", processFiles);
+      priceBtn.addEventListener("click", processPriceOnly);
       titleSubmitBtn.addEventListener("click", submitTitleRequest);
       titleClearBtn.addEventListener("click", () => {
         titleInput.value = "";

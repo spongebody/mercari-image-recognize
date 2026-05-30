@@ -9,11 +9,13 @@ from app.runtime_config import get_public_config, update_runtime_config
 def _fake_settings(**overrides):
     base = dict(
         vision_model="old-vision",
+        price_model="old-price",
         category_model="old-category",
         product_data_model="old-product-data",
         product_data_fallback_model="openai/gpt-4o-mini",
         product_data_fallback_timeout_seconds=10.0,
         showcase_model="old-showcase",
+        classification_reasoning_enabled=False,
         log_requests=False,
         enable_debug_param=True,
         image_compression_threshold_mb=1,

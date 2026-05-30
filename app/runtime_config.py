@@ -17,6 +17,7 @@ class ConfigField:
 
 CONFIG_FIELDS = (
     ConfigField("VISION_MODEL", "vision_model", "str"),
+    ConfigField("PRICE_MODEL", "price_model", "str"),
     ConfigField("CATEGORY_MODEL", "category_model", "str"),
     ConfigField("PRODUCT_DATA_MODEL", "product_data_model", "str"),
     ConfigField("PRODUCT_DATA_FALLBACK_MODEL", "product_data_fallback_model", "str"),
@@ -27,6 +28,11 @@ CONFIG_FIELDS = (
         min_value=0.1,
     ),
     ConfigField("SHOWCASE_MODEL", "showcase_model", "str"),
+    ConfigField(
+        "CLASSIFICATION_REASONING_ENABLED",
+        "classification_reasoning_enabled",
+        "bool",
+    ),
     ConfigField("LOG_REQUESTS", "log_requests", "bool"),
     ConfigField("ENABLE_DEBUG", "enable_debug_param", "bool"),
     ConfigField("IMAGE_COMPRESSION_THRESHOLD_MB", "image_compression_threshold_mb", "int"),

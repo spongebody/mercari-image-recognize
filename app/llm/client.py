@@ -6,6 +6,12 @@ import requests
 from ..errors import LLMRequestError
 
 
+# Sentinel: when passed as `reasoning`, fall back to the client's configured
+# reasoning. Lets callers override reasoning per call (e.g. disable it for the
+# fast classification stages) without affecting other callers.
+USE_CLIENT_REASONING = object()
+
+
 class OpenRouterClient:
     def __init__(
         self,
@@ -31,6 +37,7 @@ class OpenRouterClient:
         temperature: float = 0.2,
         max_tokens: int = 1024,
         timeout: Optional[float] = None,
+        reasoning: Any = USE_CLIENT_REASONING,
     ) -> Tuple[str, Dict[str, Any]]:
         if not self.api_key:
             raise LLMRequestError("OPENROUTER_API_KEY is not configured.")
@@ -52,8 +59,11 @@ class OpenRouterClient:
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
-        if self.reasoning is not None:
-            payload["reasoning"] = dict(self.reasoning)
+        effective_reasoning = (
+            self.reasoning if reasoning is USE_CLIENT_REASONING else reasoning
+        )
+        if effective_reasoning is not None:
+            payload["reasoning"] = dict(effective_reasoning)
 
         effective_timeout = timeout if timeout is not None else self.timeout
         try:

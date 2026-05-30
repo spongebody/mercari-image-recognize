@@ -75,6 +75,7 @@ def _settings():
         vision_model="vision-test",
         category_model="category-test",
         product_data_model="product-data-test",
+        classification_reasoning={"enabled": False},
         log_requests=False,
         vision_fallback_models=[],
         category_fallback_models=[],
@@ -128,24 +129,90 @@ class ParallelFlowServiceTest(unittest.TestCase):
         prompt_text = vision_content[0]["text"]
         system_prompt = vision_client.calls[0]["messages"][0]["content"]
         category_prompt = category_client.calls[0]["messages"][1]["content"]
-        self.assertEqual(len(image_parts), 2)
+        # Classification now sends only the first image (price scan moved out).
+        self.assertEqual(len(image_parts), 1)
         self.assertNotIn("product_intro", prompt_text)
-        self.assertIn("tax_excluded", system_prompt)
-        self.assertIn("tax_included", system_prompt)
+        # Price fields are no longer part of the classification prompt.
+        self.assertNotIn("tax_excluded", system_prompt)
+        self.assertNotIn("tax_included", system_prompt)
         self.assertNotIn('"prices"', system_prompt)
         self.assertNotIn("brand_name", prompt_text)
         self.assertIn("- Brand (may be empty): \n", category_prompt)
         self.assertEqual(result["status"], "product_pending")
         self.assertNotIn("brand_name", result)
+        # Price fields are kept (null/empty) for client compatibility only.
         self.assertIsNone(result["tax_excluded"])
-        self.assertEqual(result["tax_included"], 1078)
+        self.assertIsNone(result["tax_included"])
         self.assertEqual(result["prices"], [])
         self.assertEqual(result["categories"][0]["confidence"], 0.91)
         self.assertEqual(result["categories"][1]["confidence"], 0.53)
         self.assertEqual(set(result["timings"].keys()), {"total_ms", "classification_ms"})
         self.assertEqual(result["timings"]["total_ms"], result["timings"]["classification_ms"])
 
-    def test_generate_product_data_uses_product_data_model_and_returns_price_fields(self):
+    def test_classification_sends_configured_reasoning_to_both_stages(self):
+        vision_client = RecordingChatClient(
+            {
+                "title": "Nike シャツ",
+                "simple_description": "Nikeのメンズシャツ",
+                "top_level_category": "メンズファッション",
+            }
+        )
+        category_client = RecordingChatClient(
+            {"best_target_path": "メンズファッション/トップス", "confidence": 0.9}
+        )
+        settings = _settings()
+        settings.classification_reasoning = {"enabled": False}
+        analyzer = MercariAnalyzer(
+            settings=settings,
+            brand_store=FakeBrandStore(),
+            category_store=FakeCategoryStore(),
+            vision_client=vision_client,
+            category_client=category_client,
+        )
+
+        analyzer.classify_first_image_categories(
+            images=[(b"front-image", "image/png")],
+            language="ja",
+        )
+
+        # Both classification stages forward the configured reasoning override.
+        self.assertEqual(vision_client.calls[0]["reasoning"], {"enabled": False})
+        self.assertEqual(category_client.calls[0]["reasoning"], {"enabled": False})
+
+    def test_product_data_does_not_use_classification_reasoning_override(self):
+        from app.llm.client import USE_CLIENT_REASONING
+
+        vision_client = RecordingChatClient(
+            {
+                "title": "Nike シャツ",
+                "description": {
+                    "product_details": {
+                        "brand": "Nike",
+                        "product_name": "シャツ",
+                        "model_number": "",
+                        "color": "",
+                    },
+                    "product_intro": "",
+                    "recommendation": "",
+                    "search_keywords": [],
+                },
+                "brand_name": "Nike",
+            }
+        )
+        analyzer = MercariAnalyzer(
+            settings=_settings(),
+            brand_store=FakeBrandStore(),
+            category_store=FakeCategoryStore(),
+            vision_client=vision_client,
+            category_client=SequenceChatClient([]),
+        )
+
+        analyzer.generate_product_data(images=[(b"front-image", "image/png")], language="ja")
+
+        # Product data uses the client's own reasoning, not the classification override.
+        self.assertIs(vision_client.calls[0]["reasoning"], USE_CLIENT_REASONING)
+
+    def test_generate_product_data_uses_product_data_model_and_omits_price_fields(self):
         vision_client = RecordingChatClient(
             {
                 "title": "Nike シャツ",
@@ -192,13 +259,14 @@ class ParallelFlowServiceTest(unittest.TestCase):
         image_parts = [part for part in call["messages"][1]["content"] if part["type"] == "image_url"]
         self.assertEqual(call["model"], "product-data-test")
         self.assertEqual(len(image_parts), 2)
-        self.assertIn("tax_excluded", system_prompt)
-        self.assertIn("prices", system_prompt)
+        # Product data no longer prompts for or returns real/inferred prices.
+        self.assertNotIn("tax_excluded", system_prompt)
+        self.assertNotIn('"prices"', system_prompt)
         self.assertIn("Japanese", prompt_text)
-        self.assertNotIn("tax_excluded", prompt_text)
-        self.assertNotIn("prices", prompt_text)
-        self.assertEqual(result["tax_excluded"], 980)
-        self.assertEqual(result["tax_included"], 1078)
+        # Price fields kept (null/empty) for client compatibility only, even
+        # though the model returned price values in its raw output.
+        self.assertIsNone(result["tax_excluded"])
+        self.assertIsNone(result["tax_included"])
         self.assertEqual(result["prices"], [])
         self.assertEqual(result["brand_name"], "Nike")
         self.assertEqual(result["brand_id_obj"]["rakuten_brand_id"], "nike-r")
@@ -256,7 +324,7 @@ class ParallelFlowServiceTest(unittest.TestCase):
         self.assertNotIn('"weight": "string"', system_prompt)
         self.assertNotIn('"condition": "string"', system_prompt)
 
-    def test_generate_product_data_preserves_inferred_prices_when_no_direct_price(self):
+    def test_generate_product_data_drops_inferred_prices(self):
         vision_client = RecordingChatClient(
             {
                 "title": "Nike シャツ",
@@ -296,9 +364,9 @@ class ParallelFlowServiceTest(unittest.TestCase):
 
         self.assertIsNone(result["tax_excluded"])
         self.assertIsNone(result["tax_included"])
-        self.assertEqual(result["prices"], [1000, 1500, 2000])
+        self.assertEqual(result["prices"], [])
 
-    def test_generate_product_data_treats_single_direct_price_as_tax_included(self):
+    def test_generate_product_data_drops_single_visible_price(self):
         vision_client = RecordingChatClient(
             {
                 "title": "Nike シャツ",
@@ -337,10 +405,10 @@ class ParallelFlowServiceTest(unittest.TestCase):
         )
 
         self.assertIsNone(result["tax_excluded"])
-        self.assertEqual(result["tax_included"], 980)
+        self.assertIsNone(result["tax_included"])
         self.assertEqual(result["prices"], [])
 
-    def test_generate_product_data_preserves_explicit_tax_included_only_price(self):
+    def test_generate_product_data_drops_explicit_tax_included_price(self):
         vision_client = RecordingChatClient(
             {
                 "title": "Nike シャツ",
@@ -379,7 +447,7 @@ class ParallelFlowServiceTest(unittest.TestCase):
         )
 
         self.assertIsNone(result["tax_excluded"])
-        self.assertEqual(result["tax_included"], 1078)
+        self.assertIsNone(result["tax_included"])
         self.assertEqual(result["prices"], [])
 
     def test_generate_product_data_expands_short_title_to_at_least_80_chars(self):

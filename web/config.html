@@ -317,6 +317,14 @@
             <input id="SHOWCASE_MODEL" type="text" placeholder="例如 google/gemini-3.1-flash-image-preview" />
             <div class="hint">用于 /api/v1/showcase/generate；必须支持 OpenRouter 图生图（image+text → image）modalities。请求中 model 字段为空时使用该默认值。</div>
           </div>
+          <div>
+            <label for="CLASSIFICATION_REASONING_ENABLED">分类链路推理（reasoning）</label>
+            <select id="CLASSIFICATION_REASONING_ENABLED">
+              <option value="false">关闭（更快，推荐）</option>
+              <option value="true">开启</option>
+            </select>
+            <div class="hint">关闭后分类的视觉识别与类目选择会禁用模型推理，显著加快返回（推荐配合 gemini-2.5-flash，可达 2-5 秒）。开启则沿用全局 reasoning 设置。不影响商品数据生成。保存后立即生效。</div>
+          </div>
         </div>
 
         <div class="controls-row">
@@ -351,14 +359,6 @@
           </summary>
           <div class="collapsible-body">
             <div class="controls-row">
-              <div>
-                <label for="LOG_LLM_RAW">打印 LLM 原始日志</label>
-                <select id="LOG_LLM_RAW">
-                  <option value="true">开启</option>
-                  <option value="false">关闭</option>
-                </select>
-                <div class="hint">开启后会把 LLM 原始内容写入服务端 logs 目录。</div>
-              </div>
               <div>
                 <label for="LOG_REQUESTS">打印请求日志</label>
                 <select id="LOG_REQUESTS">
@@ -424,11 +424,11 @@
         "PRODUCT_DATA_FALLBACK_MODEL",
         "PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS",
         "SHOWCASE_MODEL",
+        "CLASSIFICATION_REASONING_ENABLED",
         "VISION_FALLBACK_MODELS",
         "CATEGORY_FALLBACK_MODELS",
         "PRODUCT_DATA_FALLBACK_MODELS",
         "SHOWCASE_FALLBACK_MODELS",
-        "LOG_LLM_RAW",
         "LOG_REQUESTS",
         "ENABLE_DEBUG",
         "IMAGE_COMPRESSION_THRESHOLD_MB",
