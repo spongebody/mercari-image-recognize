@@ -799,7 +799,10 @@ async def analyze_image_price(
         raise HTTPException(status_code=500, detail="Internal server error.") from exc
 
     result = _ensure_price_fields(result)
-    result["image_processing"] = image_processing
+    if debug_enabled:
+        result["image_processing"] = image_processing
+    else:
+        result.pop("timings", None)
     return JSONResponse(result)
 
 
@@ -933,5 +936,4 @@ def health() -> dict:
             "showcase_model": settings.showcase_model,
         },
     }
-
 

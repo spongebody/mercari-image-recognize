@@ -39,6 +39,7 @@
 
 ### 价格字段
 - 图片识别主接口会始终返回 `tax_excluded`、`tax_included`、`prices`。首个 `product_pending` 响应会由快速分类链路基于所有上传图片抽取清晰可见的实际价格；看不到明确实际价格时，`tax_excluded` / `tax_included` 为 `null`，`prices` 为 `[]`。后台商品数据完成后，直接价格以商品数据链路为准；如果商品数据没有直接价格但首响应已有直接价格，则保留首响应价格；参考价格 `prices` 仍只由商品数据链路推断。
+- 独立价格接口 `POST /api/v1/mercari/image/price` 只识别图片中清晰可见的实际商品价格，不生成标题、品牌、分类、描述，也不推断参考价格。
 
 ## 接口列表
 
@@ -198,6 +199,79 @@ files.forEach((file) => {
 - `categories` 始终返回置信度从高到低的最多 3 个匹配分类（候选目录中可信匹配少于 3 时可能少于 3 个）；`best_target_path` / `alternatives` 在成功匹配分类路径时返回，同样按置信度降序。
 - `timings.total_ms` 表示从请求开始到当前响应时刻的实际墙钟耗时；`timings.classification_ms` 表示首接口分类链路耗时，单位均为毫秒。由于分类与商品数据并行执行，完成态的 `total_ms ≈ max(classification_ms, product_data_ms)`，而非两者相加。
 - `image_processing` 字段返回每张上传图片的压缩处理结果（是否压缩、原始/处理后字节数等）。
+
+### POST /api/v1/mercari/image/price
+快速识别图片中清晰可见的实际商品价格。该接口独立于 `/api/v1/mercari/image/analyze`，只返回价格相关字段，不返回标题、品牌、分类、描述，也不推断参考价格。
+
+#### 请求（multipart/form-data）
+字段：
+- `image_list`（文件，必填，可多次上传）：商品图片列表。接口会检查所有上传图片，价格可能出现在任意一张图片中。
+- `debug`（字符串，可选）：`true` / `1` / `yes` 等，默认 `false`。只有 `debug=true` 且服务端允许调试时，响应才包含 `timings`、`image_processing` 和 `_debug`。
+- `vision_model`（字符串，可选）：本次价格识别使用的模型覆盖；不传时使用 `PRICE_MODEL`，若未配置则回退到 `VISION_MODEL`。
+
+图片校验与压缩规则同 `/api/v1/mercari/image/analyze`：支持 `image/jpeg`、`image/png`、`image/webp`，空文件、类型不支持或超过大小限制会返回 `400`。
+
+示例：
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/mercari/image/price" \
+  -F "image_list=@/path/to/item_front.jpg" \
+  -F "image_list=@/path/to/item_back.jpg"
+```
+
+#### 响应（200，默认）
+
+```json
+{
+  "tax_excluded": null,
+  "tax_included": 1078,
+  "prices": []
+}
+```
+
+#### 响应（200，debug=true）
+
+```json
+{
+  "tax_excluded": null,
+  "tax_included": 1078,
+  "prices": [],
+  "timings": {
+    "price_ms": 420.12
+  },
+  "image_processing": [
+    {
+      "index": 1,
+      "filename": "front.jpg",
+      "compressed": false,
+      "original_bytes": 500000,
+      "processed_bytes": 500000
+    }
+  ],
+  "_debug": {
+    "price_ai_raw": {
+      "tax_excluded": null,
+      "tax_included": "税込 1,078円"
+    },
+    "attempts": {
+      "price_only": []
+    }
+  }
+}
+```
+
+说明：
+- `tax_excluded`：图片中明确可见的不含税价格，整数日元；没有则为 `null`。
+- `tax_included`：图片中明确可见的含税价格，整数日元；没有则为 `null`。
+- 如果图片中只识别到一个明确可见的实际商品价格，默认写入 `tax_included`，`tax_excluded` 为 `null`。
+- 如果没有明确可见的实际商品价格，`tax_excluded` 和 `tax_included` 均为 `null`。
+- `prices` 当前固定为 `[]`；该接口不猜测、不估算、不返回参考价格。
+- `timings` 和 `image_processing` 仅在 `debug=true` 且服务端允许调试时返回。
+
+#### 错误
+- `400`：请求无效（缺少图片、图片格式/大小错误等）。`detail` 为字符串。
+- `502`：LLM 链路全部尝试失败。`detail.stage` 为 `"price_only"`。
+- `500`：内部错误，`detail` 为字符串。
 
 ### GET /api/v1/mercari/image/analyze/{job_id}
 轮询商品数据生成结果。

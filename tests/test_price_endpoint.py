@@ -94,7 +94,7 @@ class PriceEndpointTest(unittest.TestCase):
         self.client = TestClient(main.app)
 
     @patch.object(main, "analyzer")
-    def test_price_endpoint_returns_price_and_image_processing(self, analyzer):
+    def test_price_endpoint_returns_price_only_by_default(self, analyzer):
         analyzer.extract_prices.return_value = {
             "tax_excluded": None,
             "tax_included": 1078,
@@ -114,9 +114,40 @@ class PriceEndpointTest(unittest.TestCase):
         body = resp.json()
         self.assertIsNone(body["tax_excluded"])
         self.assertEqual(body["tax_included"], 1078)
+        self.assertEqual(body["prices"], [])
+        self.assertNotIn("timings", body)
+        self.assertNotIn("image_processing", body)
+        analyzer.extract_prices.assert_called_once()
+
+    @patch.object(main, "analyzer")
+    def test_price_endpoint_returns_debug_fields_when_debug_enabled(self, analyzer):
+        analyzer.extract_prices.return_value = {
+            "tax_excluded": None,
+            "tax_included": 1078,
+            "prices": [],
+            "timings": {"price_ms": 42.0},
+            "_debug": {"price_ai_raw": {"tax_included": "1078"}},
+        }
+
+        with patch.object(main.settings, "enable_debug_param", True):
+            resp = self.client.post(
+                "/api/v1/mercari/image/price",
+                files=[
+                    ("image_list", ("a.png", b"\x89PNG\r\n\x1a\n", "image/png")),
+                    ("image_list", ("b.png", b"\x89PNG\r\n\x1a\n", "image/png")),
+                ],
+                data={"debug": "true"},
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertIsNone(body["tax_excluded"])
+        self.assertEqual(body["tax_included"], 1078)
         self.assertEqual(body["timings"]["price_ms"], 42.0)
         self.assertEqual(len(body["image_processing"]), 2)
+        self.assertEqual(body["_debug"]["price_ai_raw"]["tax_included"], "1078")
         analyzer.extract_prices.assert_called_once()
+        self.assertTrue(analyzer.extract_prices.call_args.kwargs["debug"])
 
 
 if __name__ == "__main__":
