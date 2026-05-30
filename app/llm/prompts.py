@@ -134,6 +134,11 @@ Generate:
    - recommendation: short persuasive selling points.
    - search_keywords: array of relevant search keywords.
 3. brand_name: visible brand name exactly as printed, or "" if unclear.
+4. brand_candidates: an array of 1-3 brand names for THIS product, ordered from most specific to most general, used to look the brand up in a brand database:
+   - First: the exact brand/sub-brand as printed (same as brand_name).
+   - Then: the parent brand or manufacturer that owns it, ONLY if you are confident of the ownership (for example "Tapo" -> "TP-Link"; "AirPods" -> "Apple"; "Galaxy" -> "Samsung").
+   - Only include a parent/owner you are actually confident about. Do NOT invent a manufacturer you are unsure of, and do NOT add generic product categories (never output things like "Electronics" or "Clothing").
+   - If no brand is visible, return an empty array [].
 
 Do not generate any price fields. Do not infer or estimate prices. Do not use web search or browsing.
 
@@ -160,7 +165,8 @@ The JSON schema is:
     "recommendation": "string",
     "search_keywords": ["string"]
   },
-  "brand_name": "string"
+  "brand_name": "string",
+  "brand_candidates": ["string"]
 }
 """
 
@@ -188,6 +194,11 @@ Generate:
    - recommendation: short persuasive selling points.
    - search_keywords: array of relevant search keywords, including useful user-provided terms.
 3. brand_name: visible or user-confirmed brand name exactly as printed/provided, or "" if unclear.
+4. brand_candidates: an array of 1-3 brand names for THIS product, ordered from most specific to most general, used to look the brand up in a brand database:
+   - First: the exact brand/sub-brand as printed or provided (same as brand_name).
+   - Then: the parent brand or manufacturer that owns it, ONLY if you are confident of the ownership (for example "Tapo" -> "TP-Link"; "AirPods" -> "Apple"; "Galaxy" -> "Samsung").
+   - Only include a parent/owner you are actually confident about. Do NOT invent a manufacturer you are unsure of, and do NOT add generic product categories (never output things like "Electronics" or "Clothing").
+   - If no brand is known, return an empty array [].
 
 Do not return any price fields. Do not infer prices. Do not use web search or browsing.
 
@@ -215,7 +226,8 @@ The JSON schema is:
     "recommendation": "string",
     "search_keywords": ["string"]
   },
-  "brand_name": "string"
+  "brand_name": "string",
+  "brand_candidates": ["string"]
 }
 """
 
@@ -257,6 +269,7 @@ Generate:
    - recommendation: 2–3 short, punchy selling-point lines. Each line is one persuasive sentence (≤ 60 Japanese characters / ≤ 20 English words). Separate lines with "\\n". Use buyer-facing benefit language ("毎日のデスクワークが快適に", "premium feel out of the box"), not generic praise.
    - search_keywords: an array of 8–15 distinct keywords. Include brand, brand variants (Japanese/English), product name, model number, product type, common synonyms, and 1–2 audience/use-case tags. Strings only — do NOT prefix with "#".
 3. brand_name — the visible brand exactly as printed (e.g., "Nintendo", "UNIQLO"). Return "" if no brand is clearly visible. Do NOT guess.
+   brand_candidates — an array of 1-3 brand names for THIS product, ordered most specific to most general, used to look the brand up in a brand database. First the exact brand/sub-brand as printed (same as brand_name), then the parent brand or manufacturer that owns it ONLY if you are confident of the ownership (e.g. "Tapo" -> "TP-Link", "AirPods" -> "Apple"). Never invent an unsure manufacturer and never add generic product categories. Return [] if no brand is visible.
 
 Do NOT generate any price fields. Do NOT infer or estimate prices. Do NOT use web search or browsing.
 
@@ -285,7 +298,8 @@ The JSON schema is:
     "recommendation": "string",
     "search_keywords": ["string"]
   },
-  "brand_name": "string"
+  "brand_name": "string",
+  "brand_candidates": ["string"]
 }
 """
 

@@ -39,6 +39,7 @@ from .utils import (
     image_bytes_to_data_url,
     normalize_category_label,
     normalize_price_list,
+    normalize_text,
 )
 
 
@@ -394,6 +395,64 @@ def _title_source_snippet(
     return _title_snippet(stripped, max_chars=max_chars)
 
 
+def _dedupe_brand_candidates(values: List[str]) -> List[str]:
+    """Clean, drop empties, and dedupe (case/whitespace-insensitive) keeping order."""
+    seen: set = set()
+    result: List[str] = []
+    for value in values:
+        cleaned = _clean_string(value)
+        if not cleaned:
+            continue
+        key = normalize_text(cleaned)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        result.append(cleaned)
+    return result
+
+
+def _first_title_token(title: Any) -> str:
+    cleaned = _clean_string(title)
+    if not cleaned:
+        return ""
+    return cleaned.split(" ", 1)[0]
+
+
+def _resolve_brand(
+    brand_store: BrandStore,
+    ai_raw: Dict[str, Any],
+    description: Dict[str, Any],
+) -> Tuple[str, Dict[str, Any], str]:
+    """Resolve brand from the LLM payload via ordered candidates + cross-field fallback.
+
+    Candidates are tried most-specific to most-general; the first one that matches
+    the brand table wins. Returns (brand_name, brand_id_obj, brand_raw), where
+    brand_raw is the original printed brand kept for title extension (behavior
+    unchanged vs. matching only the printed name).
+    """
+    brand_raw = _clean_string(ai_raw.get("brand_name", ""))
+
+    raw_candidates: List[str] = [brand_raw]
+    candidates_field = ai_raw.get("brand_candidates")
+    if isinstance(candidates_field, list):
+        raw_candidates.extend(str(item) for item in candidates_field)
+
+    details = description.get("product_details") if isinstance(description, dict) else {}
+    if isinstance(details, dict):
+        raw_candidates.append(_clean_string(details.get("brand", "")))
+
+    # Title first token is the weakest signal: consulted only after everything
+    # more specific has failed (it dedupes away when it equals an earlier value).
+    raw_candidates.append(_first_title_token(ai_raw.get("title", "")))
+
+    for candidate in _dedupe_brand_candidates(raw_candidates):
+        match = brand_store.match(candidate)
+        if match:
+            return match["brand_name"], dict(match["brand_id_obj"]), brand_raw
+
+    return "", empty_brand_id_obj(), brand_raw
+
+
 def _extend_title_to_minimum(
     title: str,
     *,
@@ -732,12 +791,11 @@ class MercariAnalyzer:
             use_fallback_prompt=use_fallback_prompt,
         )
 
-        brand_raw = _clean_string(ai_raw.get("brand_name", ""))
         description_raw = ai_raw.get("description")
         description_struct = _normalize_description(description_raw)
-        brand_match = self.brand_store.match(brand_raw)
-        brand_name = brand_match["brand_name"] if brand_match else ""
-        brand_id_obj = dict(brand_match["brand_id_obj"]) if brand_match else empty_brand_id_obj()
+        brand_name, brand_id_obj, brand_raw = _resolve_brand(
+            self.brand_store, ai_raw, description_struct
+        )
         title = _extend_title_to_minimum(
             ai_raw.get("title", ""),
             description=description_struct,
@@ -796,12 +854,11 @@ class MercariAnalyzer:
             model_override=model_override,
         )
 
-        brand_raw = _clean_string(ai_raw.get("brand_name", ""))
         description_raw = ai_raw.get("description")
         description_struct = _normalize_description(description_raw)
-        brand_match = self.brand_store.match(brand_raw)
-        brand_name = brand_match["brand_name"] if brand_match else ""
-        brand_id_obj = dict(brand_match["brand_id_obj"]) if brand_match else empty_brand_id_obj()
+        brand_name, brand_id_obj, brand_raw = _resolve_brand(
+            self.brand_store, ai_raw, description_struct
+        )
         title = _extend_title_to_minimum(
             ai_raw.get("title", ""),
             description=description_struct,

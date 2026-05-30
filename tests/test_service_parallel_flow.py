@@ -42,6 +42,21 @@ class FakeBrandStore:
                     "qoo10_brand_id": "",
                 },
             }
+        # The parent brand is in the table; the printed sub-brand "Tapo" is not.
+        if brand_name == "TP-Link":
+            return {
+                "brand_name": "tp-link",
+                "brand_id_obj": {
+                    "rakuten_brand_id": "",
+                    "yshop_brand_id": "",
+                    "yauc_brand_id": "",
+                    "meru_brand_id": "tplink-m",
+                    "ebay_brand_id": "",
+                    "rakuma_brand_id": "",
+                    "amazon_brand_id": "",
+                    "qoo10_brand_id": "",
+                },
+            }
         return None
 
 
@@ -271,6 +286,45 @@ class ParallelFlowServiceTest(unittest.TestCase):
         self.assertEqual(result["brand_name"], "Nike")
         self.assertEqual(result["brand_id_obj"]["rakuten_brand_id"], "nike-r")
         self.assertEqual(set(result["timings"].keys()), {"product_data_ms"})
+
+    def test_generate_product_data_resolves_subbrand_to_parent_via_candidates(self):
+        vision_client = RecordingChatClient(
+            {
+                "title": "Tapo スマートプラグ",
+                "description": {
+                    "product_details": {
+                        "brand": "Tapo",
+                        "product_name": "スマートプラグ",
+                        "model_number": "P105",
+                        "color": "白",
+                    },
+                    "product_intro": "商品紹介",
+                    "recommendation": "おすすめ",
+                    "search_keywords": ["Tapo", "TP-Link"],
+                },
+                "brand_name": "Tapo",
+                "brand_candidates": ["Tapo", "TP-Link"],
+            }
+        )
+        analyzer = MercariAnalyzer(
+            settings=_settings(),
+            brand_store=FakeBrandStore(),
+            category_store=FakeCategoryStore(),
+            vision_client=vision_client,
+            category_client=SequenceChatClient([]),
+        )
+
+        result = analyzer.generate_product_data(
+            images=[(b"front-image", "image/png")],
+            language="ja",
+        )
+
+        # "Tapo" is not in the table, but the ordered candidate list lets it fall
+        # back to the parent "TP-Link".
+        self.assertEqual(result["brand_name"], "tp-link")
+        self.assertEqual(result["brand_id_obj"]["meru_brand_id"], "tplink-m")
+        # The printed sub-brand is still surfaced in the title.
+        self.assertIn("Tapo", result["title"])
 
     def test_generate_product_data_returns_only_current_product_detail_fields(self):
         vision_client = RecordingChatClient(
