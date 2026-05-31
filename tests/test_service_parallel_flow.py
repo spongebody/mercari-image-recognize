@@ -287,6 +287,53 @@ class ParallelFlowServiceTest(unittest.TestCase):
         self.assertEqual(result["brand_id_obj"]["rakuten_brand_id"], "nike-r")
         self.assertEqual(set(result["timings"].keys()), {"product_data_ms"})
 
+    def test_product_data_prompts_keep_existing_schema_with_restrained_copy_rules(self):
+        for use_fallback_prompt in (False, True):
+            with self.subTest(use_fallback_prompt=use_fallback_prompt):
+                vision_client = RecordingChatClient(
+                    {
+                        "title": "LOEWE ロエベ アナグラム キャンバス トートバッグ ベージュ ブラック 総柄 ハンドバッグ ロゴ柄 バッグ",
+                        "description": {
+                            "product_details": {
+                                "brand": "LOEWE",
+                                "product_name": "トートバッグ",
+                                "model_number": "",
+                                "color": "ベージュ ブラック",
+                            },
+                            "product_intro": "LOEWEのアナグラム柄キャンバスを使用したトートバッグです。",
+                            "recommendation": "LOEWEのアナグラム柄が確認できるトートバッグです。",
+                            "search_keywords": ["LOEWE", "ロエベ", "アナグラム"],
+                        },
+                        "brand_name": "LOEWE",
+                        "brand_candidates": ["LOEWE"],
+                    }
+                )
+                analyzer = MercariAnalyzer(
+                    settings=_settings(),
+                    brand_store=FakeBrandStore(),
+                    category_store=FakeCategoryStore(),
+                    vision_client=vision_client,
+                    category_client=SequenceChatClient([]),
+                )
+
+                analyzer.generate_product_data(
+                    images=[(b"front-image", "image/png")],
+                    language="ja",
+                    use_fallback_prompt=use_fallback_prompt,
+                )
+
+                system_prompt = vision_client.calls[0]["messages"][0]["content"]
+                self.assertIn("Japanese second-hand marketplace", system_prompt)
+                self.assertIn("The title must not exceed 90 Japanese characters", system_prompt)
+                self.assertIn("Do not add condition, store item number, or management number to the title", system_prompt)
+                self.assertIn("Use objective, conservative, factual Japanese", system_prompt)
+                self.assertIn("product_details: object with only brand, product_name, model_number, color", system_prompt)
+                self.assertIn('"brand_candidates": ["string"]', system_prompt)
+                self.assertIn("Do not generate any price fields", system_prompt)
+                self.assertNotIn('"tax_excluded"', system_prompt)
+                self.assertNotIn('"tax_included"', system_prompt)
+                self.assertNotIn('"prices"', system_prompt)
+
     def test_generate_product_data_resolves_subbrand_to_parent_via_candidates(self):
         vision_client = RecordingChatClient(
             {
