@@ -109,6 +109,7 @@ DESCRIPTION_SECTION_KEYS = {
 }
 MIN_PRODUCT_TITLE_CHARS = 75
 MAX_PRODUCT_TITLE_CHARS = 85
+TITLE_GENERIC_SUFFIX_KEYS = ("カメラ", "camera")
 
 
 def _language_label(language: str) -> str:
@@ -403,13 +404,73 @@ def _truncate_title_to_max(
     return truncated or cleaned[:max_chars]
 
 
+def _title_dedupe_key(value: Any) -> str:
+    normalized = normalize_text(_stringify_value(value))
+    return re.sub(r"[\s　\-_/・、,.]+", "", normalized)
+
+
+def _title_key_covered_by_seen_tokens(key: str, seen_keys: List[str]) -> bool:
+    if not key:
+        return False
+    remaining = key
+    matched = False
+    for seen_key in sorted(seen_keys, key=len, reverse=True):
+        if len(seen_key) < 2:
+            continue
+        if remaining.startswith(seen_key):
+            remaining = remaining[len(seen_key):]
+            matched = True
+            if not remaining:
+                return True
+    if matched and remaining in TITLE_GENERIC_SUFFIX_KEYS:
+        return any(seen_key.endswith(remaining) for seen_key in seen_keys)
+    return matched and not remaining
+
+
+def _title_seen_token_keys(parts: List[str]) -> List[str]:
+    keys: List[str] = []
+    for part in parts:
+        for token in re.split(r"[\s　]+", _clean_string(part)):
+            key = _title_dedupe_key(token)
+            if key and key not in keys:
+                keys.append(key)
+    return keys
+
+
+def _dedupe_title_terms(title: str) -> str:
+    tokens = [token for token in re.split(r"[\s　]+", _clean_string(title)) if token]
+    if len(tokens) < 2:
+        return _clean_string(title)
+
+    parts: List[str] = []
+    seen_keys: List[str] = []
+    for token in tokens:
+        key = _title_dedupe_key(token)
+        if not key:
+            continue
+        if key in seen_keys or _title_key_covered_by_seen_tokens(key, seen_keys):
+            continue
+        parts.append(token)
+        seen_keys.append(key)
+    return _clean_string(" ".join(parts))
+
+
 def _append_title_part(parts: List[str], part: Any, max_chars: int) -> bool:
     cleaned = _clean_string(part)
     if not cleaned:
         return False
     existing = _clean_string(" ".join(parts))
     key = cleaned.casefold()
+    dedupe_key = _title_dedupe_key(cleaned)
+    existing_dedupe_key = _title_dedupe_key(existing)
+    seen_token_keys = _title_seen_token_keys(parts)
     if any(existing_part.casefold() == key for existing_part in parts):
+        return False
+    if dedupe_key and (
+        dedupe_key in seen_token_keys
+        or (existing_dedupe_key and dedupe_key in existing_dedupe_key)
+        or _title_key_covered_by_seen_tokens(dedupe_key, seen_token_keys)
+    ):
         return False
     if existing and cleaned in existing:
         return False
@@ -514,7 +575,9 @@ def _extend_title_to_minimum(
     max_chars: int = MAX_PRODUCT_TITLE_CHARS,
     excluded_snippets: Optional[List[str]] = None,
 ) -> str:
-    title_clean = _strip_title_excluded_terms(title, excluded_snippets or [])
+    title_clean = _dedupe_title_terms(
+        _strip_title_excluded_terms(title, excluded_snippets or [])
+    )
     title_over_max = len(title_clean) > max_chars
     if len(title_clean) >= min_chars:
         if len(title_clean) <= max_chars:
@@ -546,53 +609,10 @@ def _extend_title_to_minimum(
             if len(token) <= 8
         )
 
-    generic_parts_by_language = {
-        "ja": [
-            "画像確認商品",
-            "ブランド カラー 型番 情報入り",
-            "メルカリ出品向け詳細タイトル",
-            "写真から確認できる特徴を反映",
-            "商品説明と合わせて確認しやすい出品タイトル",
-        ],
-        "zh": [
-            "图片识别商品",
-            "品牌 颜色 型号 信息补充",
-            "适合商品发布的详细标题",
-            "结合图片可确认特征",
-            "便于买家检索和理解的发布标题",
-        ],
-        "en": [
-            "image verified item",
-            "brand color model details included",
-            "marketplace listing title",
-            "visible product features reflected",
-            "buyer friendly searchable listing title",
-        ],
-    }
-    candidate_parts.extend(generic_parts_by_language.get(language, generic_parts_by_language["ja"]))
-
     for part in candidate_parts:
         _append_title_part(parts, part, max_chars)
 
     candidate = _clean_string(" ".join(parts))
-    fillers = generic_parts_by_language.get(language, generic_parts_by_language["ja"])
-    while len(candidate) < min_chars:
-        if _append_title_part(parts, fillers[-1], max_chars):
-            candidate = _clean_string(" ".join(parts))
-            continue
-        appended = False
-        for filler in sorted(fillers, key=len):
-            repeated = _clean_string(f"{candidate} {filler}" if candidate else filler)
-            if len(repeated) <= max_chars:
-                parts.append(filler)
-                candidate = repeated
-                appended = True
-                break
-        if appended:
-            continue
-        if candidate:
-            break
-        candidate = _clean_string(" ".join(parts))
     if len(candidate) > max_chars:
         return _truncate_title_to_max(candidate, max_chars, min_chars)
     return candidate

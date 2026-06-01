@@ -326,8 +326,13 @@ class ParallelFlowServiceTest(unittest.TestCase):
                 self.assertIn("You are an assistant helping sellers list items for a Japanese marketplace.", system_prompt)
                 self.assertIn("Given one or more images of the same product, inspect every image independently", system_prompt)
                 self.assertIn("The title MUST be at least 75 characters and MUST NOT exceed 85 characters", system_prompt)
+                self.assertNotIn("Acceptable model-output length", system_prompt)
+                self.assertNotIn("backend code will normalize", system_prompt)
+                self.assertIn("Do not pad the title just to satisfy length", system_prompt)
+                self.assertIn("Avoid repeating the same brand, product type, or feature", system_prompt)
+                self.assertIn("10-14 relevant, objective, non-duplicative SEO search keywords", system_prompt)
                 self.assertIn("Start with brand, product name, model number, and color", system_prompt)
-                self.assertIn("use the generated SEO search keywords", system_prompt)
+                self.assertNotIn("use the generated SEO search keywords for this product to fill the title", system_prompt)
                 self.assertIn("balanced and objective", system_prompt)
                 self.assertIn("should not feel overly promotional", system_prompt)
                 self.assertIn("Use only confirmed information", system_prompt)
@@ -576,7 +581,21 @@ class ParallelFlowServiceTest(unittest.TestCase):
                     },
                     "product_intro": "速乾素材のスポーツウェアです。",
                     "recommendation": "普段使いにもトレーニングにもおすすめです。",
-                    "search_keywords": ["Nike", "Dri-FIT", "トレーニングシャツ"],
+                    "search_keywords": [
+                        "Nike",
+                        "Dri-FIT",
+                        "トレーニングシャツ",
+                        "スポーツウェア",
+                        "速乾シャツ",
+                        "ランニングウェア",
+                        "半袖",
+                        "ジム",
+                        "運動",
+                        "部活",
+                        "ワークアウト",
+                        "フィットネス",
+                        "スポーツシャツ",
+                    ],
                 },
                 "brand_name": "Nike",
             }
@@ -617,7 +636,25 @@ class ParallelFlowServiceTest(unittest.TestCase):
                     },
                     "product_intro": "目立つ傷なしの200g軽量ウェアです。",
                     "recommendation": "Mサイズを探している方におすすめです。",
-                    "search_keywords": ["Nike", "目立つ傷なし", "200g", "Mサイズ", "メンズ"],
+                    "search_keywords": [
+                        "Nike",
+                        "目立つ傷なし",
+                        "200g",
+                        "Mサイズ",
+                        "メンズ",
+                        "Dri-FIT",
+                        "トレーニングシャツ",
+                        "スポーツウェア",
+                        "速乾シャツ",
+                        "ブラックシャツ",
+                        "半袖",
+                        "ジム",
+                        "運動",
+                        "部活",
+                        "ワークアウト",
+                        "フィットネス",
+                        "スポーツシャツ",
+                    ],
                 },
                 "brand_name": "Nike",
             }
@@ -660,7 +697,17 @@ class ParallelFlowServiceTest(unittest.TestCase):
                     },
                     "product_intro": "高音質ノイズキャンセリングとBluetooth接続に対応したヘッドホンです。250gの軽量設計です。",
                     "recommendation": "音楽鑑賞やオンライン会議にも使いやすいモデルです。美品を探している方にもおすすめです。",
-                    "search_keywords": ["Sony", "ノイズキャンセリング", "Bluetooth", "高音質", "250g", "美品"],
+                    "search_keywords": [
+                        "Sony",
+                        "ノイズキャンセリング",
+                        "Bluetooth",
+                        "高音質",
+                        "250g",
+                        "美品",
+                        "ワイヤレスヘッドホン",
+                        "オーバーイヤー",
+                        "スマホ接続",
+                    ],
                 },
                 "brand_name": "Sony",
             }
@@ -707,6 +754,9 @@ class ParallelFlowServiceTest(unittest.TestCase):
                         "Bluetooth",
                         "密閉型",
                         "ワイヤレスヘッドホン",
+                        "オーバーイヤー",
+                        "音楽鑑賞",
+                        "ハイレゾ対応",
                     ],
                 },
                 "brand_name": "Sony",
@@ -820,6 +870,166 @@ class ParallelFlowServiceTest(unittest.TestCase):
         self.assertIn("見守りカメラ", result["title"])
         self.assertIn("ペットカメラ", result["title"])
         self.assertNotIn("長い説明用キーワード", result["title"])
+        self.assertNotIn("画像確認商品", result["title"])
+        self.assertNotIn("メルカリ出品向け詳細タイトル", result["title"])
+
+    def test_generate_product_data_short_title_padding_uses_only_seo_keywords(self):
+        vision_client = RecordingChatClient(
+            {
+                "title": "Tapo カメラ",
+                "description": {
+                    "product_details": {
+                        "brand": "Tapo",
+                        "product_name": "ネットワーク Wi-Fi カメラ",
+                        "model_number": "",
+                        "color": "ホワイト",
+                    },
+                    "product_intro": "Tapoのネットワークカメラです。",
+                    "recommendation": "屋内の確認に使えるカメラです。",
+                    "search_keywords": [
+                        "ネットワークカメラ",
+                        "防犯カメラ",
+                        "見守りカメラ",
+                        "ペットカメラ",
+                        "Wi-Fiカメラ",
+                        "室内用",
+                        "動作検知",
+                        "スマホ連携",
+                        "遠隔操作",
+                        "ホームカメラ",
+                        "屋内カメラ",
+                    ],
+                },
+                "brand_name": "Tapo",
+            }
+        )
+        analyzer = MercariAnalyzer(
+            settings=_settings(),
+            brand_store=FakeBrandStore(),
+            category_store=FakeCategoryStore(),
+            vision_client=vision_client,
+            category_client=SequenceChatClient([]),
+        )
+
+        result = analyzer.generate_product_data(
+            images=[(b"front-image", "image/png")],
+            language="ja",
+        )
+
+        self.assertGreaterEqual(len(result["title"]), 75)
+        self.assertLessEqual(len(result["title"]), 85)
+        self.assertTrue(result["title"].startswith("Tapo カメラ"))
+        self.assertIn("ネットワーク Wi-Fi カメラ", result["title"])
+        self.assertIn("防犯カメラ", result["title"])
+        self.assertNotIn("画像確認商品", result["title"])
+        self.assertNotIn("ブランド カラー 型番 情報入り", result["title"])
+
+    def test_generate_product_data_dedupes_repeated_title_terms_before_padding(self):
+        vision_client = RecordingChatClient(
+            {
+                "title": (
+                    "Tapo タポ ネットワーク Wi-Fi カメラ パンチルト 室内用 "
+                    "ホームカメラ ホワイト tapo tp-link ネットワークカメラ Wi-Fiカメラ 防犯カメラ"
+                ),
+                "description": {
+                    "product_details": {
+                        "brand": "Tapo",
+                        "product_name": "ネットワーク Wi-Fi カメラ",
+                        "model_number": "",
+                        "color": "ホワイト",
+                    },
+                    "product_intro": "Tapoのネットワークカメラです。",
+                    "recommendation": "屋内の確認に使えるカメラです。",
+                    "search_keywords": [
+                        "Tapo",
+                        "TP-Link",
+                        "ネットワークカメラ",
+                        "Wi-Fiカメラ",
+                        "防犯カメラ",
+                        "見守りカメラ",
+                        "ペットカメラ",
+                        "パンチルト",
+                        "屋内用",
+                    ],
+                },
+                "brand_name": "TP-Link",
+                "brand_candidates": ["TP-Link", "Tapo"],
+            }
+        )
+        analyzer = MercariAnalyzer(
+            settings=_settings(),
+            brand_store=FakeBrandStore(),
+            category_store=FakeCategoryStore(),
+            vision_client=vision_client,
+            category_client=SequenceChatClient([]),
+        )
+
+        result = analyzer.generate_product_data(
+            images=[(b"front-image", "image/png")],
+            language="ja",
+        )
+
+        self.assertGreaterEqual(len(result["title"]), 75)
+        self.assertLessEqual(len(result["title"]), 85)
+        self.assertTrue(result["title"].startswith("Tapo タポ ネットワーク Wi-Fi カメラ"))
+        self.assertNotIn(" tapo ", result["title"].casefold())
+        self.assertNotIn("ネットワークカメラ", result["title"])
+        self.assertNotIn("Wi-Fiカメラ", result["title"])
+        self.assertIn("防犯カメラ", result["title"])
+        self.assertIn("見守りカメラ", result["title"])
+
+    def test_generate_product_data_skips_compound_keyword_when_parts_already_exist(self):
+        vision_client = RecordingChatClient(
+            {
+                "title": (
+                    "Tapo ネットワークカメラ ホワイト パンチルト Wi-Fi 室内用 "
+                    "屋内 防犯カメラ 見守りカメラ ペットカメラ ベビーモニター"
+                ),
+                "description": {
+                    "product_details": {
+                        "brand": "Tapo",
+                        "product_name": "ネットワークカメラ",
+                        "model_number": "",
+                        "color": "ホワイト",
+                    },
+                    "product_intro": "Tapoのネットワークカメラです。",
+                    "recommendation": "屋内の確認に使えるカメラです。",
+                    "search_keywords": [
+                        "Tapo",
+                        "ネットワークカメラ",
+                        "見守りカメラ",
+                        "ペットカメラ",
+                        "ベビーモニター",
+                        "防犯カメラ",
+                        "Wi-Fiカメラ",
+                        "パンチルト",
+                        "室内用",
+                        "TP-Link",
+                        "スマートホーム",
+                        "遠隔監視",
+                    ],
+                },
+                "brand_name": "TP-Link",
+                "brand_candidates": ["TP-Link", "Tapo"],
+            }
+        )
+        analyzer = MercariAnalyzer(
+            settings=_settings(),
+            brand_store=FakeBrandStore(),
+            category_store=FakeCategoryStore(),
+            vision_client=vision_client,
+            category_client=SequenceChatClient([]),
+        )
+
+        result = analyzer.generate_product_data(
+            images=[(b"front-image", "image/png")],
+            language="ja",
+        )
+
+        self.assertGreaterEqual(len(result["title"]), 75)
+        self.assertLessEqual(len(result["title"]), 85)
+        self.assertNotIn("Wi-Fiカメラ", result["title"])
+        self.assertIn("スマートホーム", result["title"])
 
     def test_generate_product_data_supports_model_override_for_fallback(self):
         vision_client = RecordingChatClient(
@@ -877,7 +1087,7 @@ class ParallelFlowServiceTest(unittest.TestCase):
                     },
                     "product_intro": "ユーザー補足を反映した商品紹介です。",
                     "recommendation": "同款を探している方におすすめです。",
-                    "search_keywords": ["Nike", "Dri-FIT", "明らか同款", "イタリア真皮"],
+                    "search_keywords": ["Nike", "Dri-FIT", "明らか同款", "イタリア真皮", "スポーツシャツ"],
                 },
                 "brand_name": "Nike",
             }
@@ -905,8 +1115,13 @@ class ParallelFlowServiceTest(unittest.TestCase):
         system_prompt = vision_client.calls[0]["messages"][0]["content"]
         self.assertIn("You are an assistant helping sellers list items for a Japanese marketplace.", system_prompt)
         self.assertIn("The title MUST be at least 75 characters and MUST NOT exceed 85 characters", system_prompt)
+        self.assertNotIn("Acceptable model-output length", system_prompt)
+        self.assertNotIn("backend code will normalize", system_prompt)
+        self.assertIn("Do not pad the title just to satisfy length", system_prompt)
+        self.assertIn("Avoid repeating the same brand, product type, or feature", system_prompt)
+        self.assertIn("10-14 relevant, objective, non-duplicative search keywords", system_prompt)
         self.assertIn("Start with brand, product name, model number, and color", system_prompt)
-        self.assertIn("use the generated SEO search keywords", system_prompt)
+        self.assertNotIn("use the generated SEO search keywords for this product to fill the title", system_prompt)
         self.assertIn("brand_candidates: an array of 1-3 brand names", system_prompt)
         self.assertIn("Do not return price fields", system_prompt)
         self.assertIn("balanced and objective", system_prompt)

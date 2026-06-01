@@ -100,7 +100,16 @@ def _good_payload(title="X"):
             },
             "product_intro": "",
             "recommendation": "",
-            "search_keywords": [],
+            "search_keywords": [
+                "画像認識テスト",
+                "商品データ生成",
+                "フォールバック確認",
+                "出品タイトル検証",
+                "日本向けマーケットプレイス",
+                "JSON検証",
+                "連携確認",
+                "タイトル補正",
+            ],
         },
         "brand_name": "",
     }

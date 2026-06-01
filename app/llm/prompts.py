@@ -130,8 +130,10 @@ Generate:
 
 1. A clear, buyer-friendly title suitable for a Japanese marketplace listing.
    The title MUST be at least 75 characters and MUST NOT exceed 85 characters.
+   Generate the title directly within this range while keeping it readable and natural.
    Start with brand, product name, model number, and color.
-   If more length is needed, use the generated SEO search keywords for this product to fill the title naturally.
+   Do not pad the title just to satisfy length. Keep it readable and natural.
+   Avoid repeating the same brand, product type, or feature with multiple aliases or near-duplicate keywords.
    Do NOT include condition, weight, size, target user, material, included items, store item number, management number, or generic selling-point wording in the title.
 
 2. A structured description object in JSON format with ENGLISH field names only:
@@ -139,7 +141,7 @@ Generate:
    * product_details: object with only brand, product_name, model_number, color. Keep exactly these four fields and use "" when unknown.
    * product_intro: a full professional product description based on brand, model number, product type, functions, features, advantages, usage scenarios, and included items. The tone must be balanced and objective, and should not feel overly promotional.
    * recommendation: short persuasive selling points. The tone must be balanced and objective, and should not feel overly promotional.
-   * search_keywords: array of relevant SEO search keywords.
+   * search_keywords: array of 10-14 relevant, objective, non-duplicative SEO search keywords.
 
    Use only confirmed information from the images, visible product text, existing product data, or user supplemental information. Do not use general product knowledge to fill in model numbers, numeric specifications, storage formats, resolution, viewing angles, or unsupported functions. Return model_number only when it is clearly visible, user-provided, or present in existing product data; otherwise use "". If a function, advantage, usage scenario, included item, or specification is not clearly confirmed, use cautious wording or omit it. For product_intro and recommendation, avoid absolute or exaggerated wording such as 最適, 完璧, 必ず, 圧倒的, 隅々まで, 昼夜を問わず, or 鮮明.
 
@@ -157,9 +159,11 @@ IMPORTANT:
 
 * Use the requested language for title and all description text.
 * Use information from all images, especially the first two images.
-* The title must be at least 75 characters and must not exceed 85 characters.
+* The title MUST be at least 75 characters and MUST NOT exceed 85 characters.
+* Generate the title directly within this range while keeping it readable and natural.
 * The title must start with brand, product name, model number, and color.
-* If the title is too short, use the generated SEO search keywords for this product to fill the title naturally.
+* Do not pad the title just to satisfy length.
+* Avoid repeating the same brand, product type, or feature with multiple aliases or near-duplicate keywords in the title.
 * Do NOT include condition, weight, size, target user, material, included items, store item number, management number, or generic selling-point wording in the title.
 * The product_intro must be a full product description, not just a short sentence.
 * The product_intro and recommendation must be balanced and objective, and should not feel overly promotional.
@@ -208,15 +212,17 @@ Priority order:
 Generate:
 1. A clear, buyer-friendly title suitable for a Japanese marketplace listing.
    The title MUST be at least 75 characters and MUST NOT exceed 85 characters.
+   Generate the title directly within this range while keeping it readable and natural.
    Start with brand, product name, model number, and color.
-   If more length is needed, use the generated SEO search keywords for this product to fill the title naturally.
+   Do not pad the title just to satisfy length. Keep it readable and natural.
+   Avoid repeating the same brand, product type, or feature with multiple aliases or near-duplicate keywords.
    Do NOT include condition, weight, size, target user, material, included items, store item number, management number, or generic selling-point wording in the title.
 
 2. A structured description object in JSON format with ENGLISH field names only:
    - product_details: object with only brand, product_name, model_number, color. Keep exactly these four fields and use "" when unknown.
    - product_intro: professional product introduction based on user information, original data, and image evidence. The tone must be balanced and objective, and should not feel overly promotional.
    - recommendation: short buyer-relevant selling points. The tone must be balanced and objective, and should not feel overly promotional.
-   - search_keywords: array of relevant search keywords, including useful user-provided terms.
+   - search_keywords: array of 10-14 relevant, objective, non-duplicative search keywords, including useful user-provided terms.
    Use only confirmed information from the images, visible product text, existing product data, or user supplemental information. Do not use general product knowledge to fill in model numbers, numeric specifications, storage formats, resolution, viewing angles, or unsupported functions. Return model_number only when it is clearly visible, user-provided, or present in existing product data; otherwise use "". If a function, advantage, usage scenario, included item, or specification is not clearly confirmed, use cautious wording or omit it. For product_intro and recommendation, avoid absolute or exaggerated wording such as 最適, 完璧, 必ず, 圧倒的, 隅々まで, 昼夜を問わず, or 鮮明.
 3. brand_name: visible or user-confirmed brand name exactly as printed/provided, or "" if unclear.
 4. brand_candidates: an array of 1-3 brand names for THIS product, ordered from most specific to most general, used to look the brand up in a brand database:
@@ -232,7 +238,7 @@ IMPORTANT:
 - If user supplemental information is present, it must be reflected unless it is impossible to reconcile with the product.
 - If original product data is present but user supplemental information is empty, optimize and enrich the original data using the images.
 - If original product data is absent, deeply analyze the images and generate the most reasonable product data from scratch.
-- The title MUST be at least 75 characters and MUST NOT exceed 85 characters. If the title is too short, use the generated SEO search keywords for this product to fill the title naturally. It must not include condition, weight, size, target user, material, included items, or generic selling-point wording.
+- The title MUST be at least 75 characters and MUST NOT exceed 85 characters. Generate the title directly within this range while keeping it readable and natural. Do not pad the title just to satisfy length. Avoid repeating the same brand, product type, or feature with multiple aliases or near-duplicate keywords. It must not include condition, weight, size, target user, material, included items, or generic selling-point wording.
 - The product_intro must be a full product description, not just a short sentence.
 - The product_intro and recommendation must be balanced and objective, and should not feel overly promotional.
 - Use only confirmed information. Do not use general product knowledge. Return model_number only when it is clearly visible, user-provided, or present in existing product data.
@@ -291,8 +297,10 @@ Generate:
 
 1. A clear, buyer-friendly title suitable for a Japanese marketplace listing.
    The title MUST be at least 75 characters and MUST NOT exceed 85 characters.
+   Generate the title directly within this range while keeping it readable and natural.
    Start with brand, product name, model number, and color.
-   If more length is needed, use the generated SEO search keywords for this product to fill the title naturally.
+   Do not pad the title just to satisfy length. Keep it readable and natural.
+   Avoid repeating the same brand, product type, or feature with multiple aliases or near-duplicate keywords.
    Do NOT include condition, weight, size, target user, material, included items, store item number, management number, or generic selling-point wording in the title.
 
 2. A structured description object in JSON format with ENGLISH field names only:
@@ -300,7 +308,7 @@ Generate:
    * product_details: object with only brand, product_name, model_number, color. Keep exactly these four fields and use "" when unknown.
    * product_intro: a full professional product description based on brand, model number, product type, functions, features, advantages, usage scenarios, and included items. The tone must be balanced and objective, and should not feel overly promotional.
    * recommendation: short persuasive selling points. The tone must be balanced and objective, and should not feel overly promotional.
-   * search_keywords: array of relevant SEO search keywords.
+   * search_keywords: array of 10-14 relevant, objective, non-duplicative SEO search keywords.
 
    Use only confirmed information from the images, visible product text, existing product data, or user supplemental information. Do not use general product knowledge to fill in model numbers, numeric specifications, storage formats, resolution, viewing angles, or unsupported functions. Return model_number only when it is clearly visible, user-provided, or present in existing product data; otherwise use "". If a function, advantage, usage scenario, included item, or specification is not clearly confirmed, use cautious wording or omit it. For product_intro and recommendation, avoid absolute or exaggerated wording such as 最適, 完璧, 必ず, 圧倒的, 隅々まで, 昼夜を問わず, or 鮮明.
 
@@ -318,9 +326,11 @@ IMPORTANT:
 
 * Use the requested language for title and all description text.
 * Use information from all images, especially the first two images.
-* The title must be at least 75 characters and must not exceed 85 characters.
+* The title MUST be at least 75 characters and MUST NOT exceed 85 characters.
+* Generate the title directly within this range while keeping it readable and natural.
 * The title must start with brand, product name, model number, and color.
-* If the title is too short, use the generated SEO search keywords for this product to fill the title naturally.
+* Do not pad the title just to satisfy length.
+* Avoid repeating the same brand, product type, or feature with multiple aliases or near-duplicate keywords in the title.
 * Do NOT include condition, weight, size, target user, material, included items, store item number, management number, or generic selling-point wording in the title.
 * The product_intro must be a full product description, not just a short sentence.
 * The product_intro and recommendation must be balanced and objective, and should not feel overly promotional.
