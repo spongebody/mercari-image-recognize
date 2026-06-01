@@ -323,16 +323,21 @@ class ParallelFlowServiceTest(unittest.TestCase):
                 )
 
                 system_prompt = vision_client.calls[0]["messages"][0]["content"]
-                self.assertIn("Japanese second-hand marketplace", system_prompt)
+                self.assertIn("You are an assistant helping sellers list items for a Japanese marketplace.", system_prompt)
+                self.assertIn("Given one or more images of the same product, inspect every image independently", system_prompt)
                 self.assertIn("The title MUST be at least 75 characters and MUST NOT exceed 85 characters", system_prompt)
+                self.assertIn("Start with brand, product name, model number, and color", system_prompt)
                 self.assertIn("use the generated SEO search keywords", system_prompt)
-                self.assertIn("Do not add condition, store item number, or management number to the title", system_prompt)
-                self.assertIn("Use objective, conservative, factual Japanese", system_prompt)
                 self.assertIn("balanced and objective", system_prompt)
                 self.assertIn("should not feel overly promotional", system_prompt)
+                self.assertIn("Use only confirmed information", system_prompt)
+                self.assertIn("Do not use general product knowledge", system_prompt)
+                self.assertIn("model_number only when it is clearly visible", system_prompt)
+                self.assertIn("avoid absolute or exaggerated wording", system_prompt)
+                self.assertIn("最適", system_prompt)
                 self.assertIn("product_details: object with only brand, product_name, model_number, color", system_prompt)
                 self.assertIn('"brand_candidates": ["string"]', system_prompt)
-                self.assertIn("Do not generate any price fields", system_prompt)
+                self.assertIn("Do not return price fields", system_prompt)
                 self.assertNotIn('"tax_excluded"', system_prompt)
                 self.assertNotIn('"tax_included"', system_prompt)
                 self.assertNotIn('"prices"', system_prompt)
@@ -727,6 +732,95 @@ class ParallelFlowServiceTest(unittest.TestCase):
         self.assertNotIn("オンライン会議", result["title"])
         self.assertNotIn("通勤", result["title"])
 
+    def test_generate_product_data_truncates_overlong_title_at_token_boundary(self):
+        vision_client = RecordingChatClient(
+            {
+                "title": (
+                    "Tapo ネットワーク Wi-Fi カメラ ホワイト パンチルト 屋内カメラ "
+                    "夜間撮影 相互音声会話 動作検知 スマホ通知 暗視機能 遠隔操作 録画機能 防犯カメラ 見守り"
+                ),
+                "description": {
+                    "product_details": {
+                        "brand": "Tapo",
+                        "product_name": "ネットワーク Wi-Fi カメラ",
+                        "model_number": "",
+                        "color": "ホワイト",
+                    },
+                    "product_intro": "Tapoのネットワークカメラです。",
+                    "recommendation": "屋内の確認に使えるカメラです。",
+                    "search_keywords": ["Tapo", "ネットワークカメラ", "Wi-Fiカメラ"],
+                },
+                "brand_name": "Tapo",
+            }
+        )
+        analyzer = MercariAnalyzer(
+            settings=_settings(),
+            brand_store=FakeBrandStore(),
+            category_store=FakeCategoryStore(),
+            vision_client=vision_client,
+            category_client=SequenceChatClient([]),
+        )
+
+        result = analyzer.generate_product_data(
+            images=[(b"front-image", "image/png")],
+            language="ja",
+        )
+
+        self.assertGreaterEqual(len(result["title"]), 75)
+        self.assertLessEqual(len(result["title"]), 85)
+        self.assertFalse(result["title"].endswith("見守"))
+        self.assertNotIn(" 見守$", result["title"])
+        self.assertEqual(result["title"], result["title"].rstrip(" 、,.;；。"))
+
+    def test_generate_product_data_repairs_overlong_title_with_prioritized_complete_phrases(self):
+        vision_client = RecordingChatClient(
+            {
+                "title": (
+                    "Tapo ネットワーク Wi-Fi カメラ ホワイト 長い説明用キーワード "
+                    "スマホ通知 アプリ確認 リアルタイム映像 かんたん設定 遠隔操作 録画確認 "
+                    "屋内用 防犯カメラ 見守りカメラ ペットカメラ"
+                ),
+                "description": {
+                    "product_details": {
+                        "brand": "Tapo",
+                        "product_name": "ネットワーク Wi-Fi カメラ",
+                        "model_number": "",
+                        "color": "ホワイト",
+                    },
+                    "product_intro": "Tapoのネットワークカメラです。",
+                    "recommendation": "屋内の確認に使えるカメラです。",
+                    "search_keywords": [
+                        "防犯カメラ",
+                        "見守りカメラ",
+                        "ペットカメラ",
+                        "屋内用",
+                        "動作検知",
+                    ],
+                },
+                "brand_name": "Tapo",
+            }
+        )
+        analyzer = MercariAnalyzer(
+            settings=_settings(),
+            brand_store=FakeBrandStore(),
+            category_store=FakeCategoryStore(),
+            vision_client=vision_client,
+            category_client=SequenceChatClient([]),
+        )
+
+        result = analyzer.generate_product_data(
+            images=[(b"front-image", "image/png")],
+            language="ja",
+        )
+
+        self.assertGreaterEqual(len(result["title"]), 75)
+        self.assertLessEqual(len(result["title"]), 85)
+        self.assertTrue(result["title"].startswith("Tapo ネットワーク Wi-Fi カメラ ホワイト"))
+        self.assertIn("防犯カメラ", result["title"])
+        self.assertIn("見守りカメラ", result["title"])
+        self.assertIn("ペットカメラ", result["title"])
+        self.assertNotIn("長い説明用キーワード", result["title"])
+
     def test_generate_product_data_supports_model_override_for_fallback(self):
         vision_client = RecordingChatClient(
             {
@@ -809,10 +903,22 @@ class ParallelFlowServiceTest(unittest.TestCase):
 
         prompt_text = vision_client.calls[0]["messages"][1]["content"][0]["text"]
         system_prompt = vision_client.calls[0]["messages"][0]["content"]
+        self.assertIn("You are an assistant helping sellers list items for a Japanese marketplace.", system_prompt)
         self.assertIn("The title MUST be at least 75 characters and MUST NOT exceed 85 characters", system_prompt)
+        self.assertIn("Start with brand, product name, model number, and color", system_prompt)
         self.assertIn("use the generated SEO search keywords", system_prompt)
+        self.assertIn("brand_candidates: an array of 1-3 brand names", system_prompt)
+        self.assertIn("Do not return price fields", system_prompt)
         self.assertIn("balanced and objective", system_prompt)
         self.assertIn("should not feel overly promotional", system_prompt)
+        self.assertIn("Use only confirmed information", system_prompt)
+        self.assertIn("Do not use general product knowledge", system_prompt)
+        self.assertIn("model_number only when it is clearly visible", system_prompt)
+        self.assertIn("avoid absolute or exaggerated wording", system_prompt)
+        self.assertIn("最適", system_prompt)
+        self.assertNotIn('"tax_excluded"', system_prompt)
+        self.assertNotIn('"tax_included"', system_prompt)
+        self.assertNotIn('"prices"', system_prompt)
         self.assertIn("User supplemental information", prompt_text)
         self.assertIn("成色は目立つ傷なし", prompt_text)
         self.assertIn("Original product data", prompt_text)

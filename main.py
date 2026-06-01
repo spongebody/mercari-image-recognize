@@ -310,6 +310,48 @@ def _primary_elapsed_seconds(
     return None
 
 
+_FALLBACK_TITLE_FILLER_TERMS = (
+    "画像確認商品",
+    "ブランド カラー 型番 情報入り",
+    "メルカリ出品向け詳細タイトル",
+    "写真から確認できる特徴を反映",
+    "商品説明と合わせて確認しやすい出品タイトル",
+)
+_FALLBACK_PROMOTIONAL_TERMS = (
+    "最適",
+    "完璧",
+    "必ず",
+    "圧倒的",
+    "隅々まで",
+    "昼夜を問わず",
+    "鮮明",
+    "ぜひ",
+)
+
+
+def _description_text_for_quality(payload: Dict[str, Any]) -> str:
+    description = payload.get("description")
+    if not isinstance(description, dict):
+        return str(description or "")
+    parts = []
+    for key in ("product_intro", "recommendation"):
+        value = description.get(key)
+        if value:
+            parts.append(str(value))
+    return "\n".join(parts)
+
+
+def _fallback_quality_issues(payload: Dict[str, Any]) -> List[str]:
+    title = str(payload.get("title") or "")
+    description_text = _description_text_for_quality(payload)
+    issues: List[str] = []
+    if any(term in title for term in _FALLBACK_TITLE_FILLER_TERMS):
+        issues.append("title_contains_generic_filler")
+    if any(term in description_text for term in _FALLBACK_PROMOTIONAL_TERMS):
+        issues.append("description_contains_overpromotional_terms")
+    return issues
+
+
 def _resolve_product_source(
     job: Dict[str, Any],
     *,
@@ -354,7 +396,13 @@ def _resolve_product_source(
     # Rule 2: primary blew past the threshold (still running or done late) →
     # use fallback as soon as it has data, regardless of primary's state.
     if primary_exceeded and fallback_ok:
-        return "fallback", fallback.result(), None
+        fallback_data = fallback.result()
+        if _fallback_quality_issues(fallback_data):
+            if primary_ok:
+                return "primary", primary.result(), None
+            if not primary_done:
+                return None, None, None
+        return "fallback", fallback_data, None
 
     # Rule 3a: primary errored but fallback succeeded → use whatever we have.
     if primary_done and primary_error is not None and fallback_ok:
@@ -936,4 +984,3 @@ def health() -> dict:
             "showcase_model": settings.showcase_model,
         },
     }
-

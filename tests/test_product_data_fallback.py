@@ -133,6 +133,46 @@ class ProductDataFallbackTest(_BaseFallbackTest):
 
     @patch.object(main, "product_data_executor")
     @patch.object(main, "analyzer")
+    def test_keeps_pending_when_fallback_quality_is_suspicious_and_primary_pending(
+        self, analyzer, executor
+    ):
+        main.settings.product_data_fallback_timeout_seconds = 0.0
+        primary_future = concurrent.futures.Future()
+        fallback_future = concurrent.futures.Future()
+        executor.submit.side_effect = [primary_future, fallback_future]
+        analyzer.classify_first_image_categories.return_value = self._classification_payload()
+
+        response = self._post_analyze()
+        self.assertEqual(response.status_code, 200)
+        job_id = response.json()["job_id"]
+
+        fallback_payload = self._product_payload(product_data_ms=300.0)
+        fallback_payload["title"] = (
+            "Tapo スマートカメラ C200 ホワイト 画像確認商品 "
+            "ブランド カラー 型番 情報入り メルカリ出品向け詳細タイトル"
+        )
+        fallback_payload["description"]["product_intro"] = "暗い場所でも鮮明な映像を提供します。"
+        fallback_payload["description"]["recommendation"] = "家庭やオフィスの監視に最適です。"
+        fallback_future.set_result(fallback_payload)
+
+        poll = self.client.get(f"/api/v1/mercari/image/analyze/{job_id}")
+        self.assertEqual(poll.status_code, 200)
+        self.assertEqual(poll.json()["status"], "product_pending")
+        self.assertNotIn("product_data_source", poll.json())
+
+        primary_future.set_result(
+            self._product_payload(brand_name="Adidas", brand_rakuten="adi-r", product_data_ms=500.0)
+        )
+
+        completed_response = self.client.get(f"/api/v1/mercari/image/analyze/{job_id}")
+        self.assertEqual(completed_response.status_code, 200)
+        completed = completed_response.json()
+        self.assertEqual(completed["status"], "completed")
+        self.assertEqual(completed["product_data_source"], "primary")
+        self.assertEqual(completed["brand_name"], "Adidas")
+
+    @patch.object(main, "product_data_executor")
+    @patch.object(main, "analyzer")
     def test_keeps_pending_when_within_timeout_even_if_fallback_completed(
         self, analyzer, executor
     ):

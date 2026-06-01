@@ -387,11 +387,53 @@ def _strip_title_excluded_terms(title: str, excluded_snippets: List[str]) -> str
     return _clean_string(cleaned)
 
 
-def _truncate_title_to_max(title: str, max_chars: int = MAX_PRODUCT_TITLE_CHARS) -> str:
+def _truncate_title_to_max(
+    title: str,
+    max_chars: int = MAX_PRODUCT_TITLE_CHARS,
+    min_chars: int = MIN_PRODUCT_TITLE_CHARS,
+) -> str:
     cleaned = _clean_string(title)
     if len(cleaned) <= max_chars:
         return cleaned
-    return cleaned[:max_chars].rstrip(" 、,.;；。") or cleaned[:max_chars]
+    truncated = cleaned[:max_chars].rstrip(" 、,.;；。")
+    for separator in (" ", "　"):
+        boundary = truncated.rfind(separator)
+        if boundary >= min_chars:
+            return truncated[:boundary].rstrip(" 、,.;；。")
+    return truncated or cleaned[:max_chars]
+
+
+def _append_title_part(parts: List[str], part: Any, max_chars: int) -> bool:
+    cleaned = _clean_string(part)
+    if not cleaned:
+        return False
+    existing = _clean_string(" ".join(parts))
+    key = cleaned.casefold()
+    if any(existing_part.casefold() == key for existing_part in parts):
+        return False
+    if existing and cleaned in existing:
+        return False
+    candidate = _clean_string(" ".join(parts + [cleaned]))
+    if len(candidate) > max_chars:
+        return False
+    parts.append(cleaned)
+    return True
+
+
+def _title_keyword_parts(value: Any, excluded_snippets: List[str]) -> List[str]:
+    if not isinstance(value, list):
+        return []
+    parts: List[str] = []
+    for item in value:
+        part = _title_source_snippet(item, excluded_snippets, max_chars=30)
+        if part:
+            parts.append(part)
+    return parts
+
+
+def _title_tokens(title: str, excluded_snippets: List[str]) -> List[str]:
+    stripped = _strip_title_excluded_terms(title, excluded_snippets)
+    return [token for token in re.split(r"[\s　]+", stripped) if token]
 
 
 def _title_source_snippet(
@@ -473,34 +515,35 @@ def _extend_title_to_minimum(
     excluded_snippets: Optional[List[str]] = None,
 ) -> str:
     title_clean = _strip_title_excluded_terms(title, excluded_snippets or [])
-    if len(title_clean) > max_chars:
-        return _truncate_title_to_max(title_clean, max_chars)
+    title_over_max = len(title_clean) > max_chars
     if len(title_clean) >= min_chars:
-        return title_clean
+        if len(title_clean) <= max_chars:
+            return title_clean
 
-    parts: List[str] = []
+    parts: List[str] = [] if title_over_max else ([title_clean] if title_clean else [])
     details = description.get("product_details") if isinstance(description, dict) else {}
     if not isinstance(details, dict):
         details = {}
     excluded = excluded_snippets or []
 
-    for value in (
-        brand_name,
+    core_parts = [
         brand_raw,
         details.get("brand"),
+        brand_name,
         details.get("product_name"),
         details.get("model_number"),
         details.get("color"),
-    ):
-        part = _title_snippet(value)
-        if part:
-            parts.append(part)
+    ]
 
     keywords = description.get("search_keywords") if isinstance(description, dict) else []
-    if isinstance(keywords, list):
-        parts.extend(
-            _title_source_snippet(item, excluded, max_chars=30)
-            for item in keywords
+    candidate_parts = (
+        [_title_snippet(value) for value in core_parts]
+        + _title_keyword_parts(keywords, excluded)
+    )
+    if title_over_max:
+        candidate_parts.extend(
+            token for token in _title_tokens(title_clean, excluded)
+            if len(token) <= 8
         )
 
     generic_parts_by_language = {
@@ -526,32 +569,32 @@ def _extend_title_to_minimum(
             "buyer friendly searchable listing title",
         ],
     }
-    parts.extend(generic_parts_by_language.get(language, generic_parts_by_language["ja"]))
+    candidate_parts.extend(generic_parts_by_language.get(language, generic_parts_by_language["ja"]))
 
-    seen = {title_clean.casefold()} if title_clean else set()
-    title_parts = [title_clean] if title_clean else []
-    for part in parts:
-        cleaned = _clean_string(part)
-        if not cleaned:
-            continue
-        key = cleaned.casefold()
-        if key in seen or (title_clean and cleaned in title_clean):
-            continue
-        title_parts.append(cleaned)
-        seen.add(key)
-        candidate = _clean_string(" ".join(title_parts))
-        if len(candidate) > max_chars:
-            candidate = _truncate_title_to_max(candidate, max_chars)
-        if len(candidate) >= min_chars:
-            return candidate
+    for part in candidate_parts:
+        _append_title_part(parts, part, max_chars)
 
-    candidate = _clean_string(" ".join(title_parts))
-    filler = generic_parts_by_language.get(language, generic_parts_by_language["ja"])[-1]
+    candidate = _clean_string(" ".join(parts))
+    fillers = generic_parts_by_language.get(language, generic_parts_by_language["ja"])
     while len(candidate) < min_chars:
-        candidate = _clean_string(f"{candidate} {filler}" if candidate else filler)
-        if len(candidate) > max_chars:
-            candidate = _truncate_title_to_max(candidate, max_chars)
+        if _append_title_part(parts, fillers[-1], max_chars):
+            candidate = _clean_string(" ".join(parts))
+            continue
+        appended = False
+        for filler in sorted(fillers, key=len):
+            repeated = _clean_string(f"{candidate} {filler}" if candidate else filler)
+            if len(repeated) <= max_chars:
+                parts.append(filler)
+                candidate = repeated
+                appended = True
+                break
+        if appended:
+            continue
+        if candidate:
             break
+        candidate = _clean_string(" ".join(parts))
+    if len(candidate) > max_chars:
+        return _truncate_title_to_max(candidate, max_chars, min_chars)
     return candidate
 
 
