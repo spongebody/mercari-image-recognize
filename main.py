@@ -186,6 +186,7 @@ async def lifespan(app: FastAPI):
 
     task = asyncio.create_task(prune_loop())
     app.state.prune_task = task
+    prompt_store.load_overrides()
     try:
         yield
     finally:

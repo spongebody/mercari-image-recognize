@@ -103,6 +103,12 @@ class PromptStoreWriteTest(unittest.TestCase):
                 {"PRODUCT_DATA_USER_PROMPT": "lang {language_label} extra {oops}"}
             )
 
+    def test_update_rejects_anonymous_positional_field(self):
+        with self.assertRaises(ValueError):
+            prompt_store.update(
+                {"PRODUCT_DATA_USER_PROMPT": "Lang {language_label} {}"}
+            )
+
     def test_update_accepts_valid_user_prompt(self):
         prompt_store.update({"PRODUCT_DATA_USER_PROMPT": "Lang: {language_label}. Go."})
         self.assertEqual(
@@ -116,6 +122,10 @@ class PromptStoreWriteTest(unittest.TestCase):
             )
         self.assertFalse(prompt_store.is_overridden("PRODUCT_DATA_SYSTEM_PROMPT"))
 
+    def test_reset_rejects_non_list_keys(self):
+        with self.assertRaises(ValueError):
+            prompt_store.reset("PRODUCT_DATA_SYSTEM_PROMPT")
+
     def test_reset_specific_key(self):
         prompt_store.update({"PRODUCT_DATA_SYSTEM_PROMPT": "x"})
         prompt_store.reset(["PRODUCT_DATA_SYSTEM_PROMPT"])
@@ -125,6 +135,15 @@ class PromptStoreWriteTest(unittest.TestCase):
         prompt_store.update({"PRODUCT_DATA_SYSTEM_PROMPT": "x"})
         prompt_store.reset(None)
         self.assertEqual(prompt_store._overrides, {})
+
+    def test_render_system_replaces_token_in_override(self):
+        prompt_store.update(
+            {"CATEGORY_SYSTEM_PROMPT": "Custom rules.\n[[TOP_LEVEL_CATEGORY_OPTIONS]]\nEnd."}
+        )
+        rendered = prompt_store.render_system("CATEGORY_SYSTEM_PROMPT")
+        self.assertNotIn("[[TOP_LEVEL_CATEGORY_OPTIONS]]", rendered)
+        from app.llm.prompts import TOP_LEVEL_CATEGORY_OPTIONS
+        self.assertIn(TOP_LEVEL_CATEGORY_OPTIONS, rendered)
 
     def test_load_overrides_tolerates_missing_file(self):
         prompt_store.load_overrides()

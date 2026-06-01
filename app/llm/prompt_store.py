@@ -79,7 +79,7 @@ def _user_prompt_fields(text: str) -> set:
     return {
         field_name
         for _, field_name, _, _ in string.Formatter().parse(text)
-        if field_name
+        if field_name is not None
     }
 
 
@@ -127,6 +127,8 @@ def update(updates: Dict[str, str]) -> List[dict]:
 
 
 def reset(keys: Optional[List[str]]) -> List[dict]:
+    if keys is not None and not isinstance(keys, list):
+        raise ValueError("keys must be a list or null.")
     if keys:
         unknown = [k for k in keys if k not in _REGISTRY_BY_KEY]
         if unknown:
