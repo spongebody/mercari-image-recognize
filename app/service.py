@@ -15,24 +15,7 @@ from .data.categories import CategoryStore
 from .errors import BadRequestError, LLMAllAttemptsFailedError
 from .llm.client import OpenRouterClient, USE_CLIENT_REASONING
 from .llm.resilient import AttemptRecord, ResilientCaller
-from .llm.prompts import (
-    CATEGORY_SYSTEM_PROMPT,
-    CATEGORY_USER_PROMPT_TEMPLATE,
-    FAST_CLASSIFICATION_SYSTEM_PROMPT,
-    FAST_CLASSIFICATION_USER_PROMPT,
-    PRODUCT_DATA_FALLBACK_SYSTEM_PROMPT,
-    PRODUCT_DATA_FALLBACK_USER_PROMPT,
-    PRICE_ONLY_SYSTEM_PROMPT,
-    PRICE_ONLY_USER_PROMPT,
-    PRODUCT_DATA_REGENERATION_SYSTEM_PROMPT,
-    PRODUCT_DATA_REGENERATION_USER_PROMPT,
-    PRODUCT_DATA_SYSTEM_PROMPT,
-    PRODUCT_DATA_USER_PROMPT,
-    PRODUCT_TITLE_CATEGORY_SYSTEM_PROMPT,
-    PRODUCT_TITLE_CATEGORY_USER_PROMPT,
-    TITLE_IMAGE_FALLBACK_SYSTEM_PROMPT,
-    TITLE_IMAGE_FALLBACK_USER_PROMPT,
-)
+from .llm import prompt_store
 from .utils import (
     compress_whitespace,
     fetch_image_from_url,
@@ -1038,7 +1021,7 @@ class MercariAnalyzer:
     ) -> Tuple[Dict[str, Any], Dict[str, Any], List[AttemptRecord]]:
         if not image_data_urls:
             raise BadRequestError("Image list is empty.")
-        user_prompt = TITLE_IMAGE_FALLBACK_USER_PROMPT.format(
+        user_prompt = prompt_store.get("TITLE_IMAGE_FALLBACK_USER_PROMPT").format(
             language_label=_language_label(language)
         )
         image_payloads: List[Dict[str, Any]] = []
@@ -1055,7 +1038,7 @@ class MercariAnalyzer:
             )
             image_payloads.append({"type": "image_url", "image_url": {"url": url}})
         messages = [
-            {"role": "system", "content": TITLE_IMAGE_FALLBACK_SYSTEM_PROMPT},
+            {"role": "system", "content": prompt_store.render_system("TITLE_IMAGE_FALLBACK_SYSTEM_PROMPT")},
             {
                 "role": "user",
                 "content": [{"type": "text", "text": user_prompt}] + image_payloads,
@@ -1097,7 +1080,7 @@ class MercariAnalyzer:
     ) -> Tuple[Dict[str, Any], List[AttemptRecord]]:
         if not image_data_urls:
             raise BadRequestError("Image list is empty.")
-        user_prompt = FAST_CLASSIFICATION_USER_PROMPT.format(
+        user_prompt = prompt_store.get("FAST_CLASSIFICATION_USER_PROMPT").format(
             language_label=_language_label(language)
         )
         image_payloads: List[Dict[str, Any]] = []
@@ -1110,7 +1093,7 @@ class MercariAnalyzer:
             )
             image_payloads.append({"type": "image_url", "image_url": {"url": url}})
         messages = [
-            {"role": "system", "content": FAST_CLASSIFICATION_SYSTEM_PROMPT},
+            {"role": "system", "content": prompt_store.render_system("FAST_CLASSIFICATION_SYSTEM_PROMPT")},
             {
                 "role": "user",
                 "content": [{"type": "text", "text": user_prompt}] + image_payloads,
@@ -1166,10 +1149,10 @@ class MercariAnalyzer:
             )
             image_payloads.append({"type": "image_url", "image_url": {"url": url}})
         messages = [
-            {"role": "system", "content": PRICE_ONLY_SYSTEM_PROMPT},
+            {"role": "system", "content": prompt_store.render_system("PRICE_ONLY_SYSTEM_PROMPT")},
             {
                 "role": "user",
-                "content": [{"type": "text", "text": PRICE_ONLY_USER_PROMPT}] + image_payloads,
+                "content": [{"type": "text", "text": prompt_store.get("PRICE_ONLY_USER_PROMPT")}] + image_payloads,
             },
         ]
         primary = (
@@ -1214,14 +1197,14 @@ class MercariAnalyzer:
         if not image_data_urls:
             raise BadRequestError("Image list is empty.")
         if use_fallback_prompt:
-            system_prompt = PRODUCT_DATA_FALLBACK_SYSTEM_PROMPT
-            user_prompt = PRODUCT_DATA_FALLBACK_USER_PROMPT.format(
+            system_prompt = prompt_store.render_system("PRODUCT_DATA_FALLBACK_SYSTEM_PROMPT")
+            user_prompt = prompt_store.get("PRODUCT_DATA_FALLBACK_USER_PROMPT").format(
                 language_label=_language_label(language)
             )
             stage = "product_data_fallback"
         else:
-            system_prompt = PRODUCT_DATA_SYSTEM_PROMPT
-            user_prompt = PRODUCT_DATA_USER_PROMPT.format(
+            system_prompt = prompt_store.render_system("PRODUCT_DATA_SYSTEM_PROMPT")
+            user_prompt = prompt_store.get("PRODUCT_DATA_USER_PROMPT").format(
                 language_label=_language_label(language)
             )
             stage = "product_data"
@@ -1291,7 +1274,7 @@ class MercariAnalyzer:
     ) -> Tuple[Dict[str, Any], Dict[str, Any], List[AttemptRecord]]:
         if not image_data_urls:
             raise BadRequestError("Image list is empty.")
-        user_prompt = PRODUCT_DATA_REGENERATION_USER_PROMPT.format(
+        user_prompt = prompt_store.get("PRODUCT_DATA_REGENERATION_USER_PROMPT").format(
             language_label=_language_label(language),
             user_notes=_clean_string(user_notes) or "(none)",
             original_product_data_json=_product_data_context_json(original_product_data),
@@ -1310,7 +1293,7 @@ class MercariAnalyzer:
             )
             image_payloads.append({"type": "image_url", "image_url": {"url": url}})
         messages = [
-            {"role": "system", "content": PRODUCT_DATA_REGENERATION_SYSTEM_PROMPT},
+            {"role": "system", "content": prompt_store.render_system("PRODUCT_DATA_REGENERATION_SYSTEM_PROMPT")},
             {
                 "role": "user",
                 "content": [{"type": "text", "text": user_prompt}] + image_payloads,
@@ -1373,12 +1356,12 @@ class MercariAnalyzer:
         language: str,
         model_override: Optional[str] = None,
     ) -> Tuple[Dict[str, Any], List[AttemptRecord]]:
-        user_prompt = PRODUCT_TITLE_CATEGORY_USER_PROMPT.format(
+        user_prompt = prompt_store.get("PRODUCT_TITLE_CATEGORY_USER_PROMPT").format(
             title=title,
             language_label=_language_label(language),
         )
         messages = [
-            {"role": "system", "content": PRODUCT_TITLE_CATEGORY_SYSTEM_PROMPT},
+            {"role": "system", "content": prompt_store.render_system("PRODUCT_TITLE_CATEGORY_SYSTEM_PROMPT")},
             {"role": "user", "content": user_prompt},
         ]
         primary = model_override or self.settings.category_model
@@ -1424,7 +1407,7 @@ class MercariAnalyzer:
 
         candidate_paths = [item["name"] for item in candidates]
         candidate_block = "\n".join(candidate_paths)
-        user_prompt = CATEGORY_USER_PROMPT_TEMPLATE.format(
+        user_prompt = prompt_store.get("CATEGORY_USER_PROMPT_TEMPLATE").format(
             title=title,
             description=description,
             brand=brand_for_prompt,
@@ -1432,7 +1415,7 @@ class MercariAnalyzer:
             candidate_paths=candidate_block,
         )
         messages = [
-            {"role": "system", "content": CATEGORY_SYSTEM_PROMPT},
+            {"role": "system", "content": prompt_store.render_system("CATEGORY_SYSTEM_PROMPT")},
             {"role": "user", "content": user_prompt},
         ]
 

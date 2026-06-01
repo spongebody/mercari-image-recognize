@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from app.llm.prompts import TITLE_IMAGE_FALLBACK_SYSTEM_PROMPT
+from app.llm import prompt_store
 from app.service import MercariAnalyzer, _paths_from_categories
 
 
@@ -116,7 +116,7 @@ class RakutenIdResponseTest(unittest.TestCase):
         self.assertEqual(len(vision_client.calls), 1)
         self.assertEqual(
             vision_client.calls[0]["messages"][0]["content"],
-            TITLE_IMAGE_FALLBACK_SYSTEM_PROMPT,
+            prompt_store.render_system("TITLE_IMAGE_FALLBACK_SYSTEM_PROMPT"),
         )
         user_content = vision_client.calls[0]["messages"][1]["content"][0]["text"]
         self.assertIn("top_level_category", user_content)

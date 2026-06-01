@@ -6,6 +6,9 @@ dist/
 wheels/
 *.egg-info
 
+# Runtime prompt overrides (edited via /config, not source-controlled)
+data/prompt_overrides.json
+
 # Virtual environments
 .venv
 .env
