@@ -75,6 +75,72 @@ def load_overrides() -> None:
     }
 
 
+def _user_prompt_fields(text: str) -> set:
+    return {
+        field_name
+        for _, field_name, _, _ in string.Formatter().parse(text)
+        if field_name
+    }
+
+
+def _validate(key: str, text: str) -> None:
+    definition = _REGISTRY_BY_KEY.get(key)
+    if definition is None:
+        raise ValueError(f"Unknown prompt key: {key}")
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError(f"{key} must be a non-empty string.")
+    for token in definition.required_tokens:
+        if token not in text:
+            raise ValueError(f"{key} must contain the placeholder {token}.")
+    if definition.role == "user":
+        allowed = {tok.strip("{}") for tok in definition.required_tokens}
+        try:
+            fields = _user_prompt_fields(text)
+        except ValueError as exc:
+            raise ValueError(f"{key} has invalid template formatting: {exc}") from exc
+        extra = fields - allowed
+        if extra:
+            raise ValueError(
+                f"{key} contains unsupported placeholders: "
+                + ", ".join("{" + name + "}" for name in sorted(extra))
+            )
+
+
+def _persist() -> None:
+    OVERRIDES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = OVERRIDES_PATH.with_name(OVERRIDES_PATH.name + ".tmp")
+    tmp_path.write_text(
+        json.dumps(_overrides, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    os.replace(tmp_path, OVERRIDES_PATH)
+
+
+def update(updates: Dict[str, str]) -> List[dict]:
+    if not isinstance(updates, dict) or not updates:
+        raise ValueError("No prompt updates provided.")
+    for key, text in updates.items():
+        _validate(key, text)
+    with _lock:
+        _overrides.update(updates)
+        _persist()
+    return list_prompts()
+
+
+def reset(keys: Optional[List[str]]) -> List[dict]:
+    if keys:
+        unknown = [k for k in keys if k not in _REGISTRY_BY_KEY]
+        if unknown:
+            raise ValueError(f"Unknown prompt key(s): {', '.join(unknown)}")
+    with _lock:
+        if not keys:
+            _overrides.clear()
+        else:
+            for key in keys:
+                _overrides.pop(key, None)
+        _persist()
+    return list_prompts()
+
+
 def get(key: str) -> str:
     """Effective unrendered template (override if set, else default)."""
     definition = _REGISTRY_BY_KEY.get(key)
