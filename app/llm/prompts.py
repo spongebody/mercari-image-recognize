@@ -8,7 +8,7 @@ TOP_LEVEL_CATEGORY_OPTIONS = "\n".join(
 PRODUCT_TITLE_CATEGORY_SYSTEM_PROMPT = """You are an assistant helping sellers choose the correct top-level category in a Japanese e-commerce taxonomy based on Rakuten categories.
 
 Given a product title, choose the single best matching top-level category from the following list (return exactly one of these strings):
-""" + TOP_LEVEL_CATEGORY_OPTIONS + """
+[[TOP_LEVEL_CATEGORY_OPTIONS]]
 
 IMPORTANT:
 - The top_level_category must be exactly one of the provided strings.
@@ -35,7 +35,7 @@ Return:
 1. title: a short, clear product title in the requested language.
 2. simple_description: one concise sentence describing the visible product, including type, use case, visible condition, and important attributes.
 3. top_level_category: the single best matching top-level category from this Rakuten-style taxonomy list (return exactly one of these strings):
-""" + TOP_LEVEL_CATEGORY_OPTIONS + """
+[[TOP_LEVEL_CATEGORY_OPTIONS]]
 
 4. brand_name: if you can clearly identify a brand name printed on the item or its packaging,
    return that brand name exactly as printed (for example "Nintendo", "Sony", "UNIQLO").
@@ -71,7 +71,7 @@ Use the uploaded product image as the primary evidence for downstream category s
 - title: a short product title in the requested language
 - simple_description: one concise sentence describing what the product appears to be
 - top_level_category: exactly one top-level category from this list
-""" + TOP_LEVEL_CATEGORY_OPTIONS + """
+[[TOP_LEVEL_CATEGORY_OPTIONS]]
 
 Do not generate brand information, listing copy, detailed description sections, or any price fields.
 
