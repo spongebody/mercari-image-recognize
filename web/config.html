@@ -264,10 +264,117 @@
         color: #991b1b;
         border: 1px solid #fecdd3;
       }
-      .prompt-block { margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid #eee; }
-      .prompt-block code { font-size: 12px; color: #666; }
-      .prompt-block .badge { background: #f59e0b; color: #fff; border-radius: 4px; padding: 1px 6px; font-size: 11px; }
-      .prompt-actions { margin-top: 6px; display: flex; gap: 8px; }
+      .tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 18px;
+      }
+
+      .tab-btn {
+        width: auto;
+        background: white;
+        color: var(--muted);
+        border: 2px solid var(--border);
+        box-shadow: none;
+        padding: 10px 22px;
+        font-size: 14px;
+      }
+
+      .tab-btn.active {
+        background: linear-gradient(135deg, var(--accent), #1d4ed8);
+        color: white;
+        border-color: transparent;
+        box-shadow: 0 10px 25px rgba(47, 128, 237, 0.2);
+      }
+
+      .tab-btn:not(.active):hover {
+        transform: none;
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      .tab-panel[hidden] {
+        display: none;
+      }
+
+      .prompt-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 14px;
+        flex-wrap: wrap;
+      }
+
+      .prompt-toolbar label {
+        margin: 0;
+        white-space: nowrap;
+      }
+
+      .prompt-toolbar select {
+        width: auto;
+        min-width: 260px;
+        flex: 0 0 auto;
+        font-weight: 700;
+      }
+
+      .prompt-entry {
+        margin-top: 22px;
+        padding-top: 18px;
+        border-top: 1px solid var(--border);
+      }
+
+      .prompt-entry:first-of-type {
+        margin-top: 16px;
+        border-top: none;
+        padding-top: 0;
+      }
+
+      .entry-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 6px;
+      }
+
+      .entry-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--text);
+      }
+
+      .entry-head code {
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 500;
+      }
+
+      .prompt-entry textarea {
+        min-height: 240px;
+      }
+
+      .badge {
+        background: #fef3c7;
+        color: #92400e;
+        border: 1px solid #fcd34d;
+        border-radius: 999px;
+        padding: 1px 9px;
+        font-size: 11px;
+        font-weight: 700;
+        margin-left: 8px;
+      }
+
+      .entry-actions {
+        margin-top: 10px;
+        display: flex;
+        gap: 10px;
+      }
+
+      .entry-actions button {
+        width: auto;
+        padding: 9px 18px;
+        font-size: 13px;
+      }
     </style>
   </head>
   <body>
@@ -283,6 +390,12 @@
         <span class="pill">同服务配置页</span>
       </header>
 
+      <nav class="tabs">
+        <button type="button" class="tab-btn active" data-tab="api">API 配置</button>
+        <button type="button" class="tab-btn" data-tab="prompts">提示词配置</button>
+      </nav>
+
+      <div class="tab-panel" id="tab-api">
       <main class="card grid">
         <div class="controls-row">
           <div>
@@ -418,12 +531,19 @@
           <button class="secondary" id="reload-btn">重新读取</button>
         </div>
       </main>
+      </div>
 
-    <section class="card" id="prompts-section">
-      <h2>提示词配置 (Prompts)</h2>
-      <p class="hint">修改后点击「保存」立即生效，无需重启服务。占位符必须保留。</p>
-      <div id="prompts-container">正在读取提示词...</div>
-    </section>
+      <div class="tab-panel" id="tab-prompts" hidden>
+        <div class="card">
+          <div class="prompt-toolbar">
+            <label for="prompt-stage-select">选择提示词</label>
+            <select id="prompt-stage-select"></select>
+          </div>
+          <p class="hint">一次展示一个阶段的 System / User 提示词。修改后点击「保存」立即生效，无需重启服务。占位符（如 {language_label}、[[TOP_LEVEL_CATEGORY_OPTIONS]]）必须原样保留。</p>
+          <div class="message" id="prompts-message"></div>
+          <div id="prompt-editor">正在读取提示词...</div>
+        </div>
+      </div>
     </div>
 
     <script>
@@ -546,62 +666,146 @@
         loadConfig().catch((err) => showMessage(String(err.message || err), "error"));
       });
 
-      const promptsContainer = document.getElementById("prompts-container");
+      // ---------- Tabs ----------
+      const tabButtons = document.querySelectorAll(".tab-btn");
+      const tabPanels = {
+        api: document.getElementById("tab-api"),
+        prompts: document.getElementById("tab-prompts"),
+      };
+      tabButtons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const tab = btn.getAttribute("data-tab");
+          tabButtons.forEach((b) => b.classList.toggle("active", b === btn));
+          Object.entries(tabPanels).forEach(([key, el]) => {
+            el.hidden = key !== tab;
+          });
+        });
+      });
+
+      // ---------- Prompts ----------
+      const DEFAULT_STAGE = "product_data";
+      const stageSelect = document.getElementById("prompt-stage-select");
+      const promptEditor = document.getElementById("prompt-editor");
+      const promptsMessage = document.getElementById("prompts-message");
+
+      let promptsByStage = {};
+      let stageOrder = [];
+      let stageNames = {};
+      let currentStage = DEFAULT_STAGE;
 
       function escapeHtml(s) {
         return String(s)
           .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       }
 
-      function renderPrompts(prompts) {
-        promptsContainer.innerHTML = "";
+      function showPromptsMessage(text, type) {
+        promptsMessage.textContent = text;
+        promptsMessage.className = `message show ${type}`;
+      }
+
+      function roleTitle(role) {
+        return role === "system" ? "System · 系统提示词" : "User · 用户提示词";
+      }
+
+      function groupPrompts(prompts) {
+        promptsByStage = {};
+        stageOrder = [];
+        stageNames = {};
         prompts.forEach((p) => {
-          const block = document.createElement("div");
-          block.className = "prompt-block";
+          if (!promptsByStage[p.stage]) {
+            promptsByStage[p.stage] = [];
+            stageOrder.push(p.stage);
+            stageNames[p.stage] = (p.label.split(" · ")[0] || p.stage).trim();
+          }
+          promptsByStage[p.stage].push(p);
+        });
+        if (!stageOrder.includes(currentStage)) {
+          currentStage = stageOrder.includes(DEFAULT_STAGE) ? DEFAULT_STAGE : stageOrder[0];
+        }
+      }
+
+      function populateStageSelect() {
+        stageSelect.innerHTML = "";
+        stageOrder.forEach((stage) => {
+          const opt = document.createElement("option");
+          opt.value = stage;
+          const overridden = promptsByStage[stage].some((p) => p.is_overridden);
+          opt.textContent = stageNames[stage] + (overridden ? " ●" : "");
+          stageSelect.appendChild(opt);
+        });
+        stageSelect.value = currentStage;
+      }
+
+      function renderStage(stage, actedKey) {
+        // Preserve unsaved edits in sibling textareas across re-render.
+        const snapshot = {};
+        promptEditor.querySelectorAll("textarea[data-key]").forEach((ta) => {
+          snapshot[ta.getAttribute("data-key")] = ta.value;
+        });
+        promptEditor.innerHTML = "";
+        (promptsByStage[stage] || []).forEach((p) => {
+          const wrap = document.createElement("div");
+          wrap.className = "prompt-entry";
           const tokens = p.required_tokens.length
-            ? `必需占位符：${p.required_tokens.map(escapeHtml).join(" ")}`
+            ? `必需占位符：${p.required_tokens.map(escapeHtml).join("  ")}`
             : "无必需占位符";
           const badge = p.is_overridden ? ' <span class="badge">已修改</span>' : "";
-          block.innerHTML =
-            `<label>${escapeHtml(p.label)} <code>${escapeHtml(p.key)}</code>${badge}</label>` +
+          wrap.innerHTML =
+            `<div class="entry-head">` +
+            `<span class="entry-title">${escapeHtml(roleTitle(p.role))}${badge}</span>` +
+            `<code>${escapeHtml(p.key)}</code>` +
+            `</div>` +
             `<div class="hint">${tokens}</div>` +
-            `<textarea id="prompt-${p.key}" rows="10"></textarea>` +
-            `<div class="prompt-actions">` +
+            `<textarea data-key="${p.key}" rows="14"></textarea>` +
+            `<div class="entry-actions">` +
             `<button type="button" data-save="${p.key}">保存</button>` +
-            `<button type="button" data-reset="${p.key}">恢复默认</button>` +
+            `<button type="button" class="secondary" data-reset="${p.key}">恢复默认</button>` +
             `</div>`;
-          promptsContainer.appendChild(block);
-          block.querySelector("textarea").value = p.value;
+          promptEditor.appendChild(wrap);
+          const ta = wrap.querySelector("textarea");
+          ta.value =
+            p.key !== actedKey && snapshot[p.key] !== undefined ? snapshot[p.key] : p.value;
         });
-        promptsContainer.querySelectorAll("[data-save]").forEach((btn) => {
+        promptEditor.querySelectorAll("[data-save]").forEach((btn) => {
           btn.addEventListener("click", () => savePrompt(btn.getAttribute("data-save")));
         });
-        promptsContainer.querySelectorAll("[data-reset]").forEach((btn) => {
+        promptEditor.querySelectorAll("[data-reset]").forEach((btn) => {
           btn.addEventListener("click", () => resetPrompt(btn.getAttribute("data-reset")));
         });
       }
+
+      function applyPrompts(prompts, actedKey) {
+        groupPrompts(prompts);
+        populateStageSelect();
+        renderStage(currentStage, actedKey);
+      }
+
+      stageSelect.addEventListener("change", () => {
+        currentStage = stageSelect.value;
+        renderStage(currentStage);
+      });
 
       async function loadPrompts() {
         const resp = await fetch("/api/v1/prompts");
         const data = await resp.json();
         if (!resp.ok) throw new Error(data.detail || "读取提示词失败");
-        renderPrompts(data.prompts);
+        applyPrompts(data.prompts);
       }
 
       async function savePrompt(key) {
-        const text = document.getElementById(`prompt-${key}`).value;
+        const ta = document.querySelector(`textarea[data-key="${key}"]`);
         try {
           const resp = await fetch("/api/v1/prompts", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ [key]: text }),
+            body: JSON.stringify({ [key]: ta.value }),
           });
           const data = await resp.json();
           if (!resp.ok) throw new Error(data.detail || "保存失败");
-          renderPrompts(data.prompts);
-          showMessage(`提示词 ${key} 已保存并立即生效。`, "success");
+          applyPrompts(data.prompts, key);
+          showPromptsMessage(`「${stageNames[currentStage]}」的 ${key} 已保存并立即生效。`, "success");
         } catch (err) {
-          showMessage(String(err.message || err), "error");
+          showPromptsMessage(String(err.message || err), "error");
         }
       }
 
@@ -614,15 +818,15 @@
           });
           const data = await resp.json();
           if (!resp.ok) throw new Error(data.detail || "恢复失败");
-          renderPrompts(data.prompts);
-          showMessage(`提示词 ${key} 已恢复默认。`, "success");
+          applyPrompts(data.prompts, key);
+          showPromptsMessage(`${key} 已恢复默认。`, "success");
         } catch (err) {
-          showMessage(String(err.message || err), "error");
+          showPromptsMessage(String(err.message || err), "error");
         }
       }
 
       loadPrompts().catch((err) => {
-        promptsContainer.textContent = "读取提示词失败：" + String(err.message || err);
+        promptEditor.textContent = "读取提示词失败：" + String(err.message || err);
       });
 
       loadConfig().catch((err) => {
