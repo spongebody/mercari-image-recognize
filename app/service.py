@@ -107,7 +107,8 @@ DESCRIPTION_SECTION_KEYS = {
         "検索用キーワード",
     ),
 }
-MIN_PRODUCT_TITLE_CHARS = 80
+MIN_PRODUCT_TITLE_CHARS = 75
+MAX_PRODUCT_TITLE_CHARS = 85
 
 
 def _language_label(language: str) -> str:
@@ -386,6 +387,13 @@ def _strip_title_excluded_terms(title: str, excluded_snippets: List[str]) -> str
     return _clean_string(cleaned)
 
 
+def _truncate_title_to_max(title: str, max_chars: int = MAX_PRODUCT_TITLE_CHARS) -> str:
+    cleaned = _clean_string(title)
+    if len(cleaned) <= max_chars:
+        return cleaned
+    return cleaned[:max_chars].rstrip(" 、,.;；。") or cleaned[:max_chars]
+
+
 def _title_source_snippet(
     value: Any,
     excluded_snippets: List[str],
@@ -461,9 +469,12 @@ def _extend_title_to_minimum(
     brand_raw: str = "",
     language: str = DEFAULT_LANGUAGE,
     min_chars: int = MIN_PRODUCT_TITLE_CHARS,
+    max_chars: int = MAX_PRODUCT_TITLE_CHARS,
     excluded_snippets: Optional[List[str]] = None,
 ) -> str:
     title_clean = _strip_title_excluded_terms(title, excluded_snippets or [])
+    if len(title_clean) > max_chars:
+        return _truncate_title_to_max(title_clean, max_chars)
     if len(title_clean) >= min_chars:
         return title_clean
 
@@ -490,14 +501,6 @@ def _extend_title_to_minimum(
         parts.extend(
             _title_source_snippet(item, excluded, max_chars=30)
             for item in keywords
-        )
-
-    if isinstance(description, dict):
-        parts.append(
-            _title_source_snippet(description.get("recommendation"), excluded, max_chars=50)
-        )
-        parts.append(
-            _title_source_snippet(description.get("product_intro"), excluded, max_chars=50)
         )
 
     generic_parts_by_language = {
@@ -537,6 +540,8 @@ def _extend_title_to_minimum(
         title_parts.append(cleaned)
         seen.add(key)
         candidate = _clean_string(" ".join(title_parts))
+        if len(candidate) > max_chars:
+            candidate = _truncate_title_to_max(candidate, max_chars)
         if len(candidate) >= min_chars:
             return candidate
 
@@ -544,6 +549,9 @@ def _extend_title_to_minimum(
     filler = generic_parts_by_language.get(language, generic_parts_by_language["ja"])[-1]
     while len(candidate) < min_chars:
         candidate = _clean_string(f"{candidate} {filler}" if candidate else filler)
+        if len(candidate) > max_chars:
+            candidate = _truncate_title_to_max(candidate, max_chars)
+            break
     return candidate
 
 

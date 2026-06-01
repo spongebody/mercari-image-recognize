@@ -324,9 +324,12 @@ class ParallelFlowServiceTest(unittest.TestCase):
 
                 system_prompt = vision_client.calls[0]["messages"][0]["content"]
                 self.assertIn("Japanese second-hand marketplace", system_prompt)
-                self.assertIn("The title must not exceed 90 Japanese characters", system_prompt)
+                self.assertIn("The title MUST be at least 75 characters and MUST NOT exceed 85 characters", system_prompt)
+                self.assertIn("use the generated SEO search keywords", system_prompt)
                 self.assertIn("Do not add condition, store item number, or management number to the title", system_prompt)
                 self.assertIn("Use objective, conservative, factual Japanese", system_prompt)
+                self.assertIn("balanced and objective", system_prompt)
+                self.assertIn("should not feel overly promotional", system_prompt)
                 self.assertIn("product_details: object with only brand, product_name, model_number, color", system_prompt)
                 self.assertIn('"brand_candidates": ["string"]', system_prompt)
                 self.assertIn("Do not generate any price fields", system_prompt)
@@ -551,7 +554,7 @@ class ParallelFlowServiceTest(unittest.TestCase):
         self.assertIsNone(result["tax_included"])
         self.assertEqual(result["prices"], [])
 
-    def test_generate_product_data_expands_short_title_to_at_least_80_chars(self):
+    def test_generate_product_data_expands_short_title_to_75_to_85_chars(self):
         vision_client = RecordingChatClient(
             {
                 "title": "Nike シャツ",
@@ -586,7 +589,8 @@ class ParallelFlowServiceTest(unittest.TestCase):
             language="ja",
         )
 
-        self.assertGreaterEqual(len(result["title"]), 80)
+        self.assertGreaterEqual(len(result["title"]), 75)
+        self.assertLessEqual(len(result["title"]), 85)
         self.assertTrue(result["title"].startswith("Nike シャツ"))
         self.assertIn("DV1234-010", result["title"])
         self.assertIn("ブラック", result["title"])
@@ -626,7 +630,8 @@ class ParallelFlowServiceTest(unittest.TestCase):
             language="ja",
         )
 
-        self.assertGreaterEqual(len(result["title"]), 80)
+        self.assertGreaterEqual(len(result["title"]), 75)
+        self.assertLessEqual(len(result["title"]), 85)
         self.assertIn("Nike", result["title"])
         self.assertIn("DV1234-010", result["title"])
         self.assertIn("ブラック", result["title"])
@@ -635,7 +640,7 @@ class ParallelFlowServiceTest(unittest.TestCase):
         self.assertNotIn("Mサイズ", result["title"])
         self.assertNotIn("メンズ", result["title"])
 
-    def test_generate_product_data_title_extension_uses_filtered_keywords_intro_and_recommendation(self):
+    def test_generate_product_data_title_extension_uses_filtered_keywords_not_intro_or_recommendation(self):
         vision_client = RecordingChatClient(
             {
                 "title": "Sony ヘッドホン",
@@ -668,15 +673,59 @@ class ParallelFlowServiceTest(unittest.TestCase):
             language="ja",
         )
 
-        self.assertGreaterEqual(len(result["title"]), 80)
+        self.assertGreaterEqual(len(result["title"]), 75)
+        self.assertLessEqual(len(result["title"]), 85)
         self.assertIn("WH-1000XM5", result["title"])
         self.assertIn("ブラック", result["title"])
         self.assertIn("ノイズキャンセリング", result["title"])
         self.assertIn("Bluetooth", result["title"])
         self.assertIn("高音質", result["title"])
-        self.assertIn("オンライン会議", result["title"])
+        self.assertNotIn("オンライン会議", result["title"])
         self.assertNotIn("250g", result["title"])
         self.assertNotIn("美品", result["title"])
+
+    def test_generate_product_data_title_extension_uses_seo_keywords_before_other_copy(self):
+        vision_client = RecordingChatClient(
+            {
+                "title": "Sony ヘッドホン WH-1000XM5 ブラック ワイヤレス",
+                "description": {
+                    "product_details": {
+                        "brand": "Sony",
+                        "product_name": "ワイヤレスヘッドホン",
+                        "model_number": "WH-1000XM5",
+                        "color": "ブラック",
+                    },
+                    "product_intro": "長時間の移動やオンライン会議で確認しやすい説明文です。",
+                    "recommendation": "通勤や会議向けの説明を入れています。",
+                    "search_keywords": [
+                        "ノイズキャンセリング",
+                        "Bluetooth",
+                        "密閉型",
+                        "ワイヤレスヘッドホン",
+                    ],
+                },
+                "brand_name": "Sony",
+            }
+        )
+        analyzer = MercariAnalyzer(
+            settings=_settings(),
+            brand_store=FakeBrandStore(),
+            category_store=FakeCategoryStore(),
+            vision_client=vision_client,
+            category_client=SequenceChatClient([]),
+        )
+
+        result = analyzer.generate_product_data(
+            images=[(b"front-image", "image/png")],
+            language="ja",
+        )
+
+        self.assertGreaterEqual(len(result["title"]), 75)
+        self.assertLessEqual(len(result["title"]), 85)
+        self.assertIn("ノイズキャンセリング", result["title"])
+        self.assertIn("Bluetooth", result["title"])
+        self.assertNotIn("オンライン会議", result["title"])
+        self.assertNotIn("通勤", result["title"])
 
     def test_generate_product_data_supports_model_override_for_fallback(self):
         vision_client = RecordingChatClient(
@@ -759,6 +808,11 @@ class ParallelFlowServiceTest(unittest.TestCase):
         )
 
         prompt_text = vision_client.calls[0]["messages"][1]["content"][0]["text"]
+        system_prompt = vision_client.calls[0]["messages"][0]["content"]
+        self.assertIn("The title MUST be at least 75 characters and MUST NOT exceed 85 characters", system_prompt)
+        self.assertIn("use the generated SEO search keywords", system_prompt)
+        self.assertIn("balanced and objective", system_prompt)
+        self.assertIn("should not feel overly promotional", system_prompt)
         self.assertIn("User supplemental information", prompt_text)
         self.assertIn("成色は目立つ傷なし", prompt_text)
         self.assertIn("Original product data", prompt_text)
@@ -766,7 +820,8 @@ class ParallelFlowServiceTest(unittest.TestCase):
         self.assertNotIn("Prioritize user supplemental information", prompt_text)
         self.assertNotIn("Return JSON only with title", prompt_text)
         self.assertEqual(vision_client.calls[0]["model"], "product-data-test")
-        self.assertGreaterEqual(len(result["title"]), 80)
+        self.assertGreaterEqual(len(result["title"]), 75)
+        self.assertLessEqual(len(result["title"]), 85)
         self.assertEqual(result["brand_name"], "Nike")
 
 

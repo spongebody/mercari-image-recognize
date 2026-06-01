@@ -182,11 +182,13 @@ class FallbackPromptIsUsedTest(unittest.TestCase):
         self.assertNotEqual(sent_system, PRODUCT_DATA_SYSTEM_PROMPT)
         # Fallback quality rules live in the system prompt; the user prompt
         # should only carry request-scoped context such as language.
-        self.assertIn("3–5 paragraphs", sent_system)
+        self.assertIn("full product description", sent_system)
+        self.assertIn("balanced and objective", sent_system)
+        self.assertIn("should not feel overly promotional", sent_system)
         self.assertIn("search_keywords", sent_system)
         sent_user = vision_client.calls[0]["messages"][1]["content"][0]["text"]
         self.assertIn("Japanese", sent_user)
-        self.assertNotIn("3–5 paragraph", sent_user)
+        self.assertNotIn("full product description", sent_user)
         self.assertNotIn("search_keywords", sent_user)
 
     def test_primary_prompt_used_by_default(self):
@@ -227,7 +229,8 @@ class ProductDataFallbackChainTest(unittest.TestCase):
         self.assertEqual(models_called[0], "explicit-fallback-model")
         self.assertEqual(models_called[1], "chain-model-a")
         self.assertTrue(result["title"].startswith("ok-from-chain"))
-        self.assertGreaterEqual(len(result["title"]), 80)
+        self.assertGreaterEqual(len(result["title"]), 75)
+        self.assertLessEqual(len(result["title"]), 85)
 
     def test_primary_chain_includes_explicit_fallback_first(self):
         """Primary product-data path should fall back to the explicit fallback model first.
@@ -253,7 +256,8 @@ class ProductDataFallbackChainTest(unittest.TestCase):
         self.assertEqual(models_called[0], "primary-product-data")
         self.assertEqual(models_called[1], "explicit-fallback-model")
         self.assertTrue(result["title"].startswith("ok-from-explicit-fb"))
-        self.assertGreaterEqual(len(result["title"]), 80)
+        self.assertGreaterEqual(len(result["title"]), 75)
+        self.assertLessEqual(len(result["title"]), 85)
 
 
 if __name__ == "__main__":

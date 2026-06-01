@@ -135,8 +135,7 @@ Generate the following fields:
 
 Title rules:
 
-* The title should be around 80 Japanese characters when possible.
-* The title must not exceed 90 Japanese characters.
+* The title MUST be at least 75 characters and MUST NOT exceed 85 characters.
 * The final marketplace title may later be combined with condition and store item number by the frontend, so leave enough character space.
 * Start with brand, product name or product type, model number if clearly visible, and color.
 * The title should mainly contain objective searchable attributes.
@@ -147,8 +146,8 @@ Title rules:
     * pattern
     * style
     * visible model number or identifiable series name
-    * concise product-identifying keywords
-* If the title is too short, add only concise objective keywords.
+    * generated SEO search keywords from search_keywords
+* If the title is too short, use the generated SEO search keywords for this product to fill the title naturally.
 * Do NOT include condition, weight, size, target user, material, included items, store item number, or generic selling-point wording in the title.
 * Do NOT include sentence-style promotional phrases in the title.
 * Do NOT use expressions such as:
@@ -186,13 +185,15 @@ Description style rules:
 The description object must contain:
 
 * product_details: object with only brand, product_name, model_number, color. Keep exactly these four fields and use "" when unknown.
-* product_intro: objective product introduction based on visible brand, model, type, shape, color, pattern, design, and visible features.
-* recommendation: short objective recommendation points based only on visible facts.
+* product_intro: objective product introduction based on visible brand, model, type, shape, color, pattern, design, and visible features. The tone must be balanced and objective, and should not feel overly promotional.
+* recommendation: short objective recommendation points based only on visible facts. The tone must be balanced and objective, and should not feel overly promotional.
 * search_keywords: array of relevant objective search keywords.
 
 product_intro rules:
 
 * Keep it factual and conservative.
+* Make it a full product description with enough concrete detail, not just a short sentence.
+* The tone must be balanced and objective, and should not feel overly promotional.
 * Describe the visible product type, color, pattern, shape, and design.
 * Do not use exaggerated expressions.
 * Do not use phrases such as:
@@ -213,6 +214,7 @@ LOEWEのアナグラム柄キャンバスを使用したトートバッグです
 recommendation rules:
 
 * Keep it short, objective, and restrained.
+* Keep it balanced and objective, and avoid overly promotional wording.
 * Use only facts visible in the images.
 * Do not use exaggerated promotional wording.
 
@@ -295,11 +297,11 @@ Priority order:
 3. Product images are the source of visual evidence. Use them to verify brand, model, color, size, condition, packaging, labels, included items, and visible features.
 
 Generate:
-1. A clear, buyer-friendly title suitable for a Japanese marketplace listing. It MUST be at least 80 characters. Start with brand, product name, model number, and color. If more length is needed, you may use concise product-identifying keywords or key content from product_intro/recommendation. Do NOT include condition, weight, size, target user, material, included items, or generic selling-point wording in the title.
+1. A clear, buyer-friendly title suitable for a Japanese marketplace listing. The title MUST be at least 75 characters and MUST NOT exceed 85 characters. Start with brand, product name, model number, and color. If more length is needed, use the generated SEO search keywords for this product to fill the title naturally. Do NOT include condition, weight, size, target user, material, included items, or generic selling-point wording in the title.
 2. A structured description object in JSON format with ENGLISH field names only:
    - product_details: object with only brand, product_name, model_number, color. Keep exactly these four fields and use "" when unknown.
-   - product_intro: professional product introduction based on user information, original data, and image evidence.
-   - recommendation: short persuasive selling points.
+   - product_intro: professional product introduction based on user information, original data, and image evidence. The tone must be balanced and objective, and should not feel overly promotional.
+   - recommendation: short buyer-relevant selling points. The tone must be balanced and objective, and should not feel overly promotional.
    - search_keywords: array of relevant search keywords, including useful user-provided terms.
 3. brand_name: visible or user-confirmed brand name exactly as printed/provided, or "" if unclear.
 4. brand_candidates: an array of 1-3 brand names for THIS product, ordered from most specific to most general, used to look the brand up in a brand database:
@@ -315,7 +317,9 @@ IMPORTANT:
 - If user supplemental information is present, it must be reflected unless it is impossible to reconcile with the product.
 - If original product data is present but user supplemental information is empty, optimize and enrich the original data using the images.
 - If original product data is absent, deeply analyze the images and generate the most reasonable product data from scratch.
-- The title must be at least 80 characters. It may use concise product-identifying keywords or key content from product_intro/recommendation when needed, but must not include condition, weight, size, target user, material, included items, or generic selling-point wording.
+- The title MUST be at least 75 characters and MUST NOT exceed 85 characters. If the title is too short, use the generated SEO search keywords for this product to fill the title naturally. It must not include condition, weight, size, target user, material, included items, or generic selling-point wording.
+- The product_intro must be a full product description, not just a short sentence.
+- The product_intro and recommendation must be balanced and objective, and should not feel overly promotional.
 
 You must respond with pure JSON only, without explanations, markdown, or comments.
 
@@ -373,8 +377,7 @@ Generate the following fields:
 
 Title rules:
 
-* The title should be around 80 Japanese characters when possible.
-* The title must not exceed 90 Japanese characters.
+* The title MUST be at least 75 characters and MUST NOT exceed 85 characters.
 * The final marketplace title may later be combined with condition and store item number by the frontend, so leave enough character space.
 * Start with brand, product name or product type, model number if clearly visible, and color.
 * The title should mainly contain objective searchable attributes.
@@ -385,8 +388,8 @@ Title rules:
     * pattern
     * style
     * visible model number or identifiable series name
-    * concise product-identifying keywords
-* If the title is too short, add only concise objective keywords.
+    * generated SEO search keywords from search_keywords
+* If the title is too short, use the generated SEO search keywords for this product to fill the title naturally.
 * Do NOT include condition, weight, size, target user, material, included items, store item number, or generic selling-point wording in the title.
 * Do NOT include sentence-style promotional phrases in the title.
 * Do NOT use expressions such as:
@@ -424,13 +427,15 @@ Description style rules:
 The description object must contain:
 
 * product_details: object with only brand, product_name, model_number, color. Keep exactly these four fields and use "" when unknown.
-* product_intro: objective product introduction based on visible brand, model, type, shape, color, pattern, design, and visible features.
-* recommendation: short objective recommendation points based only on visible facts.
+* product_intro: objective product introduction based on visible brand, model, type, shape, color, pattern, design, and visible features. The tone must be balanced and objective, and should not feel overly promotional.
+* recommendation: short objective recommendation points based only on visible facts. The tone must be balanced and objective, and should not feel overly promotional.
 * search_keywords: array of relevant objective search keywords.
 
 product_intro rules:
 
 * Keep it factual and conservative.
+* Make it a full product description with enough concrete detail, not just a short sentence.
+* The tone must be balanced and objective, and should not feel overly promotional.
 * Describe the visible product type, color, pattern, shape, and design.
 * Do not use exaggerated expressions.
 * Do not use phrases such as:
@@ -451,6 +456,7 @@ LOEWEのアナグラム柄キャンバスを使用したトートバッグです
 recommendation rules:
 
 * Keep it short, objective, and restrained.
+* Keep it balanced and objective, and avoid overly promotional wording.
 * Use only facts visible in the images.
 * Do not use exaggerated promotional wording.
 
