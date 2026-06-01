@@ -31,6 +31,7 @@ from app.observability.auth import require_logs_auth
 from app.observability.recorder import Recorder
 from app.observability.retention import prune as obs_prune
 from app.observability.store import Store as ObsStore
+from app.llm import prompt_store
 from app.runtime_config import get_public_config, update_runtime_config
 from app import service as _svc_module
 from app.service import MercariAnalyzer
@@ -581,15 +582,19 @@ def read_config() -> Dict[str, Any]:
     return get_public_config(settings)
 
 
-@app.put("/api/v1/config",
-         dependencies=[Depends(require_logs_auth(settings.logs_password))])
-def save_config(payload: Dict[str, Any], request: Request) -> Dict[str, Any]:
+def _reject_cross_origin(request: Request) -> None:
     origin = request.headers.get("origin")
     if origin:
         origin_host = urlparse(origin).netloc
         request_host = request.headers.get("host", "")
         if origin_host != request_host:
-            raise HTTPException(status_code=403, detail="Cross-origin config updates are not allowed.")
+            raise HTTPException(status_code=403, detail="Cross-origin updates are not allowed.")
+
+
+@app.put("/api/v1/config",
+         dependencies=[Depends(require_logs_auth(settings.logs_password))])
+def save_config(payload: Dict[str, Any], request: Request) -> Dict[str, Any]:
+    _reject_cross_origin(request)
     try:
         return update_runtime_config(
             settings,
@@ -597,6 +602,31 @@ def save_config(payload: Dict[str, Any], request: Request) -> Dict[str, Any]:
             env_path=CONFIG_ENV_PATH,
             on_applied=_sync_runtime_clients,
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/v1/prompts")
+def read_prompts() -> Dict[str, Any]:
+    return {"prompts": prompt_store.list_prompts()}
+
+
+@app.put("/api/v1/prompts",
+         dependencies=[Depends(require_logs_auth(settings.logs_password))])
+def save_prompts(payload: Dict[str, Any], request: Request) -> Dict[str, Any]:
+    _reject_cross_origin(request)
+    try:
+        return {"prompts": prompt_store.update(payload)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/prompts/reset",
+          dependencies=[Depends(require_logs_auth(settings.logs_password))])
+def reset_prompts(payload: Dict[str, Any], request: Request) -> Dict[str, Any]:
+    _reject_cross_origin(request)
+    try:
+        return {"prompts": prompt_store.reset(payload.get("keys"))}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
