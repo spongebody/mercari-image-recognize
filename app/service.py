@@ -4,7 +4,7 @@ import re
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from .config import Settings
 from .constants import DEFAULT_LANGUAGE, PRICE_MAX, PRICE_MIN, SUPPORTED_LANGUAGES, TOP_LEVEL_CATEGORIES
@@ -21,7 +21,6 @@ from .utils import (
     fetch_image_from_url,
     image_bytes_to_data_url,
     normalize_category_label,
-    normalize_price_list,
     normalize_text,
 )
 
@@ -146,14 +145,101 @@ def _normalize_direct_price(value: Any) -> Optional[int]:
     return None
 
 
+def _extract_price_numbers(value: Any) -> List[int]:
+    if value is None or isinstance(value, bool):
+        return []
+    if isinstance(value, (int, float)):
+        price = _normalize_direct_price(value)
+        return [price] if price is not None else []
+    if isinstance(value, str):
+        prices: List[int] = []
+        for match in re.finditer(r"\d[\d,，]*", value):
+            digits = re.sub(r"[^\d]", "", match.group(0))
+            if not digits:
+                continue
+            price = _normalize_direct_price(int(digits))
+            if price is not None:
+                prices.append(price)
+        return prices
+    if isinstance(value, (list, tuple)):
+        prices: List[int] = []
+        for item in value:
+            prices.extend(_extract_price_numbers(item))
+        return prices
+    if isinstance(value, dict):
+        prices: List[int] = []
+        for key in (
+            "prices",
+            "range",
+            "values",
+            "list",
+            "options",
+            "candidates",
+            "suggestions",
+        ):
+            prices.extend(_extract_price_numbers(value.get(key)))
+        for key in (
+            "low",
+            "lower",
+            "lowest",
+            "min",
+            "minimum",
+            "price_min",
+            "reference_min",
+            "reference_price_min",
+            "high",
+            "higher",
+            "highest",
+            "max",
+            "maximum",
+            "price_max",
+            "reference_max",
+            "reference_price_max",
+            "best",
+            "primary",
+            "main",
+            "price",
+            "value",
+            "estimate",
+        ):
+            prices.extend(_extract_price_numbers(value.get(key)))
+        return prices
+    return []
+
+
+def _normalize_reference_price_range(raw_prices: Any, covering_prices: Iterable[int]) -> List[int]:
+    ordered_unique: List[int] = []
+    seen = set()
+    for price in _extract_price_numbers(raw_prices):
+        if price in seen:
+            continue
+        seen.add(price)
+        ordered_unique.append(price)
+    if not ordered_unique:
+        return []
+
+    low = min(ordered_unique)
+    high = max(ordered_unique)
+    for price in covering_prices:
+        if PRICE_MIN <= price <= PRICE_MAX:
+            low = min(low, price)
+            high = max(high, price)
+    return [low, high]
+
+
 def _normalize_price_fields(ai_raw: Dict[str, Any]) -> Dict[str, Any]:
     tax_excluded = _normalize_direct_price(ai_raw.get("tax_excluded"))
     tax_included = _normalize_direct_price(ai_raw.get("tax_included"))
     if tax_excluded is not None and tax_included is None:
         tax_included = tax_excluded
         tax_excluded = None
-    has_direct_price = tax_excluded is not None or tax_included is not None
-    prices = [] if has_direct_price else normalize_price_list(ai_raw.get("prices", []))
+    visible_prices = [
+        price for price in (tax_excluded, tax_included) if price is not None
+    ]
+    prices = _normalize_reference_price_range(
+        ai_raw.get("prices", []),
+        covering_prices=visible_prices,
+    )
     return {
         "tax_excluded": tax_excluded,
         "tax_included": tax_included,
@@ -789,7 +875,7 @@ class MercariAnalyzer:
 
         Returns only price fields (no title/brand/category/description), so the
         app can show a price quickly without waiting on the full analyze flow.
-        Only real, visible prices are returned — no inferred reference prices.
+        Direct prices are visible-only; prices is an AI reference range.
         """
         if not images:
             raise BadRequestError("Image list is required.")
@@ -802,8 +888,6 @@ class MercariAnalyzer:
             data_urls,
             model_override=model_override,
         )
-        # The price-only prompt never returns a `prices` list, so this yields
-        # visible tax_excluded/tax_included with an empty `prices`.
         result: Dict[str, Any] = {
             **_normalize_price_fields(ai_raw),
             "timings": {
@@ -1143,7 +1227,8 @@ class MercariAnalyzer:
                     "type": "text",
                     "text": (
                         f"Image {index} of {image_count}: inspect this image for any "
-                        "clearly visible actual product price."
+                        "clearly visible actual product price and product evidence for "
+                        "a realistic AI reference price range."
                     ),
                 }
             )

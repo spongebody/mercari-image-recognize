@@ -39,7 +39,7 @@
 
 ### 价格字段
 - 图片识别主接口会始终返回 `tax_excluded`、`tax_included`、`prices`。首个 `product_pending` 响应会由快速分类链路基于所有上传图片抽取清晰可见的实际价格；看不到明确实际价格时，`tax_excluded` / `tax_included` 为 `null`，`prices` 为 `[]`。后台商品数据完成后，直接价格以商品数据链路为准；如果商品数据没有直接价格但首响应已有直接价格，则保留首响应价格；参考价格 `prices` 仍只由商品数据链路推断。
-- 独立价格接口 `POST /api/v1/mercari/image/price` 只识别图片中清晰可见的实际商品价格，不生成标题、品牌、分类、描述，也不推断参考价格。
+- 独立价格接口 `POST /api/v1/mercari/image/price` 识别图片中清晰可见的实际商品价格，并返回 AI 参考价格区间；不生成标题、品牌、分类、描述。
 
 ## 接口列表
 
@@ -201,7 +201,7 @@ files.forEach((file) => {
 - `image_processing` 字段返回每张上传图片的压缩处理结果（是否压缩、原始/处理后字节数等）。
 
 ### POST /api/v1/mercari/image/price
-快速识别图片中清晰可见的实际商品价格。该接口独立于 `/api/v1/mercari/image/analyze`，只返回价格相关字段，不返回标题、品牌、分类、描述，也不推断参考价格。
+快速识别图片中清晰可见的实际商品价格，并给出 AI 参考价格区间。该接口独立于 `/api/v1/mercari/image/analyze`，只返回价格相关字段，不返回标题、品牌、分类、描述。
 
 #### 请求（multipart/form-data）
 字段：
@@ -225,7 +225,7 @@ curl -X POST "http://localhost:8000/api/v1/mercari/image/price" \
 {
   "tax_excluded": null,
   "tax_included": 1078,
-  "prices": []
+  "prices": [900, 1300]
 }
 ```
 
@@ -235,7 +235,7 @@ curl -X POST "http://localhost:8000/api/v1/mercari/image/price" \
 {
   "tax_excluded": null,
   "tax_included": 1078,
-  "prices": [],
+  "prices": [900, 1300],
   "timings": {
     "price_ms": 420.12
   },
@@ -251,7 +251,8 @@ curl -X POST "http://localhost:8000/api/v1/mercari/image/price" \
   "_debug": {
     "price_ai_raw": {
       "tax_excluded": null,
-      "tax_included": "税込 1,078円"
+      "tax_included": "税込 1,078円",
+      "prices": [900, 1300]
     },
     "attempts": {
       "price_only": []
@@ -265,7 +266,8 @@ curl -X POST "http://localhost:8000/api/v1/mercari/image/price" \
 - `tax_included`：图片中明确可见的含税价格，整数日元；没有则为 `null`。
 - 如果图片中只识别到一个明确可见的实际商品价格，默认写入 `tax_included`，`tax_excluded` 为 `null`。
 - 如果没有明确可见的实际商品价格，`tax_excluded` 和 `tax_included` 均为 `null`。
-- `prices` 当前固定为 `[]`；该接口不猜测、不估算、不返回参考价格。
+- `prices`：AI 参考价格区间，形如 `[low, high]`，两个整数均为日元且升序排列，应用可展示为 `low-high`。模型会根据商品品牌、型号、系列、容量/尺寸、颜色、配件、包装、可见成色和新品/中古等线索估算；如果图片信息不足以负责任地估算，则返回 `[]`。
+- 如果图片中有可见实际价格，`prices` 必须覆盖该价格；服务端也会二次校正区间边界，确保 `low <= 可见价格 <= high`。
 - `timings` 和 `image_processing` 仅在 `debug=true` 且服务端允许调试时返回。
 
 #### 错误

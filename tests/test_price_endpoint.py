@@ -82,6 +82,28 @@ class ExtractPricesTest(unittest.TestCase):
         self.assertIsNone(result["tax_excluded"])
         self.assertEqual(result["tax_included"], 980)
 
+    def test_returns_ai_reference_price_range_when_no_visible_price(self):
+        analyzer, _ = _analyzer(
+            {"tax_excluded": None, "tax_included": None, "prices": [1200, 2400]}
+        )
+
+        result = analyzer.extract_prices(images=[(b"front", "image/png")])
+
+        self.assertIsNone(result["tax_excluded"])
+        self.assertIsNone(result["tax_included"])
+        self.assertEqual(result["prices"], [1200, 2400])
+
+    def test_reference_price_range_covers_visible_price_without_changing_it(self):
+        analyzer, _ = _analyzer(
+            {"tax_excluded": None, "tax_included": "税込 10,780円", "prices": [1200, 2400]}
+        )
+
+        result = analyzer.extract_prices(images=[(b"front", "image/png")])
+
+        self.assertIsNone(result["tax_excluded"])
+        self.assertEqual(result["tax_included"], 10780)
+        self.assertEqual(result["prices"], [1200, 10780])
+
     def test_returns_null_when_no_visible_price(self):
         analyzer, _ = _analyzer({"tax_excluded": None, "tax_included": None})
         result = analyzer.extract_prices(images=[(b"front", "image/png")])
@@ -98,7 +120,7 @@ class PriceEndpointTest(unittest.TestCase):
         analyzer.extract_prices.return_value = {
             "tax_excluded": None,
             "tax_included": 1078,
-            "prices": [],
+            "prices": [900, 1300],
             "timings": {"price_ms": 42.0},
         }
 
@@ -114,7 +136,7 @@ class PriceEndpointTest(unittest.TestCase):
         body = resp.json()
         self.assertIsNone(body["tax_excluded"])
         self.assertEqual(body["tax_included"], 1078)
-        self.assertEqual(body["prices"], [])
+        self.assertEqual(body["prices"], [900, 1300])
         self.assertNotIn("timings", body)
         self.assertNotIn("image_processing", body)
         analyzer.extract_prices.assert_called_once()

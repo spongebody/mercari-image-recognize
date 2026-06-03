@@ -623,6 +623,17 @@
         font-weight: 600;
       }
 
+      .field-value.price-range-value {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: 0;
+        background: #f8fafc;
+        border-color: #cbd5e1;
+      }
+
       .field-value.multiline {
         white-space: pre-wrap;
       }
@@ -1411,6 +1422,7 @@
           fieldPriceSingle: "💰 建议价格",
           fieldImagePrice: "💰 图片标价",
           fieldImageTaxIncludedPrice: "💰 图片税后价",
+          fieldReferencePriceRange: "💰 AI参考价格区间",
           fieldPriceList: "💰 价格预测",
           priceCandidateLabel: "候选",
           priceNone: "暂无价格",
@@ -1581,6 +1593,7 @@
           fieldPriceSingle: "💰 推奨価格",
           fieldImagePrice: "💰 画像内価格",
           fieldImageTaxIncludedPrice: "💰 画像内税込価格",
+          fieldReferencePriceRange: "💰 AI参考価格帯",
           fieldPriceList: "💰 価格予測",
           priceCandidateLabel: "候補",
           priceNone: "価格なし",
@@ -2210,24 +2223,34 @@
           `;
         }
 
-        // 价格列表（最可能的3个价格，已按可能性排序）
+        // AI参考价格区间或候选价格
         if (Array.isArray(data.prices) && data.prices.length) {
-          const priceTags = data.prices
-            .map((p, idx) => {
-              if (p === null || p === undefined) return null;
-              return `<span class="tag ${idx === 0 ? 'primary' : ''}">${t("priceCandidateLabel")}${idx + 1}: ¥${escapeHtml(String(p))}</span>`;
-            })
-            .filter(Boolean)
-            .join("");
-
-          html += `
-            <div class="field-group">
-              <div class="field-label">${t("fieldPriceList")}</div>
-              <div class="tags-container">
-                ${priceTags || `<span class="tag">${t("priceNone")}</span>`}
+          if (isReferencePriceRange(data.prices)) {
+            html += `
+              <div class="field-group">
+                <div class="field-label">${t("fieldReferencePriceRange")}</div>
+                <div class="field-value price-range-value">${escapeHtml(formatReferencePriceRange(data.prices))}</div>
               </div>
-            </div>
-          `;
+            `;
+          } else {
+            const priceTags = data.prices
+              .map((p, idx) => {
+                if (p === null || p === undefined) return null;
+                const priceLabel = formatYen(p) || `¥${String(p)}`;
+                return `<span class="tag ${idx === 0 ? 'primary' : ''}">${t("priceCandidateLabel")}${idx + 1}: ${escapeHtml(priceLabel)}</span>`;
+              })
+              .filter(Boolean)
+              .join("");
+
+            html += `
+              <div class="field-group">
+                <div class="field-label">${t("fieldPriceList")}</div>
+                <div class="tags-container">
+                  ${priceTags || `<span class="tag">${t("priceNone")}</span>`}
+                </div>
+              </div>
+            `;
+          }
         }
 
         // 商品状态
@@ -2356,6 +2379,30 @@
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+      }
+
+      function normalizePriceNumber(value) {
+        if (value === null || value === undefined || value === "") return null;
+        const raw = typeof value === "number" ? String(value) : String(value).replace(/[^\d.-]/g, "");
+        const parsed = Number(raw);
+        return Number.isFinite(parsed) ? Math.round(parsed) : null;
+      }
+
+      function formatYen(value) {
+        const price = normalizePriceNumber(value);
+        if (price === null) return "";
+        return `¥${price.toLocaleString("ja-JP")}`;
+      }
+
+      function isReferencePriceRange(prices) {
+        return Array.isArray(prices)
+          && prices.length === 2
+          && prices.every((value) => normalizePriceNumber(value) !== null);
+      }
+
+      function formatReferencePriceRange(prices) {
+        const values = prices.map(normalizePriceNumber).sort((a, b) => a - b);
+        return `${formatYen(values[0])} - ${formatYen(values[1])}`;
       }
 
       function setActiveTab(tab) {

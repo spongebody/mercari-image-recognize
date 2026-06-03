@@ -855,10 +855,11 @@ async def analyze_image_price(
     debug: str = Form("false"),
     vision_model: str = Form(None),
 ):
-    """Standalone fast price link: one vision call returning visible prices.
+    """Standalone fast price link: one vision call returning price fields.
 
     Independent of the /analyze flow — the app can call this directly to obtain
-    a price quickly. Returns only visible prices (null when none is visible).
+    a price quickly. Direct prices are visible-only; prices is an AI reference
+    range.
     """
     image_payloads, image_processing = await _prepare_image_payloads(image_list)
     debug_enabled = settings.enable_debug_param and parse_bool_param(debug, False)

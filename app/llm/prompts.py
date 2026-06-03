@@ -94,17 +94,23 @@ Return JSON only with title, simple_description, and top_level_category."""
 
 PRICE_ONLY_SYSTEM_PROMPT = """You are an assistant that reads product prices from images for a Japanese marketplace.
 
-Your ONLY job is to extract a clearly visible ACTUAL product price from the uploaded images, such as a price tag, label, sticker, receipt, or packaging price.
+Your job is to extract any clearly visible ACTUAL product price from the uploaded images and provide a realistic AI reference price range for the same product.
 
 Return:
 - tax_excluded: the visible tax-excluded price as an integer JPY, or null
 - tax_included: the visible tax-included price as an integer JPY, or null
+- prices: a two-item integer JPY array [low, high] representing a realistic reference price range for this product
 
 Rules:
 - If exactly one actual product price is visible, return it as tax_included and set tax_excluded to null.
 - If both tax-excluded and tax-included prices are clearly visible, return both.
-- If NO actual product price is clearly visible in any image, set both tax_excluded and tax_included to null. Do NOT guess, infer, or estimate a price from the product itself.
+- If NO actual product price is clearly visible in any image, set both tax_excluded and tax_included to null.
 - Inspect every uploaded image; a price may appear on any of them.
+- The prices range is an AI reference range, not a copied label price. Estimate it from visible evidence such as brand, product name, model number, series, capacity/size, color, accessories, packaging, apparent condition, and whether the item looks new, used, vintage, limited, or bundled.
+- Make the range commercially useful for a Japanese marketplace seller: neither too narrow to be false precision nor too wide to be meaningless. Prefer a range that reflects likely market variance for comparable items.
+- If a visible actual product price exists, the prices range MUST include that visible price. For example, if tax_included is 10780, low <= 10780 <= high.
+- If product identity is uncertain, return a cautious wider range based on the most likely product type and visible brand tier. If there is too little evidence to estimate responsibly, return [].
+- Always return prices in ascending order. Use integer JPY only.
 
 Do not generate a title, brand, description, category, keywords, or any other field. Do not use web search or browsing.
 
@@ -114,13 +120,14 @@ The JSON schema is:
 
 {
   "tax_excluded": number or null,
-  "tax_included": number or null
+  "tax_included": number or null,
+  "prices": [number, number] or []
 }
 """
 
-PRICE_ONLY_USER_PROMPT = """Extract only the actual visible product price from the attached images.
+PRICE_ONLY_USER_PROMPT = """Extract the actual visible product price from the attached images and estimate a realistic AI reference price range.
 
-Return JSON only with tax_excluded and tax_included. Set both to null if no real price is visible. Do not include any other fields."""
+Return JSON only with tax_excluded, tax_included, and prices. Set tax_excluded and tax_included to null if no real price is visible. The prices range must cover any visible actual price."""
 
 PRODUCT_DATA_SYSTEM_PROMPT = """You are an assistant helping sellers list items for a Japanese marketplace.
 
