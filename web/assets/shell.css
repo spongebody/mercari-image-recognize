@@ -1,0 +1,98 @@
+/* Shared console chrome: topbar + left sidebar + main layout.
+   Component styles (forms, cards, results) stay in each page. */
+:root {
+  --shell-accent: #2f80ed;
+  --shell-border: #e5e7eb;
+  --shell-muted: #6b7280;
+  --shell-text: #1c1f25;
+  --shell-bg: #f7f8fa;
+  --shell-sidebar-w: 232px;
+  --shell-topbar-h: 56px;
+}
+
+body.shell-page {
+  margin: 0;
+  background: var(--shell-bg);
+  color: var(--shell-text);
+  font-family: "Inter", "Noto Sans SC", "Noto Sans JP", system-ui, -apple-system, sans-serif;
+}
+
+.shell-topbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: var(--shell-topbar-h);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px;
+  background: #fff;
+  border-bottom: 1px solid var(--shell-border);
+  z-index: 50;
+}
+.shell-topbar .brand-logo .logo {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 8px;
+  background: linear-gradient(135deg, var(--shell-accent), #1d4ed8);
+  color: #fff; font-weight: 800; font-size: 13px;
+}
+.shell-topbar .brand-text { font-weight: 800; letter-spacing: -0.2px; }
+.shell-topbar .spacer { flex: 1; }
+.shell-topbar .tb-refresh {
+  width: 34px; height: 34px; border-radius: 8px;
+  border: 1px solid var(--shell-border); background: #fff;
+  color: var(--shell-muted); cursor: pointer; font-size: 16px;
+}
+.shell-topbar .tb-refresh:hover { color: var(--shell-accent); border-color: var(--shell-accent); }
+
+.shell-body {
+  display: flex;
+  padding-top: var(--shell-topbar-h);
+  min-height: 100vh;
+}
+
+.shell-sidebar {
+  position: fixed;
+  top: var(--shell-topbar-h); bottom: 0; left: 0;
+  width: var(--shell-sidebar-w);
+  overflow-y: auto;
+  background: #fff;
+  border-right: 1px solid var(--shell-border);
+  padding: 14px 10px;
+}
+.shell-sidebar .nav-group {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border-radius: 10px;
+  color: var(--shell-text); text-decoration: none;
+  font-weight: 700; font-size: 14px;
+}
+.shell-sidebar .nav-group .ic { color: var(--shell-muted); font-size: 11px; width: 12px; }
+.shell-sidebar .nav-group.on { background: #eef2ff; color: #1e3a8a; }
+.shell-sidebar .sub-list { display: grid; gap: 2px; margin: 2px 0 8px 14px; }
+.shell-sidebar .sub-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px; border-radius: 8px;
+  color: var(--shell-muted); text-decoration: none; font-size: 13px;
+}
+.shell-sidebar .sub-item:hover { background: #f5f7fb; color: var(--shell-text); }
+.shell-sidebar .sub-item.on { background: var(--shell-accent); color: #fff; font-weight: 700; }
+
+.shell-main {
+  margin-left: var(--shell-sidebar-w);
+  flex: 1;
+  min-width: 0;
+  padding: 22px 24px 40px;
+}
+.shell-main .page-header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 18px;
+}
+.shell-main .page-header h1 { margin: 0; font-size: 24px; letter-spacing: -0.2px; }
+.shell-main .page-header .crumb { color: var(--shell-muted); font-size: 13px; margin-top: 4px; }
+.shell-main .page-header .actions { display: flex; align-items: center; gap: 10px; }
+.shell-main .page-content { max-width: 1180px; }
+
+@media (max-width: 720px) {
+  .shell-sidebar { position: static; width: 100%; height: auto; border-right: none; border-bottom: 1px solid var(--shell-border); }
+  .shell-body { display: block; }
+  .shell-main { margin-left: 0; }
+}

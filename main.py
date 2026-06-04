@@ -12,6 +12,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Upload
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.datastructures import UploadFile as _Upload
 from starlette.requests import Request as _SReq
@@ -539,9 +540,13 @@ def _parse_original_product_data(raw: Optional[str]) -> Optional[Dict[str, Any]]
 
 
 WEB_DIR = BASE_DIR / "web"
+ASSETS_DIR = WEB_DIR / "assets"
+ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/", response_class=HTMLResponse,
+         dependencies=[Depends(require_logs_auth(settings.logs_password))])
 def index_page():
     """Serve the test UI from the same origin as the API.
 

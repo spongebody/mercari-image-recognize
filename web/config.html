@@ -376,24 +376,14 @@
         font-size: 13px;
       }
     </style>
+    <link rel="stylesheet" href="/assets/shell.css" />
   </head>
   <body>
     <div class="page">
-      <header>
-        <div>
-          <h1>API 配置</h1>
-          <p class="status">
-            <span class="dot" id="status-dot"></span>
-            <span id="status-text">正在读取配置...</span>
-          </p>
-        </div>
-        <span class="pill">同服务配置页</span>
-      </header>
-
-      <nav class="tabs">
-        <button type="button" class="tab-btn active" data-tab="api">API 配置</button>
-        <button type="button" class="tab-btn" data-tab="prompts">提示词配置</button>
-      </nav>
+      <div id="config-status-host" hidden>
+        <span class="dot" id="status-dot"></span>
+        <span id="status-text">正在读取配置...</span>
+      </div>
 
       <div class="tab-panel" id="tab-api">
       <main class="card grid">
@@ -546,6 +536,7 @@
       </div>
     </div>
 
+    <script src="/assets/shell.js"></script>
     <script>
       const fields = [
         "VISION_MODEL",
@@ -588,6 +579,10 @@
       function setStatus(text, live) {
         statusText.textContent = text;
         statusDot.classList.toggle("live", Boolean(live));
+        if (window.Shell && Shell.setHeader) {
+          const active = document.getElementById("tab-prompts").hidden ? "API 配置" : "提示词配置";
+          Shell.setHeader({ title: active, crumb: text });
+        }
       }
 
       function setFormValues(config) {
@@ -666,20 +661,28 @@
         loadConfig().catch((err) => showMessage(String(err.message || err), "error"));
       });
 
-      // ---------- Tabs ----------
-      const tabButtons = document.querySelectorAll(".tab-btn");
+      // ---------- Shell + sidebar routing ----------
       const tabPanels = {
         api: document.getElementById("tab-api"),
         prompts: document.getElementById("tab-prompts"),
       };
-      tabButtons.forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const tab = btn.getAttribute("data-tab");
-          tabButtons.forEach((b) => b.classList.toggle("active", b === btn));
-          Object.entries(tabPanels).forEach(([key, el]) => {
-            el.hidden = key !== tab;
-          });
+      function showPanel(route) {
+        const key = tabPanels[route] ? route : "api";
+        Object.entries(tabPanels).forEach(([k, el]) => { el.hidden = k !== key; });
+        Shell.setHeader({
+          title: key === "prompts" ? "提示词配置" : "API 配置",
+          crumb: statusText ? statusText.textContent : "",
         });
+      }
+      Shell.mount({
+        page: "config",
+        defaultRoute: "api",
+        brand: { logo: "M", text: "Mercari 识别" },
+        sidebar: () => [
+          { id: "api", label: "API 配置" },
+          { id: "prompts", label: "提示词配置" },
+        ],
+        onRouteChange: showPanel,
       });
 
       // ---------- Prompts ----------

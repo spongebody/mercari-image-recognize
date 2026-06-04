@@ -1061,12 +1061,12 @@
         }
       }
     </style>
+    <link rel="stylesheet" href="/assets/shell.css" />
   </head>
   <body>
     <div class="page">
       <header>
         <div>
-          <h1 id="page-title">Mercari 商品图片识别测试</h1>
           <p class="status">
             <span class="dot" id="status-dot"></span>
             <span id="status-text">待命</span>
@@ -1086,11 +1086,6 @@
       <div class="main-layout">
         <!-- 左侧主要内容 -->
         <div class="grid">
-          <div class="tab-bar">
-            <button class="tab-btn active" id="tab-image">图片识别</button>
-            <button class="tab-btn" id="tab-title">标题分类</button>
-            <button class="tab-btn" id="tab-showcase">图片合成</button>
-          </div>
 
           <div class="card grid" id="image-card">
             <!-- 批量文件上传 -->
@@ -1322,6 +1317,7 @@
       </div>
     </div>
 
+    <script src="/assets/shell.js"></script>
     <script>
       const translations = {
         zh: {
@@ -1705,7 +1701,6 @@
       let activeTab = "image";
 
       // DOM 元素
-      const pageTitleEl = document.getElementById("page-title");
       const betaPill = document.getElementById("beta-pill");
       const uiLanguageSelect = document.getElementById("ui-language");
       const imageInput = document.getElementById("image");
@@ -1818,7 +1813,6 @@
       function applyTranslations() {
         document.documentElement.lang = uiLanguage === "ja" ? "ja" : "zh";
         document.title = t("documentTitle");
-        pageTitleEl.textContent = t("pageTitle");
         betaPill.textContent = t("betaPill");
         uiLanguageSelect.value = uiLanguage;
         uiLanguageSelect.querySelector('option[value="zh"]').textContent = t("uiLangZh");
@@ -1856,8 +1850,6 @@
 
         apiTitle.textContent = t("apiTitle");
         apiInput.placeholder = t("apiPlaceholder");
-        tabImageBtn.textContent = t("tabImage");
-        tabTitleBtn.textContent = t("tabTitle");
 
         titleCardHeading.textContent = t("titleCardHeading");
         titleCardPill.textContent = t("titleCardPill");
@@ -1875,7 +1867,6 @@
         titleClearBtn.textContent = t("titleClearButton");
         titleResultHeading.textContent = t("titleResultHeading");
 
-        tabShowcaseBtn.textContent = t("tabShowcase");
         showcaseCardHeading.textContent = t("showcaseCardHeading");
         showcaseCardPill.textContent = t("showcaseCardPill");
         showcaseUploadLabel.textContent = t("showcaseUploadLabel");
@@ -1896,6 +1887,7 @@
 
         setStatus(statusState);
         setActiveTab(activeTab);
+        if (window.Shell && Shell.refreshSidebar) Shell.refreshSidebar();
         renderResults();
         renderShowcaseResult();
       }
@@ -2413,13 +2405,13 @@
         } else {
           activeTab = "image";
         }
-        tabImageBtn.classList.toggle("active", activeTab === "image");
-        tabTitleBtn.classList.toggle("active", activeTab === "title");
-        tabShowcaseBtn.classList.toggle("active", activeTab === "showcase");
         imageCard.classList.toggle("hidden", activeTab !== "image");
         imageResultsSection.classList.toggle("hidden", activeTab !== "image");
         titleCard.classList.toggle("hidden", activeTab !== "title");
         showcaseCard.classList.toggle("hidden", activeTab !== "showcase");
+        const titleKeys = { image: "tabImage", title: "tabTitle", showcase: "tabShowcase" };
+        if (window.Shell && Shell.setHeader) Shell.setHeader({ title: t(titleKeys[activeTab]) });
+        if (window.Shell && Shell.refreshSidebar) Shell.refreshSidebar();
       }
 
       function renderTitleResult(payload, success) {
@@ -3382,9 +3374,18 @@
         titleImageUrlInput.value = "";
         renderTitleResult(null, true);
       });
-      tabImageBtn.addEventListener("click", () => setActiveTab("image"));
-      tabTitleBtn.addEventListener("click", () => setActiveTab("title"));
-      tabShowcaseBtn.addEventListener("click", () => setActiveTab("showcase"));
+      // ---------- Shell + sidebar routing ----------
+      Shell.mount({
+        page: "test",
+        defaultRoute: "image",
+        brand: { logo: "M", text: "Mercari 识别" },
+        sidebar: () => [
+          { id: "image", label: t("tabImage") },
+          { id: "title", label: t("tabTitle") },
+          { id: "showcase", label: t("tabShowcase") },
+        ],
+        onRouteChange: (route) => setActiveTab(route),
+      });
 
       // 初始化
       applyTranslations();
