@@ -1121,6 +1121,44 @@ async def analyze_image_price(
     return JSONResponse(result)
 
 
+@app.post("/api/v1/mercari/image/size")
+async def analyze_image_size(
+    image_list: List[UploadFile] = File(...),
+    debug: str = Form("false"),
+    vision_model: str = Form(None),
+):
+    """Standalone fast size link: one vision call returning the product size.
+
+    Independent of the /analyze flow — the app can call this directly to obtain a
+    size on demand without slowing classification. Inspects every uploaded image
+    because the size usually appears on a tag, package or size chart rather than
+    the first image. The size is visible-only: product_size is null when no
+    explicit size text is found.
+    """
+    image_payloads, image_processing = await _prepare_image_payloads(image_list)
+    debug_enabled = settings.enable_debug_param and parse_bool_param(debug, False)
+
+    try:
+        result = await run_in_threadpool(
+            analyzer.extract_size,
+            images=image_payloads,
+            debug=debug_enabled,
+            model_override=vision_model,
+        )
+    except BadRequestError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except LLMAllAttemptsFailedError as exc:
+        raise HTTPException(status_code=502, detail=_format_attempts_error(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Internal server error.") from exc
+
+    if debug_enabled:
+        result["image_processing"] = image_processing
+    else:
+        result.pop("timings", None)
+    return JSONResponse(result)
+
+
 @app.post("/api/v1/mercari/product-data/regenerate")
 async def regenerate_product_data(
     image_list: List[UploadFile] = File(...),

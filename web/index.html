@@ -1138,6 +1138,9 @@
             <button id="price-btn" style="width: 100%; margin-top: 12px;">
               <span id="price-button-text">⚡ 快速识别价格</span>
             </button>
+            <button id="size-btn" style="width: 100%; margin-top: 12px;">
+              <span id="size-button-text">📏 识别尺寸</span>
+            </button>
 
             <!-- 进度显示 -->
             <div id="progress-section" style="display: none;">
@@ -1346,6 +1349,8 @@
           clearImages: "清空图片",
           priceButton: "⚡ 快速识别价格",
           pricingButton: "识别价格中...",
+          sizeButton: "📏 识别尺寸",
+          sizingButton: "识别尺寸中...",
           progressLabel: "处理进度",
           resultsTitle: "识别结果",
           statsTitle: "测试统计",
@@ -1518,6 +1523,8 @@
           clearImages: "画像をクリア",
           priceButton: "⚡ 価格だけ高速取得",
           pricingButton: "価格を取得中...",
+          sizeButton: "📏 サイズだけ高速取得",
+          sizingButton: "サイズを取得中...",
           progressLabel: "処理進捗",
           resultsTitle: "解析結果",
           statsTitle: "テスト統計",
@@ -1694,6 +1701,7 @@
       let testResults = [];
       let processing = false;
       let pricing = false;
+      let sizing = false;
       let resultRatings = {}; // 跟踪每个结果的评价状态 { resultId: 'accurate' | 'moderate' | 'inaccurate' | null }
       let titleProcessing = false;
       let showcaseProcessing = false;
@@ -1728,6 +1736,8 @@
       const buttonText = document.getElementById("button-text");
       const priceBtn = document.getElementById("price-btn");
       const priceButtonText = document.getElementById("price-button-text");
+      const sizeBtn = document.getElementById("size-btn");
+      const sizeButtonText = document.getElementById("size-button-text");
       const clearFilesBtn = document.getElementById("clear-files-btn");
       const progressSection = document.getElementById("progress-section");
       const progressLabel = document.getElementById("progress-label");
@@ -1838,6 +1848,7 @@
           ? `<span class="spinner"></span> ${t("processingButton")}`
           : t("startButton");
         if (priceButtonText && !pricing) priceButtonText.textContent = t("priceButton");
+        if (sizeButtonText && !sizing) sizeButtonText.textContent = t("sizeButton");
         clearFilesBtn.textContent = t("clearImages");
         progressLabel.textContent = t("progressLabel");
         resultsTitle.textContent = t("resultsTitle");
@@ -2751,6 +2762,58 @@
         setStatus("done");
       }
 
+      function buildSizeEndpoint() {
+        const base = (apiInput.value.trim() || "/api/v1/mercari/image/analyze").replace(/\/$/, "");
+        if (base.includes("/api/v1/mercari/image/analyze")) {
+          return base.replace("/api/v1/mercari/image/analyze", "/api/v1/mercari/image/size");
+        }
+        return "/api/v1/mercari/image/size";
+      }
+
+      async function processSizeOnly() {
+        if (sizing || pricing || processing) return;
+        if (selectedFiles.length === 0) {
+          alert(t("alertNoFiles"));
+          return;
+        }
+
+        const endpoint = buildSizeEndpoint();
+        sizing = true;
+        sizeBtn.disabled = true;
+        priceBtn.disabled = true;
+        submitBtn.disabled = true;
+        sizeButtonText.innerHTML = `<span class="spinner"></span> ${t("sizingButton")}`;
+        setStatus("processing");
+
+        const batchFileObj = buildBatchFileObj(selectedFiles);
+        try {
+          const formData = new FormData();
+          selectedFiles.forEach((fileObj) => {
+            formData.append("image_list", fileObj.file);
+          });
+          if (visionModelInput?.value.trim()) formData.append("vision_model", visionModelInput.value.trim());
+
+          const resp = await fetch(endpoint, { method: "POST", body: formData });
+          const text = await resp.text();
+          let payload = {};
+          try {
+            payload = JSON.parse(text);
+          } catch (err) {
+            payload = { error: t("jsonParseFailed"), raw: text };
+          }
+          addResultCard(batchFileObj, payload, resp.ok);
+        } catch (err) {
+          addResultCard(batchFileObj, { error: String(err?.message || err) }, false);
+        }
+
+        sizing = false;
+        sizeBtn.disabled = false;
+        priceBtn.disabled = false;
+        submitBtn.disabled = false;
+        sizeButtonText.textContent = t("sizeButton");
+        setStatus("done");
+      }
+
       async function submitTitleRequest() {
         const endpoint = titleApiInput.value.trim() || "/api/v1/mercari/title/analyze";
         const titleValue = titleInput.value.trim();
@@ -3380,6 +3443,7 @@
       // 提交处理
       submitBtn.addEventListener("click", processFiles);
       priceBtn.addEventListener("click", processPriceOnly);
+      sizeBtn.addEventListener("click", processSizeOnly);
       titleSubmitBtn.addEventListener("click", submitTitleRequest);
       titleClearBtn.addEventListener("click", () => {
         titleInput.value = "";

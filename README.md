@@ -105,7 +105,7 @@ API_PORT=8010 UI_PORT=8012 ./run.sh
    - 同时检查所有上传图片中是否有清晰可见的实际价格标签、贴纸、票据或包装价格
    - 使用 `FAST_CLASSIFICATION_SYSTEM_PROMPT` + `FAST_CLASSIFICATION_USER_PROMPT`
    - 通过 `VISION_MODEL` 或请求里的 `vision_model` 调 OpenRouter
-   - 得到 `title`、`simple_description`、`top_level_category`、`product_size`（仅当图片有明确可见尺寸信息时返回，否则为 `null`）、`tax_excluded`、`tax_included`
+   - 得到 `title`、`simple_description`、`top_level_category`、`tax_excluded`、`tax_included`
 5. `app/service.py` 将模型返回的顶级类目映射到 `TOP_LEVEL_CATEGORIES`，再用 `CategoryStore.get_categories_by_group` 从分类 CSV 取候选路径。
 6. 类目选择链路调用 OpenRouter：
    - prompt 来自 `CATEGORY_SYSTEM_PROMPT` + `CATEGORY_USER_PROMPT_TEMPLATE`

@@ -819,9 +819,6 @@ class MercariAnalyzer:
         title = _clean_string(ai_raw.get("title", ""))
         simple_description = _clean_string(ai_raw.get("simple_description", ""))
         top_level_category = _clean_string(ai_raw.get("top_level_category", ""))
-        # Size comes from the fast vision stage and is only trusted when the model
-        # found explicit size text in the image; otherwise it stays null.
-        product_size = _clean_string(ai_raw.get("product_size", "")) or None
         group_name = _map_top_level_category(top_level_category)
 
         categories: List[Dict[str, Any]] = []
@@ -840,9 +837,6 @@ class MercariAnalyzer:
         result: Dict[str, Any] = {
             "status": "product_pending",
             "categories": categories,
-            # Product size extracted from the first image by the fast vision stage;
-            # null when no explicit size information was visible.
-            "product_size": product_size,
             # Price now comes from the dedicated price link; these fields are kept
             # (null/empty) only so existing clients do not break.
             "tax_excluded": None,
@@ -904,6 +898,45 @@ class MercariAnalyzer:
             result["_debug"] = {
                 "price_ai_raw": ai_raw,
                 "attempts": {"price_only": [a.__dict__ for a in attempts]},
+            }
+        return result
+
+    def extract_size(
+        self,
+        images: List[Tuple[bytes, str]],
+        debug: bool = False,
+        model_override: Optional[str] = None,
+        started_at: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """Standalone fast size link: a single vision call reading visible size text.
+
+        Returns only the product size (no title/brand/category/price/description),
+        so the app can fetch a size on demand without slowing the analyze flow.
+        Inspects every image because the size usually appears on a tag, package or
+        size chart rather than the first image. The size is visible-only: if no
+        explicit size text is found, product_size is null.
+        """
+        if not images:
+            raise BadRequestError("Image list is required.")
+        started = float(started_at) if started_at is not None else time.monotonic()
+        data_urls = [
+            image_bytes_to_data_url(image_bytes, mime_type)
+            for image_bytes, mime_type in images
+        ]
+        ai_raw, attempts = self._call_size_only_llm(
+            data_urls,
+            model_override=model_override,
+        )
+        result: Dict[str, Any] = {
+            "product_size": _clean_string(ai_raw.get("product_size", "")) or None,
+            "timings": {
+                "size_ms": round((time.monotonic() - started) * 1000, 2),
+            },
+        }
+        if debug:
+            result["_debug"] = {
+                "size_ai_raw": ai_raw,
+                "attempts": {"size_only": [a.__dict__ for a in attempts]},
             }
         return result
 
@@ -1271,6 +1304,62 @@ class MercariAnalyzer:
             raise
         self._record_stage(
             stage="price_only",
+            attempts=[a.__dict__ for a in attempts],
+            messages=messages,
+            raw_response=raw_response,
+            parsed=parsed,
+        )
+        return parsed, attempts
+
+    def _call_size_only_llm(
+        self,
+        image_data_urls: List[str],
+        model_override: Optional[str] = None,
+    ) -> Tuple[Dict[str, Any], List[AttemptRecord]]:
+        if not image_data_urls:
+            raise BadRequestError("Image list is empty.")
+        image_payloads: List[Dict[str, Any]] = []
+        image_count = len(image_data_urls)
+        for index, url in enumerate(image_data_urls, start=1):
+            image_payloads.append(
+                {
+                    "type": "text",
+                    "text": (
+                        f"Image {index} of {image_count}: inspect this image for any "
+                        "clearly visible product size text (tags, labels, packaging, "
+                        "size charts, printed measurements)."
+                    ),
+                }
+            )
+            image_payloads.append({"type": "image_url", "image_url": {"url": url}})
+        messages = [
+            {"role": "system", "content": prompt_store.render_system("SIZE_ONLY_SYSTEM_PROMPT")},
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": prompt_store.get("SIZE_ONLY_USER_PROMPT")}] + image_payloads,
+            },
+        ]
+        primary = model_override or self.settings.vision_model
+        fallbacks = self.settings.vision_fallback_models
+
+        try:
+            parsed, raw_response, attempts = self.vision_caller.call_and_parse(
+                stage="size_only",
+                primary_model=primary,
+                fallback_models=fallbacks,
+                messages=messages,
+                temperature=0.1,
+                max_tokens=200,
+            )
+        except LLMAllAttemptsFailedError as exc:
+            self._record_stage(
+                stage="size_only",
+                attempts=[a.__dict__ for a in exc.attempts],
+                messages=messages,
+            )
+            raise
+        self._record_stage(
+            stage="size_only",
             attempts=[a.__dict__ for a in attempts],
             messages=messages,
             raw_response=raw_response,
