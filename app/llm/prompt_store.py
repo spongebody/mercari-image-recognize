@@ -45,6 +45,7 @@ PROMPT_REGISTRY: Tuple[PromptDef, ...] = (
     PromptDef("PRODUCT_TITLE_CATEGORY_USER_PROMPT", "标题选类目 · User", "title_category", "user", _p.PRODUCT_TITLE_CATEGORY_USER_PROMPT, ("{title}", "{language_label}")),
     PromptDef("CATEGORY_SYSTEM_PROMPT", "类目匹配 · System", "category", "system", _p.CATEGORY_SYSTEM_PROMPT, ()),
     PromptDef("CATEGORY_USER_PROMPT_TEMPLATE", "类目匹配 · User", "category", "user", _p.CATEGORY_USER_PROMPT_TEMPLATE, ("{title}", "{description}", "{brand}", "{group_name}", "{candidate_paths}")),
+    PromptDef("SHOWCASE_PROMPT", "图片合成 · 指令", "showcase", "system", _p.SHOWCASE_PROMPT, ()),
 )
 
 _REGISTRY_BY_KEY: Dict[str, PromptDef] = {d.key: d for d in PROMPT_REGISTRY}

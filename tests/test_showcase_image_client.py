@@ -102,6 +102,7 @@ class OpenRouterImageClientTest(unittest.TestCase):
         sent = calls[0]["payload"]
         self.assertEqual(sent["model"], "google/gemini-3.1-flash-image-preview")
         self.assertEqual(sent["modalities"], ["image", "text"])
+        self.assertEqual(sent["image_config"], {"aspect_ratio": "1:1"})
         self.assertEqual(sent["messages"][0]["content"][0]["text"], "hello")
         self.assertTrue(
             sent["messages"][0]["content"][1]["image_url"]["url"].startswith(

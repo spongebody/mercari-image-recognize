@@ -40,7 +40,8 @@ class PromptsApiTest(unittest.TestCase):
         resp = client.get("/api/v1/prompts")
         self.assertEqual(resp.status_code, 200)
         prompts = resp.json()["prompts"]
-        self.assertEqual(len(prompts), 16)
+        self.assertEqual(len(prompts), 17)
+        self.assertIn("SHOWCASE_PROMPT", {p["key"] for p in prompts})
 
     def test_put_prompt_updates_and_persists(self):
         client = TestClient(main.app)

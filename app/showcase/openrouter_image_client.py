@@ -340,4 +340,7 @@ class OpenRouterImageClient:
                 }
             ],
             "modalities": ["image", "text"],
+            # Always request a square output so the showcase reads cleanly as a
+            # marketplace thumbnail (see app/showcase/prompt.py framing rules).
+            "image_config": {"aspect_ratio": "1:1"},
         }
