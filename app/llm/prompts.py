@@ -72,6 +72,13 @@ Use the uploaded product image as the primary evidence for downstream category s
 - simple_description: one concise sentence describing what the product appears to be
 - top_level_category: exactly one top-level category from this list
 [[TOP_LEVEL_CATEGORY_OPTIONS]]
+- product_size: the product size, but ONLY when it is explicitly and clearly readable in the image
+
+Rules for product_size:
+- Return a size ONLY when there is explicit, clearly visible size information in the image, such as text on a tag, label, packaging, a size chart, or a measurement printed next to the item (e.g. "M", "27cm", "縦30×横20×高10cm").
+- Copy the size exactly as shown, keeping its original numbers, units, and labels. You may join several visible dimensions into one short string.
+- Do NOT guess, estimate, or infer the size from the object's appearance, proportions, or any surrounding objects. If there is no explicit size text in the image, you MUST return null.
+- When in doubt, return null. It is far better to omit the size than to return a wrong one.
 
 Do not generate brand information, listing copy, detailed description sections, or any price fields.
 
@@ -82,7 +89,8 @@ The JSON schema is:
 {
   "title": "string",
   "simple_description": "string",
-  "top_level_category": "string"
+  "top_level_category": "string",
+  "product_size": "string or null"
 }
 """
 
@@ -90,7 +98,7 @@ FAST_CLASSIFICATION_USER_PROMPT = """Classify this product image for category ma
 
 Language for title and simple_description: {language_label}.
 
-Return JSON only with title, simple_description, and top_level_category."""
+Return JSON only with title, simple_description, top_level_category, and product_size. Set product_size only when explicit size information is clearly visible in the image; otherwise set it to null."""
 
 PRICE_ONLY_SYSTEM_PROMPT = """You are an assistant that reads product prices from images for a Japanese marketplace.
 
