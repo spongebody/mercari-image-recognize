@@ -299,7 +299,7 @@ curl -X POST "http://localhost:8000/api/v1/mercari/image/size" \
 
 ```json
 {
-  "product_size": "40 to 45"
+  "product_size": "M"
 }
 ```
 
