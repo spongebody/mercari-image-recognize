@@ -52,12 +52,14 @@ class PromptStoreReadTest(unittest.TestCase):
         ):
             self.assertEqual(prompt_store.render_system(key), GOLDEN[key])
 
-    def test_list_prompts_has_seventeen_entries(self):
+    def test_list_prompts_has_nineteen_entries(self):
         prompts = prompt_store.list_prompts()
-        self.assertEqual(len(prompts), 17)
+        self.assertEqual(len(prompts), 19)
         keys = {p["key"] for p in prompts}
         self.assertIn("CATEGORY_USER_PROMPT_TEMPLATE", keys)
         self.assertIn("SHOWCASE_PROMPT", keys)
+        self.assertIn("SIZE_ONLY_SYSTEM_PROMPT", keys)
+        self.assertIn("SIZE_ONLY_USER_PROMPT", keys)
         self.assertFalse(any(p["is_overridden"] for p in prompts))
 
     def test_showcase_prompt_registered_under_showcase_stage(self):

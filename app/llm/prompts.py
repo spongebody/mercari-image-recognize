@@ -72,13 +72,6 @@ Use the uploaded product image as the primary evidence for downstream category s
 - simple_description: one concise sentence describing what the product appears to be
 - top_level_category: exactly one top-level category from this list
 [[TOP_LEVEL_CATEGORY_OPTIONS]]
-- product_size: the product size, but ONLY when it is explicitly and clearly readable in the image
-
-Rules for product_size:
-- Return a size ONLY when there is explicit, clearly visible size information in the image, such as text on a tag, label, packaging, a size chart, or a measurement printed next to the item (e.g. "M", "27cm", "縦30×横20×高10cm").
-- Copy the size exactly as shown, keeping its original numbers, units, and labels. You may join several visible dimensions into one short string.
-- Do NOT guess, estimate, or infer the size from the object's appearance, proportions, or any surrounding objects. If there is no explicit size text in the image, you MUST return null.
-- When in doubt, return null. It is far better to omit the size than to return a wrong one.
 
 Do not generate brand information, listing copy, detailed description sections, or any price fields.
 
@@ -89,8 +82,7 @@ The JSON schema is:
 {
   "title": "string",
   "simple_description": "string",
-  "top_level_category": "string",
-  "product_size": "string or null"
+  "top_level_category": "string"
 }
 """
 
@@ -98,7 +90,7 @@ FAST_CLASSIFICATION_USER_PROMPT = """Classify this product image for category ma
 
 Language for title and simple_description: {language_label}.
 
-Return JSON only with title, simple_description, top_level_category, and product_size. Set product_size only when explicit size information is clearly visible in the image; otherwise set it to null."""
+Return JSON only with title, simple_description, and top_level_category."""
 
 PRICE_ONLY_SYSTEM_PROMPT = """You are an assistant that reads product prices from images for a Japanese marketplace.
 
@@ -136,6 +128,35 @@ The JSON schema is:
 PRICE_ONLY_USER_PROMPT = """Extract the actual visible product price from the attached images and estimate a realistic AI reference price range.
 
 Return JSON only with tax_excluded, tax_included, and prices. Set tax_excluded and tax_included to null if no real price is visible. The prices range must cover any visible actual price."""
+
+SIZE_ONLY_SYSTEM_PROMPT = """You are an assistant that reads product size information from images for a Japanese marketplace.
+
+Your only job is to extract the product size when it is explicitly and clearly readable in the uploaded images.
+
+Return:
+- product_size: the size text exactly as shown in the image, or null
+
+Rules:
+- Return a size ONLY when there is explicit, clearly visible size information, such as text on a tag, label, packaging, a size chart, or a measurement printed next to the item (e.g. "M", "27cm", "縦30×横20×高10cm").
+- Copy the size exactly as shown, keeping its original numbers, units, and labels. You may join several visible dimensions into one short string.
+- Inspect EVERY uploaded image; the size may appear on any of them (a tag, the back of the package, a size chart, etc.), not necessarily the first image.
+- Do NOT guess, estimate, or infer the size from the object's appearance, proportions, or any surrounding objects. If no explicit size text is visible in any image, you MUST return null.
+- When in doubt, return null. It is far better to omit the size than to return a wrong one.
+
+Do not generate a title, brand, description, category, price, or any other field. Do not use web search or browsing.
+
+You must respond with pure JSON only, without explanations, markdown, or comments.
+
+The JSON schema is:
+
+{
+  "product_size": "string or null"
+}
+"""
+
+SIZE_ONLY_USER_PROMPT = """Extract the product size from the attached images, but only when it is explicitly and clearly visible.
+
+Return JSON only with product_size. Inspect every image; set product_size to null if no explicit size text is visible in any of them. Do not infer size from appearance."""
 
 PRODUCT_DATA_SYSTEM_PROMPT = """You are an assistant helping sellers list items for a Japanese marketplace.
 

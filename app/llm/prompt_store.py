@@ -35,6 +35,8 @@ PROMPT_REGISTRY: Tuple[PromptDef, ...] = (
     PromptDef("TITLE_IMAGE_FALLBACK_USER_PROMPT", "标题图片兜底 · User", "title_image_fallback", "user", _p.TITLE_IMAGE_FALLBACK_USER_PROMPT, ("{language_label}",)),
     PromptDef("PRICE_ONLY_SYSTEM_PROMPT", "价格提取 · System", "price_only", "system", _p.PRICE_ONLY_SYSTEM_PROMPT, ()),
     PromptDef("PRICE_ONLY_USER_PROMPT", "价格提取 · User", "price_only", "user", _p.PRICE_ONLY_USER_PROMPT, ()),
+    PromptDef("SIZE_ONLY_SYSTEM_PROMPT", "尺寸提取 · System", "size_only", "system", _p.SIZE_ONLY_SYSTEM_PROMPT, ()),
+    PromptDef("SIZE_ONLY_USER_PROMPT", "尺寸提取 · User", "size_only", "user", _p.SIZE_ONLY_USER_PROMPT, ()),
     PromptDef("PRODUCT_DATA_SYSTEM_PROMPT", "商品数据 · System", "product_data", "system", _p.PRODUCT_DATA_SYSTEM_PROMPT, ()),
     PromptDef("PRODUCT_DATA_USER_PROMPT", "商品数据 · User", "product_data", "user", _p.PRODUCT_DATA_USER_PROMPT, ("{language_label}",)),
     PromptDef("PRODUCT_DATA_REGENERATION_SYSTEM_PROMPT", "商品数据再生成 · System", "product_data_regeneration", "system", _p.PRODUCT_DATA_REGENERATION_SYSTEM_PROMPT, ()),
