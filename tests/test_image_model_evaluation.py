@@ -58,7 +58,13 @@ def test_result_fields_are_reviewer_friendly_and_include_model_dimensions():
         "totalDurationS",
         "customerCategoryCheck",
         "customerBrandCheck",
+        "customerNotes",
     ]
+
+
+def test_result_fields_include_customer_notes():
+    assert "customerNotes" in RESULT_FIELDS
+    assert RESULT_FIELDS[-1] == "customerNotes"
 
 
 def test_build_result_row_extracts_predictions_and_keeps_customer_checks_blank():
@@ -119,7 +125,46 @@ def test_build_result_row_extracts_predictions_and_keeps_customer_checks_blank()
         "totalDurationS": "5.812",
         "customerCategoryCheck": "",
         "customerBrandCheck": "",
+        "customerNotes": "",
     }
+
+
+def test_summarize_rows_includes_customer_reviewed_accuracy():
+    rows = [
+        {
+            "genreId": "100040",
+            "aiCategory": "100040",
+            "brand": "ASUS",
+            "aiBrand": "ASUS",
+            "visionModel": "vision-a",
+            "categoryModel": "category-a",
+            "productDataModel": "product-a",
+            "reasoningEffort": "none",
+            "customerCategoryCheck": "",
+            "customerBrandCheck": "",
+        },
+        {
+            "genreId": "100181",
+            "aiCategory": "565105",
+            "brand": "recolte",
+            "aiBrand": "",
+            "visionModel": "vision-a",
+            "categoryModel": "category-a",
+            "productDataModel": "product-a",
+            "reasoningEffort": "none",
+            "customerCategoryCheck": "ACCEPTABLE",
+            "customerBrandCheck": "NG",
+        },
+    ]
+
+    summary = summarize_rows(rows)
+
+    assert summary["overall"]["categoryReviewedCorrect"] == 2
+    assert summary["overall"]["brandReviewedCorrect"] == 1
+    assert summary["overall"]["categoryReviewedAccuracy"] == 1.0
+    assert summary["overall"]["brandReviewedAccuracy"] == 0.5
+    assert summary["overall"]["categoryPendingReview"] == 0
+    assert summary["overall"]["brandPendingReview"] == 0
 
 
 def test_summarize_rows_groups_by_model_dimensions_and_uses_normalized_brand_match():

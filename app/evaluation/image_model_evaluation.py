@@ -30,6 +30,7 @@ RESULT_FIELDS = [
     "totalDurationS",
     "customerCategoryCheck",
     "customerBrandCheck",
+    "customerNotes",
 ]
 
 MODEL_DIMENSIONS = (
@@ -275,6 +276,7 @@ def build_result_row(
         "totalDurationS": _format_seconds(total_duration_s),
         "customerCategoryCheck": "",
         "customerBrandCheck": "",
+        "customerNotes": "",
     }
     return {field: row.get(field, "") for field in RESULT_FIELDS}
 
@@ -289,10 +291,36 @@ def _is_brand_correct(row: Dict[str, Any]) -> bool:
     return bool(expected and actual and expected == actual)
 
 
+def _review_check_is_positive(value: Any) -> bool:
+    return _clean(value).upper() in {"OK", "ACCEPTABLE"}
+
+
 def _summary_bucket(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     total = len(rows)
     category_correct = sum(1 for row in rows if _is_category_correct(row))
     brand_correct = sum(1 for row in rows if _is_brand_correct(row))
+    category_reviewed_correct = sum(
+        1
+        for row in rows
+        if _is_category_correct(row)
+        or _review_check_is_positive(row.get("customerCategoryCheck"))
+    )
+    brand_reviewed_correct = sum(
+        1
+        for row in rows
+        if _is_brand_correct(row)
+        or _review_check_is_positive(row.get("customerBrandCheck"))
+    )
+    category_pending_review = sum(
+        1
+        for row in rows
+        if not _is_category_correct(row) and not _clean(row.get("customerCategoryCheck"))
+    )
+    brand_pending_review = sum(
+        1
+        for row in rows
+        if not _is_brand_correct(row) and not _clean(row.get("customerBrandCheck"))
+    )
     return {
         "total": total,
         "categoryCorrect": category_correct,
@@ -301,6 +329,16 @@ def _summary_bucket(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         "brandAccuracy": round(brand_correct / total, 6) if total else 0.0,
         "categoryNeedsCustomerCheck": total - category_correct,
         "brandNeedsCustomerCheck": total - brand_correct,
+        "categoryReviewedCorrect": category_reviewed_correct,
+        "brandReviewedCorrect": brand_reviewed_correct,
+        "categoryReviewedAccuracy": round(category_reviewed_correct / total, 6)
+        if total
+        else 0.0,
+        "brandReviewedAccuracy": round(brand_reviewed_correct / total, 6)
+        if total
+        else 0.0,
+        "categoryPendingReview": category_pending_review,
+        "brandPendingReview": brand_pending_review,
     }
 
 

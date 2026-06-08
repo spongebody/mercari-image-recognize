@@ -14,8 +14,9 @@
  */
 (function (global) {
   const PAGES = [
-    { id: 'config', label: '配置', href: '/config' },
-    { id: 'test',   label: '测试', href: '/' },
+    { id: 'config',      label: '配置', href: '/config' },
+    { id: 'test',        label: '测试', href: '/' },
+    { id: 'evaluations', label: '模型测试', href: '/evaluations' },
   ];
 
   // Body-level overlays that must NOT be moved into the shell main area.

@@ -109,6 +109,7 @@
 
       input[type="text"],
       input[type="number"],
+      input[type="file"],
       select,
       textarea {
         width: 100%;
@@ -375,6 +376,7 @@
         padding: 9px 18px;
         font-size: 13px;
       }
+
     </style>
     <link rel="stylesheet" href="/assets/shell.css" />
   </head>
@@ -534,6 +536,7 @@
           <div id="prompt-editor">正在读取提示词...</div>
         </div>
       </div>
+
     </div>
 
     <script src="/assets/shell.js"></script>
@@ -580,7 +583,8 @@
         statusText.textContent = text;
         statusDot.classList.toggle("live", Boolean(live));
         if (window.Shell && Shell.setHeader) {
-          const active = document.getElementById("tab-prompts").hidden ? "API 配置" : "提示词配置";
+          const activePanel = Object.keys(tabPanels || {}).find((key) => !tabPanels[key].hidden) || "api";
+          const active = panelTitles && panelTitles[activePanel] ? panelTitles[activePanel] : "API 配置";
           Shell.setHeader({ title: active, crumb: text });
         }
       }
@@ -666,11 +670,15 @@
         api: document.getElementById("tab-api"),
         prompts: document.getElementById("tab-prompts"),
       };
+      const panelTitles = {
+        api: "API 配置",
+        prompts: "提示词配置",
+      };
       function showPanel(route) {
         const key = tabPanels[route] ? route : "api";
         Object.entries(tabPanels).forEach(([k, el]) => { el.hidden = k !== key; });
         Shell.setHeader({
-          title: key === "prompts" ? "提示词配置" : "API 配置",
+          title: panelTitles[key],
           crumb: statusText ? statusText.textContent : "",
         });
       }

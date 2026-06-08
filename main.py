@@ -22,6 +22,8 @@ from app.config import BASE_DIR, load_settings
 from app.constants import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES
 from app.data.brands import BrandStore
 from app.data.categories import CategoryStore
+from app.evaluation.image_model_evaluation import ModelCombination, build_result_row
+from app.evaluation.runs import EvaluationRunConfig, EvaluationRunStore
 from app.errors import BadRequestError, LLMAllAttemptsFailedError
 from app.image_processing import compress_image_if_needed
 from app.jobs import AnalysisJobStore
@@ -40,7 +42,7 @@ from app.showcase.archive import ArchiveWriter as ShowcaseArchiveWriter
 from app.showcase.openrouter_image_client import OpenRouterImageClient
 from app.showcase.service import ShowcaseService
 from app.showcase.storage import StorageManager as ShowcaseStorageManager
-from app.utils import parse_bool_param
+from app.utils import fetch_image_from_url, parse_bool_param
 
 settings = load_settings()
 _obs_store = ObsStore(BASE_DIR / "logs" / "observability.db")
@@ -74,6 +76,8 @@ analyzer = MercariAnalyzer(
     category_client=category_client,
 )
 product_data_executor = ThreadPoolExecutor(max_workers=4)
+evaluation_executor = ThreadPoolExecutor(max_workers=1)
+evaluation_store = EvaluationRunStore(BASE_DIR / "logs" / "image_model_tests")
 
 
 def _submit_with_request_id(fn, /, *args, **kwargs):
@@ -86,6 +90,123 @@ def _submit_with_request_id(fn, /, *args, **kwargs):
             if token is not None:
                 obs_ctx.reset_request_id(token)
     return product_data_executor.submit(_runner)
+
+
+def _settings_for_evaluation(config: EvaluationRunConfig):
+    eval_settings = load_settings()
+    eval_settings.vision_model = config.visionModel
+    eval_settings.category_model = config.categoryModel
+    eval_settings.product_data_model = config.productDataModel
+    eval_settings.vision_fallback_models = []
+    eval_settings.category_fallback_models = []
+    eval_settings.product_data_fallback_models = []
+    eval_settings.product_data_fallback_model = ""
+    eval_settings.model_call_max_retries = 0
+
+    effort = (config.reasoningEffort or "none").strip().lower()
+    if effort == "none":
+        eval_settings.reasoning_enabled = False
+        eval_settings.reasoning_effort = None
+        eval_settings.reasoning_max_tokens = None
+        eval_settings.reasoning_summary = None
+        eval_settings.classification_reasoning_enabled = True
+    else:
+        eval_settings.reasoning_enabled = True
+        eval_settings.reasoning_effort = effort
+        eval_settings.classification_reasoning_enabled = True
+    return eval_settings
+
+
+def _build_evaluation_analyzer(config: EvaluationRunConfig) -> MercariAnalyzer:
+    eval_settings = _settings_for_evaluation(config)
+    eval_vision_client = OpenRouterClient(
+        api_key=eval_settings.openrouter_api_key,
+        base_url=eval_settings.openrouter_base_url,
+        timeout=eval_settings.request_timeout,
+        referer=eval_settings.openrouter_referer,
+        app_name=eval_settings.openrouter_app_name,
+        reasoning=eval_settings.reasoning,
+    )
+    eval_category_client = OpenRouterClient(
+        api_key=eval_settings.openrouter_api_key,
+        base_url=eval_settings.openrouter_base_url,
+        timeout=eval_settings.request_timeout,
+        referer=eval_settings.openrouter_referer,
+        app_name=eval_settings.openrouter_app_name,
+        reasoning=eval_settings.reasoning,
+    )
+    return MercariAnalyzer(
+        settings=eval_settings,
+        brand_store=brand_store,
+        category_store=category_store,
+        vision_client=eval_vision_client,
+        category_client=eval_category_client,
+    )
+
+
+_evaluation_analyzer_cache: Dict[Tuple[str, str, str, str], MercariAnalyzer] = {}
+
+
+def _evaluation_analyzer(config: EvaluationRunConfig) -> MercariAnalyzer:
+    key = (
+        config.visionModel,
+        config.categoryModel,
+        config.productDataModel,
+        config.reasoningEffort,
+    )
+    if key not in _evaluation_analyzer_cache:
+        _evaluation_analyzer_cache[key] = _build_evaluation_analyzer(config)
+    return _evaluation_analyzer_cache[key]
+
+
+def _evaluation_case_runner(case: Dict[str, str], config: EvaluationRunConfig) -> Dict[str, str]:
+    combo = ModelCombination(
+        vision_model=config.visionModel,
+        category_model=config.categoryModel,
+        product_data_model=config.productDataModel,
+        reasoning_effort=config.reasoningEffort,
+    )
+    eval_analyzer = _evaluation_analyzer(config)
+    eval_settings = eval_analyzer.settings
+    image_payloads: List[Tuple[bytes, str]] = []
+    for url in (case.get("image") or "").split("|"):
+        cleaned_url = url.strip()
+        if not cleaned_url:
+            continue
+        data, mime_type = fetch_image_from_url(
+            cleaned_url,
+            eval_settings.request_timeout,
+            eval_settings.max_image_bytes,
+            eval_settings.allowed_mime_types,
+        )
+        processed = compress_image_if_needed(
+            data,
+            mime_type,
+            eval_settings.image_compression_threshold_bytes,
+        )
+        image_payloads.append((processed.data, processed.mime_type))
+
+    started = time.monotonic()
+    classification = eval_analyzer.classify_first_image_categories(
+        image_payloads,
+        config.language,
+        debug=False,
+        vision_model_override=config.visionModel,
+        category_model_override=config.categoryModel,
+    )
+    product_data = eval_analyzer.generate_product_data(
+        image_payloads,
+        config.language,
+        debug=False,
+        model_override=config.productDataModel,
+    )
+    return build_result_row(
+        case,
+        combo,
+        classification,
+        product_data,
+        total_duration_s=time.monotonic() - started,
+    )
 
 
 analysis_job_store = AnalysisJobStore()
@@ -199,6 +320,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan, title="Mercari Image Analyzer", version="1.0.0")
 CONFIG_ENV_PATH = BASE_DIR / ".env"
 CONFIG_PAGE_PATH = BASE_DIR / "web" / "config.html"
+EVALUATIONS_PAGE_PATH = BASE_DIR / "web" / "evaluations.html"
 
 # Allow local dev CORS for the test page or other origins.
 app.add_middleware(
@@ -577,6 +699,15 @@ def config_page() -> HTMLResponse:
         raise HTTPException(status_code=404, detail="Config page not found.") from exc
 
 
+@app.get("/evaluations", response_class=HTMLResponse,
+         dependencies=[Depends(require_logs_auth(settings.logs_password))])
+def evaluations_page() -> HTMLResponse:
+    try:
+        return HTMLResponse(EVALUATIONS_PAGE_PATH.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Evaluations page not found.") from exc
+
+
 @app.get("/logs", response_class=HTMLResponse,
          dependencies=[Depends(require_logs_auth(settings.logs_password))])
 def logs_page():
@@ -633,6 +764,105 @@ def reset_prompts(payload: Dict[str, Any], request: Request) -> Dict[str, Any]:
     _reject_cross_origin(request)
     try:
         return {"prompts": prompt_store.reset(payload.get("keys"))}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/evaluations")
+async def create_evaluation(
+    file: UploadFile = File(...),
+    visionModel: str = Form(...),
+    categoryModel: str = Form(...),
+    productDataModel: str = Form(...),
+    reasoningEffort: str = Form("none"),
+    language: str = Form(DEFAULT_LANGUAGE),
+    limit: int = Form(0),
+) -> Dict[str, Any]:
+    tmp_path = BASE_DIR / "logs" / "tmp" / f"evaluation-{uuid.uuid4().hex}.csv"
+    tmp_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path.write_bytes(await file.read())
+    try:
+        run = evaluation_store.create_run(
+            input_path=tmp_path,
+            config=EvaluationRunConfig(
+                visionModel=visionModel.strip(),
+                categoryModel=categoryModel.strip(),
+                productDataModel=productDataModel.strip(),
+                reasoningEffort=(reasoningEffort or "none").strip(),
+                language=language or DEFAULT_LANGUAGE,
+                limit=max(0, int(limit or 0)),
+            ),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        with suppress(Exception):
+            tmp_path.unlink()
+
+    evaluation_executor.submit(
+        evaluation_store.execute_run,
+        run.runId,
+        case_runner=_evaluation_case_runner,
+    )
+    return {"runId": run.runId, "status": "pending"}
+
+
+@app.get("/api/v1/evaluations")
+def list_evaluations() -> Dict[str, Any]:
+    return {"runs": evaluation_store.list_runs()}
+
+
+@app.get("/api/v1/evaluations/{run_id}")
+def read_evaluation(run_id: str) -> Dict[str, Any]:
+    try:
+        return evaluation_store.read_run(run_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Evaluation run not found.") from exc
+
+
+@app.get("/api/v1/evaluations/{run_id}/results")
+def read_evaluation_results(run_id: str) -> Dict[str, Any]:
+    try:
+        return {"rows": evaluation_store.read_results(run_id)}
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Evaluation run not found.") from exc
+
+
+@app.get("/api/v1/evaluations/{run_id}/results.csv")
+def download_evaluation_results(run_id: str):
+    try:
+        return FileResponse(evaluation_store.run_path(run_id) / "results.csv")
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Evaluation run not found.") from exc
+
+
+@app.put("/api/v1/evaluations/{run_id}/review")
+def save_evaluation_review(run_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        return {"summary": evaluation_store.save_review(run_id, payload.get("rows", []))}
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Evaluation run not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.put("/api/v1/evaluations/{run_id}/analysis")
+def save_evaluation_analysis(run_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        evaluation_store.save_analysis(run_id, payload)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Evaluation run not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True}
+
+
+@app.post("/api/v1/evaluations/{run_id}/archive")
+def archive_evaluation(run_id: str) -> Dict[str, Any]:
+    try:
+        return evaluation_store.archive(run_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Evaluation run not found.") from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
