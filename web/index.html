@@ -1405,6 +1405,7 @@
           fieldCategory: "🏷️ 分类",
           fieldBestCategory: "🏷️ 最佳分类路径",
           fieldCategoryCandidates: "🏷️ 分类候选",
+          fieldProductSize: "📏 商品尺寸",
           unknownCategory: "未知分类",
           idRakuten: "Rakuten ID",
           idMercari: "Mercari ID",
@@ -1576,6 +1577,7 @@
           fieldCategory: "🏷️ カテゴリ",
           fieldBestCategory: "🏷️ 最適カテゴリパス",
           fieldCategoryCandidates: "🏷️ カテゴリ候補",
+          fieldProductSize: "📏 商品サイズ",
           unknownCategory: "不明なカテゴリ",
           idRakuten: "Rakuten ID",
           idMercari: "Mercari ID",
@@ -2164,6 +2166,16 @@
                   return `<span class="tag ${isPrimary}">${label}</span>`;
                 }).join('')}
               </div>
+            </div>
+          `;
+        }
+
+        // 商品尺寸（仅当 fast vision 阶段从图片中读到明确尺寸时返回）
+        if (data.product_size !== undefined && data.product_size !== null && String(data.product_size).trim() !== "") {
+          html += `
+            <div class="field-group">
+              <div class="field-label">${t("fieldProductSize")}</div>
+              <div class="field-value">${escapeHtml(String(data.product_size))}</div>
             </div>
           `;
         }

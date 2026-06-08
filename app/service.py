@@ -819,6 +819,9 @@ class MercariAnalyzer:
         title = _clean_string(ai_raw.get("title", ""))
         simple_description = _clean_string(ai_raw.get("simple_description", ""))
         top_level_category = _clean_string(ai_raw.get("top_level_category", ""))
+        # Size comes from the fast vision stage and is only trusted when the model
+        # found explicit size text in the image; otherwise it stays null.
+        product_size = _clean_string(ai_raw.get("product_size", "")) or None
         group_name = _map_top_level_category(top_level_category)
 
         categories: List[Dict[str, Any]] = []
@@ -837,6 +840,9 @@ class MercariAnalyzer:
         result: Dict[str, Any] = {
             "status": "product_pending",
             "categories": categories,
+            # Product size extracted from the first image by the fast vision stage;
+            # null when no explicit size information was visible.
+            "product_size": product_size,
             # Price now comes from the dedicated price link; these fields are kept
             # (null/empty) only so existing clients do not break.
             "tax_excluded": None,
