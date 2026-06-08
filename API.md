@@ -148,6 +148,7 @@ files.forEach((file) => {
       "confidence": 0.92
     }
   ],
+  "product_size": "40 to 45",
   "timings": {
     "total_ms": 900.12,
     "classification_ms": 900.12
@@ -197,6 +198,7 @@ files.forEach((file) => {
 - `_debug` 仅在 `debug=true` 且服务端允许调试时返回。
 - 首次响应如果仍为 `product_pending`，也可能包含快速分类链路从所有上传图片中抽取到的直接价格；快速分类链路不推断 `prices`，因此 `prices` 在首响应通常为 `[]`。
 - `categories` 始终返回置信度从高到低的最多 3 个匹配分类（候选目录中可信匹配少于 3 时可能少于 3 个）；`best_target_path` / `alternatives` 在成功匹配分类路径时返回，同样按置信度降序。
+- `product_size` 由快速分类（fast vision）链路从首图中抽取，**仅当图片包含明确可见的尺寸信息**（如吊牌/标签/包装/尺码表/标注的测量值，例 `"M"`、`"27cm"`、`"縦30×横20×高10cm"`）时返回原样文本；模型不会根据外观或参照物推断尺寸，无明确信息时返回 `null`。
 - `timings.total_ms` 表示从请求开始到当前响应时刻的实际墙钟耗时；`timings.classification_ms` 表示首接口分类链路耗时，单位均为毫秒。由于分类与商品数据并行执行，完成态的 `total_ms ≈ max(classification_ms, product_data_ms)`，而非两者相加。
 - `image_processing` 字段返回每张上传图片的压缩处理结果（是否压缩、原始/处理后字节数等）。
 
@@ -294,7 +296,8 @@ curl -X POST "http://localhost:8000/api/v1/mercari/image/price" \
   ],
   "best_target_path": "...",
   "best_category_id": "...",
-  "rakuten_id": "..."
+  "rakuten_id": "...",
+  "product_size": "40 to 45"
 }
 ```
 
@@ -324,6 +327,7 @@ curl -X POST "http://localhost:8000/api/v1/mercari/image/price" \
       "confidence": 0.92
     }
   ],
+  "product_size": "40 to 45",
   "brand_name": "...",
   "tax_excluded": null,
   "tax_included": null,
@@ -357,6 +361,7 @@ curl -X POST "http://localhost:8000/api/v1/mercari/image/price" \
 ```
 
 说明：
+- `product_size` 在 `product_pending` 和 `completed` 两种状态下都会透传（来自快速分类链路对首图的尺寸抽取），取值规则同 `POST /api/v1/mercari/image/analyze`：仅当图片有明确可见尺寸信息时返回原样文本，否则为 `null`。
 - `brand_name` / `brand_id_obj` 只在商品数据完成后返回。
 - `tax_excluded`、`tax_included`、`prices` 始终存在。初次 `product_pending` 时可能包含快速分类链路从所有上传图片中抽取到的直接价格；看不到明确实际价格时返回 `null` / `null` / `[]`。
 - 完成态合并时，如果商品数据链路返回直接价格，则覆盖首响应价格；如果商品数据链路没有直接价格但首响应已有直接价格，则保留首响应价格。
