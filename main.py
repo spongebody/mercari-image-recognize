@@ -1,4 +1,5 @@
 import asyncio
+import hmac
 import json
 import time
 import uuid
@@ -8,10 +9,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.datastructures import UploadFile as _Upload
@@ -30,7 +31,14 @@ from app.jobs import AnalysisJobStore
 from app.llm.client import OpenRouterClient
 from app.observability import context as obs_ctx
 from app.observability.api import build_router as build_obs_router
-from app.observability.auth import require_logs_auth
+from app.observability.auth import (
+    COOKIE_NAME,
+    REMEMBER_TTL,
+    SESSION_TTL,
+    is_console_authed,
+    make_session_token,
+    require_logs_auth,
+)
 from app.observability.recorder import Recorder
 from app.observability.retention import prune as obs_prune
 from app.observability.store import Store as ObsStore
@@ -680,6 +688,40 @@ def index_page():
     if not index_path.exists():
         raise HTTPException(status_code=404, detail="Test UI not found.")
     return FileResponse(index_path)
+
+
+LOGIN_PAGE_PATH = WEB_DIR / "login.html"
+
+
+@app.post("/api/v1/console/login")
+def console_login(payload: Dict[str, Any], request: Request, response: Response) -> Dict[str, Any]:
+    if not settings.logs_password:
+        raise HTTPException(status_code=503, detail="Login not configured (set LOGS_PASSWORD).")
+    username = str(payload.get("username", ""))
+    password = str(payload.get("password", ""))
+    remember = bool(payload.get("remember", False))
+    user_ok = hmac.compare_digest(username, settings.logs_user)
+    pass_ok = hmac.compare_digest(password, settings.logs_password)
+    if not (user_ok and pass_ok):
+        raise HTTPException(status_code=401, detail="用户名或密码错误")
+    ttl = REMEMBER_TTL if remember else SESSION_TTL
+    token = make_session_token(settings.logs_password, ttl)
+    response.set_cookie(
+        COOKIE_NAME,
+        token,
+        max_age=REMEMBER_TTL if remember else None,
+        httponly=True,
+        samesite="lax",
+        secure=request.url.scheme == "https",
+        path="/",
+    )
+    return {"ok": True}
+
+
+@app.post("/api/v1/console/logout")
+def console_logout(response: Response) -> Dict[str, Any]:
+    response.delete_cookie(COOKIE_NAME, path="/")
+    return {"ok": True}
 
 
 @app.get("/favicon.ico")
