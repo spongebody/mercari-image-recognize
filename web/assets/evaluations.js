@@ -3,6 +3,10 @@ function escapeHtml(s) {
           .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       }
 
+      function firstImageUrl(image) {
+        return String(image || "").split("|").map((s) => s.trim()).filter(Boolean)[0] || "";
+      }
+
       // ---------- Evaluation SOP ----------
       const evaluationState = {
         runs: [],
@@ -11,6 +15,7 @@ function escapeHtml(s) {
         rows: [],
         poller: null,
         activeTab: "setup",
+        lightbox: { urls: [], index: 0 },
       };
       // Defaults pulled from saved config so this standalone page can prefill models.
       let configDefaults = {};
@@ -38,6 +43,36 @@ function escapeHtml(s) {
       const evaluationAnalysisNotes = document.getElementById("evaluation-analysis-notes");
       const evaluationActions = document.getElementById("evaluation-actions");
       const evaluationNextRun = document.getElementById("evaluation-next-run");
+
+      const lightboxEl = document.getElementById("evaluation-lightbox");
+      const lightboxImg = document.getElementById("lightbox-img");
+
+      function openLightbox(image, startIndex) {
+        const urls = String(image || "").split("|").map((s) => s.trim()).filter(Boolean);
+        if (!urls.length) return;
+        evaluationState.lightbox = { urls, index: startIndex || 0 };
+        renderLightbox();
+        lightboxEl.hidden = false;
+      }
+
+      function renderLightbox() {
+        const { urls, index } = evaluationState.lightbox;
+        lightboxImg.src = urls[index] || "";
+        document.getElementById("lightbox-prev").style.visibility = urls.length > 1 ? "visible" : "hidden";
+        document.getElementById("lightbox-next").style.visibility = urls.length > 1 ? "visible" : "hidden";
+      }
+
+      function closeLightbox() {
+        lightboxEl.hidden = true;
+        evaluationState.lightbox = { urls: [], index: 0 };
+      }
+
+      function stepLightbox(delta) {
+        const { urls, index } = evaluationState.lightbox;
+        if (!urls.length) return;
+        evaluationState.lightbox.index = (index + delta + urls.length) % urls.length;
+        renderLightbox();
+      }
 
       function showEvaluationMessage(text, type) {
         evaluationMessage.textContent = text;
@@ -257,11 +292,17 @@ function escapeHtml(s) {
         evaluationResultsHost.innerHTML =
           `<div class="results-table-wrap"><table class="results-table">` +
           `<thead><tr>` +
-          `<th>商品</th><th>原分类</th><th>AI分类</th><th>AI分类Path</th><th>置信度</th>` +
+          `<th>图片</th><th>商品</th><th>原分类</th><th>AI分类</th><th>AI分类Path</th><th>置信度</th>` +
           `<th>原品牌</th><th>AI品牌</th><th>AI标题</th><th>分类校验</th><th>品牌校验</th><th>备注</th>` +
           `</tr></thead><tbody>` +
           evaluationState.rows.map((row, index) => (
             `<tr>` +
+            `<td>${(() => {
+              const url = firstImageUrl(row.image);
+              return url
+                ? `<img class="thumb" src="${escapeHtml(url)}" loading="lazy" alt="" data-full="${escapeHtml(row.image)}" />`
+                : `<span class="thumb thumb-empty">无图</span>`;
+            })()}</td>` +
             `<td class="clip">${escapeHtml(row.itemName || "")}</td>` +
             `<td>${escapeHtml(row.genreId || "")}</td>` +
             `<td>${escapeHtml(row.aiCategory || "")}</td>` +
@@ -277,6 +318,9 @@ function escapeHtml(s) {
           )).join("") +
           `</tbody></table></div>`;
         renderEvaluationDetail();
+        evaluationResultsHost.querySelectorAll("img.thumb").forEach((img) => {
+          img.addEventListener("click", () => openLightbox(img.getAttribute("data-full"), 0));
+        });
       }
 
       async function loadEvaluationResults(runId) {
@@ -404,6 +448,16 @@ function escapeHtml(s) {
       evaluationArchiveBtn.addEventListener("click", archiveEvaluation);
       evaluationCloneBtn.addEventListener("click", () => {
         if (evaluationState.activeRunId) cloneRunConfig(evaluationState.activeRunId);
+      });
+      document.getElementById("lightbox-close").addEventListener("click", closeLightbox);
+      document.getElementById("lightbox-prev").addEventListener("click", () => stepLightbox(-1));
+      document.getElementById("lightbox-next").addEventListener("click", () => stepLightbox(1));
+      lightboxEl.addEventListener("click", (ev) => { if (ev.target === lightboxEl) closeLightbox(); });
+      document.addEventListener("keydown", (ev) => {
+        if (lightboxEl.hidden) return;
+        if (ev.key === "Escape") closeLightbox();
+        else if (ev.key === "ArrowLeft") stepLightbox(-1);
+        else if (ev.key === "ArrowRight") stepLightbox(1);
       });
 
       // ---------- Shell + sidebar ----------
