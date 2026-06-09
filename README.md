@@ -322,14 +322,25 @@ API_PORT=8010 UI_PORT=8012 ./run.sh
 
 重试策略由 `MODEL_CALL_MAX_RETRIES`、`MODEL_CALL_TOTAL_BUDGET_SECONDS` 和各类 fallback 模型链控制。
 
+## 控制台登录
+
+控制台页面（`/`、`/config`、`/evaluations`、`/logs`）需要登录后访问：
+
+- 用户名：环境变量 `LOGS_USER`（默认 `admin`）
+- 密码：环境变量 `LOGS_PASSWORD`（为空时禁用控制台）
+
+访问任意控制台页面会跳转到 `/login`，登录成功后回到目标页面。勾选「记住我」可保持 30 天免登录。
+程序化访问仍可使用 `Authorization: Bearer <LOGS_PASSWORD>`。
+
 ## Observability
 
 The service writes structured logs to SQLite (`logs/observability.db`) and per-request files in `logs/store/<date>/<request_id>/`. View them at `http://<host>:8000/logs`.
 
-Set `LOGS_PASSWORD` to enable the viewer (the `/config` page uses the same credential):
+Set `LOGS_PASSWORD` (and optionally `LOGS_USER`) to enable the console login that gates the viewer:
 
 ```sh
 export LOGS_PASSWORD=hunter2
+export LOGS_USER=admin
 ./run.sh
 ```
 

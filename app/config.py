@@ -127,6 +127,7 @@ class Settings:
     log_prune_interval_minutes: int = field(default_factory=lambda: _env_int_min("LOG_PRUNE_INTERVAL_MINUTES", 60, 1))
     log_response_max_bytes: int = field(default_factory=lambda: _env_int_min("LOG_RESPONSE_MAX_BYTES", 2 * 1024 * 1024, 0))
     logs_password: str = field(default_factory=lambda: os.getenv("LOGS_PASSWORD", ""))
+    logs_user: str = field(default_factory=lambda: os.getenv("LOGS_USER", "admin"))
 
     vision_fallback_models: List[str] = field(
         default_factory=lambda: _env_str_list("VISION_FALLBACK_MODELS", DEFAULT_FALLBACK_MODELS)

@@ -1,4 +1,5 @@
 import asyncio
+import hmac
 import json
 import time
 import uuid
@@ -8,10 +9,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.datastructures import UploadFile as _Upload
@@ -30,7 +31,14 @@ from app.jobs import AnalysisJobStore
 from app.llm.client import OpenRouterClient
 from app.observability import context as obs_ctx
 from app.observability.api import build_router as build_obs_router
-from app.observability.auth import require_logs_auth
+from app.observability.auth import (
+    COOKIE_NAME,
+    REMEMBER_TTL,
+    SESSION_TTL,
+    is_console_authed,
+    make_session_token,
+    require_logs_auth,
+)
 from app.observability.recorder import Recorder
 from app.observability.retention import prune as obs_prune
 from app.observability.store import Store as ObsStore
@@ -667,19 +675,63 @@ ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 
 
-@app.get("/", response_class=HTMLResponse,
-         dependencies=[Depends(require_logs_auth(settings.logs_password))])
-def index_page():
+@app.get("/", response_class=HTMLResponse)
+def index_page(request: Request):
     """Serve the test UI from the same origin as the API.
 
     Because the page is served here, its relative API paths (e.g.
     /api/v1/mercari/image/price) resolve to this server automatically, so the
     endpoint field can be left blank.
     """
+    if not is_console_authed(request, settings.logs_password):
+        return RedirectResponse("/login?next=/", status_code=302)
     index_path = WEB_DIR / "index.html"
     if not index_path.exists():
         raise HTTPException(status_code=404, detail="Test UI not found.")
     return FileResponse(index_path)
+
+
+LOGIN_PAGE_PATH = WEB_DIR / "login.html"
+
+
+@app.post("/api/v1/console/login")
+def console_login(payload: Dict[str, Any], request: Request, response: Response) -> Dict[str, Any]:
+    if not settings.logs_password:
+        raise HTTPException(status_code=503, detail="Login not configured (set LOGS_PASSWORD).")
+    username = str(payload.get("username", ""))
+    password = str(payload.get("password", ""))
+    remember = bool(payload.get("remember", False))
+    user_ok = hmac.compare_digest(username, settings.logs_user)
+    pass_ok = hmac.compare_digest(password, settings.logs_password)
+    if not (user_ok and pass_ok):
+        raise HTTPException(status_code=401, detail="用户名或密码错误")
+    ttl = REMEMBER_TTL if remember else SESSION_TTL
+    token = make_session_token(settings.logs_password, ttl)
+    response.set_cookie(
+        COOKIE_NAME,
+        token,
+        max_age=REMEMBER_TTL if remember else None,
+        httponly=True,
+        samesite="lax",
+        secure=request.url.scheme == "https",
+        path="/",
+    )
+    return {"ok": True}
+
+
+@app.post("/api/v1/console/logout")
+def console_logout(response: Response) -> Dict[str, Any]:
+    response.delete_cookie(COOKIE_NAME, path="/")
+    return {"ok": True}
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    if settings.logs_password and is_console_authed(request, settings.logs_password):
+        return RedirectResponse("/", status_code=302)
+    if not LOGIN_PAGE_PATH.exists():
+        raise HTTPException(status_code=404, detail="Login page not found.")
+    return HTMLResponse(LOGIN_PAGE_PATH.read_text(encoding="utf-8"))
 
 
 @app.get("/favicon.ico")
@@ -690,27 +742,30 @@ def favicon():
     return _Resp(status_code=204)
 
 
-@app.get("/config", response_class=HTMLResponse,
-         dependencies=[Depends(require_logs_auth(settings.logs_password))])
-def config_page() -> HTMLResponse:
+@app.get("/config", response_class=HTMLResponse)
+def config_page(request: Request):
+    if not is_console_authed(request, settings.logs_password):
+        return RedirectResponse("/login?next=/config", status_code=302)
     try:
         return HTMLResponse(CONFIG_PAGE_PATH.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Config page not found.") from exc
 
 
-@app.get("/evaluations", response_class=HTMLResponse,
-         dependencies=[Depends(require_logs_auth(settings.logs_password))])
-def evaluations_page() -> HTMLResponse:
+@app.get("/evaluations", response_class=HTMLResponse)
+def evaluations_page(request: Request):
+    if not is_console_authed(request, settings.logs_password):
+        return RedirectResponse("/login?next=/evaluations", status_code=302)
     try:
         return HTMLResponse(EVALUATIONS_PAGE_PATH.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Evaluations page not found.") from exc
 
 
-@app.get("/logs", response_class=HTMLResponse,
-         dependencies=[Depends(require_logs_auth(settings.logs_password))])
-def logs_page():
+@app.get("/logs", response_class=HTMLResponse)
+def logs_page(request: Request):
+    if not is_console_authed(request, settings.logs_password):
+        return RedirectResponse("/login?next=/logs", status_code=302)
     return FileResponse(BASE_DIR / "web" / "logs.html")
 
 

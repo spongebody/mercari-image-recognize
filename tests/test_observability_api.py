@@ -78,8 +78,9 @@ def test_fts_query_capped_at_500(set_password, monkeypatch):
 
 def test_logs_page_requires_auth(set_password):
     with TestClient(set_password.app) as client:
-        r = client.get("/logs")
-    assert r.status_code == 401
+        r = client.get("/logs", follow_redirects=False)
+    assert r.status_code == 302
+    assert r.headers["location"].startswith("/login")
 
     with TestClient(set_password.app) as client:
         r = client.get("/logs", headers=_auth())
@@ -89,8 +90,9 @@ def test_logs_page_requires_auth(set_password):
 
 def test_config_page_requires_auth(set_password):
     with TestClient(set_password.app) as client:
-        r = client.get("/config")
-    assert r.status_code == 401
+        r = client.get("/config", follow_redirects=False)
+    assert r.status_code == 302
+    assert r.headers["location"].startswith("/login")
     with TestClient(set_password.app) as client:
         r = client.get("/config", headers=_auth())
     assert r.status_code == 200
