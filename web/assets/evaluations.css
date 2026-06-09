@@ -460,7 +460,7 @@
       }
 
       .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-      .chip { width: auto; padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid var(--border); background: #fff; color: var(--muted); box-shadow: none; cursor: pointer; }
+      .chip { width: auto; padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid var(--border); background: #fff; color: var(--muted); box-shadow: none; cursor: pointer; transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease; }
       .chip:not(:disabled):hover { transform: none; box-shadow: none; }
       .chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
       .chip.chip-bad.active { background: var(--danger); border-color: var(--danger); }

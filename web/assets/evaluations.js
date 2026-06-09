@@ -23,9 +23,6 @@ function escapeHtml(s) {
         const actual = normalizeBrand(row.aiBrand);
         return Boolean(expected && actual && expected === actual);
       }
-      function reviewIsPositive(value) {
-        return ["OK", "ACCEPTABLE"].includes(String(value ?? "").trim().toUpperCase());
-      }
 
       // ---------- Evaluation SOP ----------
       const evaluationState = {
@@ -259,6 +256,7 @@ function escapeHtml(s) {
       async function selectEvaluationRun(runId) {
         evaluationState.activeRunId = runId;
         evaluationState.rows = [];
+        evaluationState.reviewFilter = "all";
         renderEvaluationList();
         evaluationResultsHost.textContent = "正在读取结果...";
         await loadEvaluationDetail(runId);
@@ -371,7 +369,7 @@ function escapeHtml(s) {
               : `<span class="thumb thumb-empty">无图</span>`;
           })();
           return (
-            `<tr class="${rowCls.trim()}" data-row-index="${index}">` +
+            `<tr${rowCls ? ` class="${rowCls.trim()}"` : ""} data-row-index="${index}">` +
             `<td>${thumbHtml}</td>` +
             `<td class="clip">${escapeHtml(row.itemName || "")}</td>` +
             `<td class="diff ${catCls}"><span class="orig">${escapeHtml(row.genreId || "")}</span> → <span class="ai">${escapeHtml(row.aiCategory || "")}</span></td>` +
