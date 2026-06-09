@@ -20,7 +20,7 @@
   ];
 
   // Body-level overlays that must NOT be moved into the shell main area.
-  const OVERLAY_IDS = new Set(['lightbox', 'image-lightbox', 'toast', 'modalBackdrop']);
+  const OVERLAY_IDS = new Set(['lightbox', 'image-lightbox', 'evaluation-lightbox', 'toast', 'modalBackdrop']);
 
   let config = null;
 
@@ -58,8 +58,6 @@
       el('span', { class: 'brand-logo', html: `<span class="logo" aria-hidden="true">${escapeHtml(brand.logo)}</span>` }),
       el('span', { class: 'brand-text', text: brand.text }),
       el('span', { class: 'spacer' }),
-      el('button', { class: 'tb-refresh', type: 'button', title: '刷新',
-        onClick: () => window.location.reload(), text: '↻' }),
     ]);
 
     const sidebar = el('aside', { id: 'shellSidebar', class: 'shell-sidebar' });

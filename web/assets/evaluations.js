@@ -46,6 +46,8 @@ function escapeHtml(s) {
 
       const lightboxEl = document.getElementById("evaluation-lightbox");
       const lightboxImg = document.getElementById("lightbox-img");
+      const lightboxPrev = document.getElementById("lightbox-prev");
+      const lightboxNext = document.getElementById("lightbox-next");
 
       function openLightbox(image, startIndex) {
         const urls = String(image || "").split("|").map((s) => s.trim()).filter(Boolean);
@@ -58,8 +60,8 @@ function escapeHtml(s) {
       function renderLightbox() {
         const { urls, index } = evaluationState.lightbox;
         lightboxImg.src = urls[index] || "";
-        document.getElementById("lightbox-prev").style.visibility = urls.length > 1 ? "visible" : "hidden";
-        document.getElementById("lightbox-next").style.visibility = urls.length > 1 ? "visible" : "hidden";
+        lightboxPrev.style.visibility = urls.length > 1 ? "visible" : "hidden";
+        lightboxNext.style.visibility = urls.length > 1 ? "visible" : "hidden";
       }
 
       function closeLightbox() {
@@ -450,8 +452,8 @@ function escapeHtml(s) {
         if (evaluationState.activeRunId) cloneRunConfig(evaluationState.activeRunId);
       });
       document.getElementById("lightbox-close").addEventListener("click", closeLightbox);
-      document.getElementById("lightbox-prev").addEventListener("click", () => stepLightbox(-1));
-      document.getElementById("lightbox-next").addEventListener("click", () => stepLightbox(1));
+      lightboxPrev.addEventListener("click", () => stepLightbox(-1));
+      lightboxNext.addEventListener("click", () => stepLightbox(1));
       lightboxEl.addEventListener("click", (ev) => { if (ev.target === lightboxEl) closeLightbox(); });
       document.addEventListener("keydown", (ev) => {
         if (lightboxEl.hidden) return;
