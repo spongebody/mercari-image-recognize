@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mercari コンソール · ログイン</title>
+<style>
+  :root{--accent:#2f80ed;--border:#e5e7eb;--text:#1c1f25;--muted:#6b7280;--danger:#dc2626}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;
+    font-family:"Inter","Noto Sans JP",system-ui,-apple-system,sans-serif;color:var(--text);
+    background:radial-gradient(circle at 12% 12%,#e0e7ff 0,transparent 30%),
+      radial-gradient(circle at 88% 90%,#dbeafe 0,transparent 30%),#f7f8fa}
+  .card{width:360px;background:#fff;border:1px solid var(--border);border-radius:18px;
+    padding:32px 30px 26px;box-shadow:0 18px 44px -22px rgba(31,41,55,.45);position:relative}
+  .logo{width:50px;height:50px;border-radius:15px;background:linear-gradient(135deg,var(--accent),#1d4ed8);
+    display:flex;align-items:center;justify-content:center;margin:0 auto;box-shadow:0 8px 18px -6px rgba(47,128,237,.55)}
+  .logo svg{width:26px;height:26px;stroke:#fff;fill:none;stroke-width:2}
+  h2{text-align:center;font-size:17px;margin:14px 0 2px}
+  .sub{text-align:center;font-size:12.5px;color:var(--muted);margin:0 0 22px}
+  .lbl{display:block;font-size:12.5px;font-weight:600;color:#374151;margin:0 0 6px 2px}
+  .field{position:relative;margin-bottom:15px}
+  .field .ic{position:absolute;left:13px;top:50%;transform:translateY(-50%);width:18px;height:18px;fill:none;stroke:#9ca3af;stroke-width:2}
+  .inp{width:100%;height:46px;border:1.5px solid var(--border);border-radius:11px;background:#fdfdfd;
+    font-size:14.5px;font-family:inherit;color:var(--text);padding:0 44px 0 40px;transition:.15s}
+  .inp:focus{outline:none;border-color:var(--accent);background:#fff;box-shadow:0 0 0 4px rgba(47,128,237,.12)}
+  .field.err .inp{border-color:var(--danger);background:#fef2f2}
+  .shake{animation:shake .45s}
+  @keyframes shake{10%,90%{transform:translateX(-1px)}20%,80%{transform:translateX(2px)}
+    30%,50%,70%{transform:translateX(-4px)}40%,60%{transform:translateX(4px)}}
+  .eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:none;background:none;cursor:pointer;padding:8px;color:#9ca3af}
+  .eye svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2}
+  .rem{display:flex;align-items:center;gap:8px;font-size:12.5px;color:#4b5563;margin:2px 0 20px;cursor:pointer;user-select:none}
+  .rem input{width:15px;height:15px;accent-color:var(--accent)}
+  .btn{width:100%;height:46px;border:none;border-radius:11px;background:linear-gradient(135deg,var(--accent),#1d4ed8);
+    color:#fff;font-size:14.5px;font-weight:600;font-family:inherit;letter-spacing:.3px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 9px 20px -9px rgba(47,128,237,.7)}
+  .btn[disabled]{opacity:.85;cursor:default}
+  .spin{width:17px;height:17px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .alert{display:none;align-items:center;gap:7px;margin-top:15px;padding:10px 12px;background:#fef2f2;
+    border:1px solid #fecaca;border-radius:10px;color:var(--danger);font-size:12.5px;font-weight:500}
+  .alert.show{display:flex}
+  .alert svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:2}
+  .lang{text-align:center;font-size:11.5px;color:#9ca3af;margin-top:18px}
+  .lang span{cursor:pointer} .lang span.active{color:var(--accent);font-weight:600}
+</style>
+</head>
+<body>
+  <form class="card" id="form" autocomplete="on">
+    <div class="logo"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+    <h2 id="t-title">Mercari コンソール</h2>
+    <div class="sub" id="t-sub">商品画像識別テスター</div>
+
+    <label class="lbl" id="t-user-label">用户名</label>
+    <div class="field" id="f-user">
+      <svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+      <input class="inp" style="padding-right:14px" id="username" name="username" type="text" autocomplete="username">
+    </div>
+
+    <label class="lbl" id="t-pass-label">密码</label>
+    <div class="field" id="f-pass">
+      <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      <input class="inp" id="password" name="password" type="password" autocomplete="current-password">
+      <button class="eye" type="button" id="toggle" aria-label="toggle">
+        <svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+    </div>
+
+    <label class="rem"><input type="checkbox" id="remember" checked> <span id="t-remember">记住我（30 天免登录）</span></label>
+    <button class="btn" id="submit" type="submit"><span id="t-btn">登 录</span></button>
+
+    <div class="alert" id="alert">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+      <span id="t-error">用户名或密码错误，请重试</span>
+    </div>
+
+    <div class="lang"><span data-lang="ja" id="l-ja">日本語</span> / <span data-lang="zh" id="l-zh">中文</span></div>
+  </form>
+
+<script>
+  const I18N = {
+    zh: {title:"Mercari コンソール", sub:"商品图片识别测试", user:"用户名", pass:"密码",
+         remember:"记住我（30 天免登录）", btn:"登 录", loading:"登录中…",
+         err:"用户名或密码错误，请重试", notConfigured:"登录未配置（请设置 LOGS_PASSWORD）"},
+    ja: {title:"Mercari コンソール", sub:"商品画像識別テスター", user:"ユーザー名", pass:"パスワード",
+         remember:"ログイン状態を保持（30日）", btn:"ログイン", loading:"ログイン中…",
+         err:"ユーザー名またはパスワードが正しくありません", notConfigured:"ログイン未設定（LOGS_PASSWORD を設定してください）"}
+  };
+  let lang = localStorage.getItem("mercari_ui_lang") || "zh";
+
+  function applyLang(){
+    const t = I18N[lang];
+    document.documentElement.lang = lang === "ja" ? "ja" : "zh";
+    document.getElementById("t-title").textContent = t.title;
+    document.getElementById("t-sub").textContent = t.sub;
+    document.getElementById("t-user-label").textContent = t.user;
+    document.getElementById("t-pass-label").textContent = t.pass;
+    document.getElementById("username").placeholder = t.user;
+    document.getElementById("password").placeholder = t.pass;
+    document.getElementById("t-remember").textContent = t.remember;
+    document.getElementById("t-btn").textContent = t.btn;
+    document.getElementById("l-zh").classList.toggle("active", lang === "zh");
+    document.getElementById("l-ja").classList.toggle("active", lang === "ja");
+  }
+  document.querySelectorAll(".lang span").forEach(el =>
+    el.addEventListener("click", () => {
+      lang = el.dataset.lang;
+      localStorage.setItem("mercari_ui_lang", lang);
+      applyLang();
+    }));
+  applyLang();
+
+  // Show/hide password
+  document.getElementById("toggle").addEventListener("click", () => {
+    const p = document.getElementById("password");
+    p.type = p.type === "password" ? "text" : "password";
+  });
+
+  // Sanitize ?next= to a same-origin path only (avoid open redirect)
+  function safeNext(){
+    const raw = new URLSearchParams(location.search).get("next") || "/";
+    if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
+    return "/";
+  }
+
+  const form = document.getElementById("form");
+  const alertBox = document.getElementById("alert");
+  const fUser = document.getElementById("f-user");
+  const fPass = document.getElementById("f-pass");
+  const submit = document.getElementById("submit");
+
+  function showError(msg){
+    document.getElementById("t-error").textContent = msg;
+    alertBox.classList.add("show");
+    fUser.classList.add("err"); fPass.classList.add("err");
+    fPass.classList.remove("shake"); void fPass.offsetWidth; fPass.classList.add("shake");
+    document.getElementById("username").focus();
+  }
+  function clearError(){
+    alertBox.classList.remove("show");
+    fUser.classList.remove("err"); fPass.classList.remove("err");
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    clearError();
+    const t = I18N[lang];
+    const body = {
+      username: document.getElementById("username").value,
+      password: document.getElementById("password").value,
+      remember: document.getElementById("remember").checked,
+    };
+    submit.disabled = true;
+    submit.innerHTML = '<span class="spin"></span> ' + t.loading;
+    try {
+      const r = await fetch("/api/v1/console/login", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        credentials: "same-origin",
+        body: JSON.stringify(body),
+      });
+      if (r.ok) { location.replace(safeNext()); return; }
+      showError(r.status === 503 ? t.notConfigured : t.err);
+    } catch (err) {
+      showError(t.err);
+    }
+    submit.disabled = false;
+    submit.innerHTML = '<span id="t-btn">' + t.btn + '</span>';
+  });
+</script>
+</body>
+</html>
