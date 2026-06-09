@@ -470,3 +470,8 @@
       .diff.bad .ai { color: var(--danger); font-weight: 700; }
       .diff.warn .ai { color: #b45309; font-weight: 700; }
       .results-table tr.row-bad td { background: #fef2f2; }
+      .batch-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .batch-count { font-size: 12px; color: var(--muted); font-weight: 700; }
+      .batch-btn { width: auto; padding: 7px 12px; font-size: 12px; }
+      #evaluation-batch-field { width: auto; padding: 7px 10px; font-size: 12px; }
+      .results-table tr.row-focus td { box-shadow: inset 3px 0 0 var(--accent); background: #f0f7ff; }

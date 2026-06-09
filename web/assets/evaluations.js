@@ -34,6 +34,7 @@ function escapeHtml(s) {
         activeTab: "setup",
         lightbox: { urls: [], index: 0 },
         reviewFilter: "all",
+        selectedRows: new Set(),
       };
       // Defaults pulled from saved config so this standalone page can prefill models.
       let configDefaults = {};
@@ -257,6 +258,7 @@ function escapeHtml(s) {
         evaluationState.activeRunId = runId;
         evaluationState.rows = [];
         evaluationState.reviewFilter = "all";
+        evaluationState.selectedRows = new Set();
         renderEvaluationList();
         evaluationResultsHost.textContent = "正在读取结果...";
         await loadEvaluationDetail(runId);
@@ -370,6 +372,7 @@ function escapeHtml(s) {
           })();
           return (
             `<tr${rowCls ? ` class="${rowCls.trim()}"` : ""} data-row-index="${index}">` +
+            `<td><input type="checkbox" class="row-select" data-row="${index}" ${evaluationState.selectedRows.has(index) ? "checked" : ""} /></td>` +
             `<td>${thumbHtml}</td>` +
             `<td class="clip">${escapeHtml(row.itemName || "")}</td>` +
             `<td class="diff ${catCls}"><span class="orig">${escapeHtml(row.genreId || "")}</span> → <span class="ai">${escapeHtml(row.aiCategory || "")}</span></td>` +
@@ -387,6 +390,7 @@ function escapeHtml(s) {
         evaluationResultsHost.innerHTML =
           `<div class="results-table-wrap"><table class="results-table">` +
           `<thead><tr>` +
+          `<th><input type="checkbox" id="evaluation-select-all" /></th>` +
           `<th>图片</th><th>商品</th><th>分类 (原→AI)</th><th>AI分类Path</th><th>置信度</th>` +
           `<th>品牌 (原→AI)</th><th>AI标题</th><th>分类校验</th><th>品牌校验</th><th>备注</th>` +
           `</tr></thead><tbody>` +
@@ -397,6 +401,23 @@ function escapeHtml(s) {
         evaluationResultsHost.querySelectorAll("img.thumb").forEach((img) => {
           img.addEventListener("click", () => openLightbox(img.getAttribute("data-full"), 0));
         });
+        evaluationResultsHost.querySelectorAll(".row-select").forEach((cb) => {
+          cb.addEventListener("change", () => {
+            const i = Number(cb.getAttribute("data-row"));
+            if (cb.checked) evaluationState.selectedRows.add(i); else evaluationState.selectedRows.delete(i);
+            updateBatchCount();
+          });
+        });
+        const selectAll = document.getElementById("evaluation-select-all");
+        if (selectAll) selectAll.addEventListener("change", () => {
+          evaluationResultsHost.querySelectorAll(".row-select").forEach((cb) => {
+            cb.checked = selectAll.checked;
+            const i = Number(cb.getAttribute("data-row"));
+            if (selectAll.checked) evaluationState.selectedRows.add(i); else evaluationState.selectedRows.delete(i);
+          });
+          updateBatchCount();
+        });
+        updateBatchCount();
       }
 
       async function loadEvaluationResults(runId) {
@@ -499,6 +520,41 @@ function escapeHtml(s) {
         }
       }
 
+      const evaluationBatchCount = document.getElementById("evaluation-batch-count");
+      function updateBatchCount() { evaluationBatchCount.textContent = `已选 ${evaluationState.selectedRows.size}`; }
+      function applyBatch(value) {
+        const field = document.getElementById("evaluation-batch-field").value;
+        evaluationState.selectedRows.forEach((i) => {
+          const el = evaluationResultsHost.querySelector(`[data-row="${i}"][data-review-key="${field}"]`);
+          if (el) el.value = value;
+        });
+      }
+
+      function reviewKeyHandler(ev) {
+        if (evaluationState.activeTab !== "review" || !evaluationState.rows.length) return;
+        const tag = (ev.target.tagName || "").toLowerCase();
+        if (tag === "textarea" || tag === "select" || tag === "input") return;
+        const trs = Array.from(evaluationResultsHost.querySelectorAll("tbody tr[data-row-index]"));
+        if (!trs.length) return;
+        let cur = trs.findIndex((tr) => tr.classList.contains("row-focus"));
+        const setVal = (field, value) => {
+          if (cur < 0) return;
+          const i = trs[cur].getAttribute("data-row-index");
+          const el = evaluationResultsHost.querySelector(`[data-row="${i}"][data-review-key="${field}"]`);
+          if (el) el.value = value;
+        };
+        const map = { "1": ["customerCategoryCheck","OK"], "2": ["customerCategoryCheck","ACCEPTABLE"], "3": ["customerCategoryCheck","NG"],
+                      "q": ["customerBrandCheck","OK"], "w": ["customerBrandCheck","ACCEPTABLE"], "e": ["customerBrandCheck","NG"] };
+        if (ev.key === "ArrowDown") { cur = Math.min((cur < 0 ? -1 : cur) + 1, trs.length - 1); }
+        else if (ev.key === "ArrowUp") { cur = Math.max((cur < 0 ? trs.length : cur) - 1, 0); }
+        else if (map[ev.key]) { setVal(map[ev.key][0], map[ev.key][1]); return; }
+        else return;
+        ev.preventDefault();
+        trs.forEach((tr) => tr.classList.remove("row-focus"));
+        trs[cur].classList.add("row-focus");
+        trs[cur].scrollIntoView({ block: "nearest" });
+      }
+
       function setActiveTab(tab) {
         evaluationState.activeTab = tab;
         document.querySelectorAll("#evaluation-tabs .tab").forEach((btn) => {
@@ -525,6 +581,10 @@ function escapeHtml(s) {
       evaluationCloneBtn.addEventListener("click", () => {
         if (evaluationState.activeRunId) cloneRunConfig(evaluationState.activeRunId);
       });
+      document.querySelectorAll("#evaluation-batch-actions .batch-btn").forEach((btn) => {
+        btn.addEventListener("click", () => applyBatch(btn.getAttribute("data-batch")));
+      });
+      document.addEventListener("keydown", reviewKeyHandler);
       document.getElementById("lightbox-close").addEventListener("click", closeLightbox);
       lightboxPrev.addEventListener("click", () => stepLightbox(-1));
       lightboxNext.addEventListener("click", () => stepLightbox(1));
