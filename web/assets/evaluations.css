@@ -35,7 +35,7 @@
         border: 1px solid var(--border);
         border-radius: 14px;
         padding: 18px;
-        box-shadow: var(--shadow);
+        box-shadow: 0 6px 20px rgba(15, 23, 42, 0.05);
       }
 
       .controls-row {
@@ -152,6 +152,10 @@
         font-weight: 700;
       }
 
+      .pill.completed { background: #dcfce7; color: #166534; }
+      .pill.running, .pill.pending { background: #dbeafe; color: #1e40af; }
+      .pill.archived { background: #e5e7eb; color: #374151; }
+
       .entry-head {
         display: flex;
         align-items: center;
@@ -161,7 +165,7 @@
       }
 
       .entry-title {
-        font-size: 14px;
+        font-size: 15px;
         font-weight: 700;
         color: var(--text);
       }
@@ -208,8 +212,8 @@
       }
 
       .run-item.active {
-        border-color: var(--accent);
         background: #eff6ff;
+        box-shadow: inset 3px 0 0 var(--accent);
       }
 
       .run-id {
@@ -252,21 +256,24 @@
       }
 
       .metric {
-        border: 1px solid var(--border);
+        border: 1px solid #eef2f7;
         border-radius: 10px;
         padding: 10px 12px;
-        background: #fbfdff;
+        background: #fff;
       }
 
       .metric-label {
         color: var(--muted);
-        font-size: 12px;
+        font-size: 11px;
         margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
       }
 
       .metric-value {
-        font-size: 20px;
+        font-size: 22px;
         font-weight: 800;
+        letter-spacing: -0.01em;
       }
 
       .results-table-wrap {
@@ -299,6 +306,9 @@
         z-index: 1;
         color: var(--muted);
         font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+        font-size: 11px;
       }
 
       .results-table select,

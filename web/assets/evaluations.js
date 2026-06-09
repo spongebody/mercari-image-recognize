@@ -226,6 +226,7 @@ function escapeHtml(s) {
         const isComplete = status.status === "completed" || isArchived;
         evaluationActiveTitle.textContent = evaluationState.activeRunId || "未选择测试";
         evaluationActiveStatus.textContent = status.status || "idle";
+        evaluationActiveStatus.className = `pill ${status.status || "idle"}`;
         evaluationActiveMeta.textContent = evaluationState.activeRunId
           ? `${run.visionModel || "-"} / ${run.categoryModel || "-"} / ${run.productDataModel || "-"} · reasoning=${run.reasoningEffort || "none"} · ${status.message || ""}`
           : "上传测试数据后会在这里展示实时进度和统计。";
