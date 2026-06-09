@@ -155,6 +155,8 @@
       .pill.completed { background: #dcfce7; color: #166534; }
       .pill.running, .pill.pending { background: #dbeafe; color: #1e40af; }
       .pill.archived { background: #e5e7eb; color: #374151; }
+      .pill.failed { background: #fee2e2; color: #991b1b; }
+      .pill.idle { background: #f3f4f6; color: #6b7280; }
 
       .entry-head {
         display: flex;
