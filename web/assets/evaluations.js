@@ -7,6 +7,26 @@ function escapeHtml(s) {
         return String(image || "").split("|").map((s) => s.trim()).filter(Boolean)[0] || "";
       }
 
+      // ---------- Correctness helpers (mirror backend image_model_evaluation.py) ----------
+      function isCategoryCorrect(row) {
+        return String(row.genreId ?? "").trim() === String(row.aiCategory ?? "").trim();
+      }
+      function normalizeBrand(value) {
+        return String(value ?? "")
+          .normalize("NFKC")
+          .replace(/[®™©]/g, "")
+          .toLowerCase()
+          .replace(/[^\p{L}\p{N}]/gu, "");
+      }
+      function isBrandCorrect(row) {
+        const expected = normalizeBrand(row.brand);
+        const actual = normalizeBrand(row.aiBrand);
+        return Boolean(expected && actual && expected === actual);
+      }
+      function reviewIsPositive(value) {
+        return ["OK", "ACCEPTABLE"].includes(String(value ?? "").trim().toUpperCase());
+      }
+
       // ---------- Evaluation SOP ----------
       const evaluationState = {
         runs: [],
@@ -16,6 +36,7 @@ function escapeHtml(s) {
         poller: null,
         activeTab: "setup",
         lightbox: { urls: [], index: 0 },
+        reviewFilter: "all",
       };
       // Defaults pulled from saved config so this standalone page can prefill models.
       let configDefaults = {};
@@ -43,6 +64,7 @@ function escapeHtml(s) {
       const evaluationAnalysisNotes = document.getElementById("evaluation-analysis-notes");
       const evaluationActions = document.getElementById("evaluation-actions");
       const evaluationNextRun = document.getElementById("evaluation-next-run");
+      const evaluationFilterBar = document.getElementById("evaluation-filter-bar");
 
       const lightboxEl = document.getElementById("evaluation-lightbox");
       const lightboxImg = document.getElementById("lightbox-img");
@@ -285,40 +307,94 @@ function escapeHtml(s) {
           `</select>`;
       }
 
+      function rowMatchesFilter(row, filter) {
+        switch (filter) {
+          case "categoryWrong": return !isCategoryCorrect(row);
+          case "brandWrong": return !isBrandCorrect(row);
+          case "pending":
+            return (!isCategoryCorrect(row) && !String(row.customerCategoryCheck || "").trim())
+                || (!isBrandCorrect(row) && !String(row.customerBrandCheck || "").trim());
+          default: return true;
+        }
+      }
+
+      function renderFilterBar() {
+        const rows = evaluationState.rows;
+        const counts = {
+          all: rows.length,
+          categoryWrong: rows.filter((r) => !isCategoryCorrect(r)).length,
+          brandWrong: rows.filter((r) => !isBrandCorrect(r)).length,
+          pending: rows.filter((r) => rowMatchesFilter(r, "pending")).length,
+        };
+        const chips = [
+          ["all", "全部", counts.all, "chip-all"],
+          ["categoryWrong", "分类错", counts.categoryWrong, "chip-bad"],
+          ["brandWrong", "品牌错", counts.brandWrong, "chip-bad"],
+          ["pending", "待校验", counts.pending, "chip-pending"],
+        ];
+        evaluationFilterBar.innerHTML = rows.length
+          ? chips.map(([key, label, n, cls]) =>
+              `<button class="chip ${cls}${evaluationState.reviewFilter === key ? " active" : ""}" data-filter="${key}">${label} ${n}</button>`
+            ).join("")
+          : "";
+        evaluationFilterBar.querySelectorAll("[data-filter]").forEach((el) => {
+          el.addEventListener("click", () => { evaluationState.reviewFilter = el.getAttribute("data-filter"); renderEvaluationResults(); });
+        });
+      }
+
       function renderEvaluationResults() {
+        renderFilterBar();
         if (!evaluationState.rows.length) {
           evaluationResultsHost.textContent = "暂无结果。";
           evaluationSaveReviewBtn.disabled = true;
           return;
         }
-        evaluationResultsHost.innerHTML =
-          `<div class="results-table-wrap"><table class="results-table">` +
-          `<thead><tr>` +
-          `<th>图片</th><th>商品</th><th>原分类</th><th>AI分类</th><th>AI分类Path</th><th>置信度</th>` +
-          `<th>原品牌</th><th>AI品牌</th><th>AI标题</th><th>分类校验</th><th>品牌校验</th><th>备注</th>` +
-          `</tr></thead><tbody>` +
-          evaluationState.rows.map((row, index) => (
-            `<tr>` +
-            `<td>${(() => {
-              const url = firstImageUrl(row.image);
-              return url
-                ? `<img class="thumb" src="${escapeHtml(url)}" loading="lazy" alt="" data-full="${escapeHtml(row.image)}" />`
-                : `<span class="thumb thumb-empty">无图</span>`;
-            })()}</td>` +
+
+        const visible = evaluationState.rows
+          .map((row, index) => ({ row, index }))
+          .filter(({ row }) => rowMatchesFilter(row, evaluationState.reviewFilter));
+
+        if (!visible.length) {
+          evaluationResultsHost.innerHTML = `<div class="hint">当前筛选无匹配条目。</div>`;
+          renderEvaluationDetail();
+          return;
+        }
+
+        const tbody = visible.map(({ row, index }) => {
+          const catCls = isCategoryCorrect(row) ? "ok" : "bad";
+          const brandCls = isBrandCorrect(row) ? "ok" : (String(row.aiBrand || "").trim() ? "warn" : "bad");
+          const rowCls = (!isCategoryCorrect(row) && !isBrandCorrect(row)) ? " row-bad" : "";
+          const thumbHtml = (() => {
+            const url = firstImageUrl(row.image);
+            return url
+              ? `<img class="thumb" src="${escapeHtml(url)}" loading="lazy" alt="" data-full="${escapeHtml(row.image)}" />`
+              : `<span class="thumb thumb-empty">无图</span>`;
+          })();
+          return (
+            `<tr class="${rowCls.trim()}" data-row-index="${index}">` +
+            `<td>${thumbHtml}</td>` +
             `<td class="clip">${escapeHtml(row.itemName || "")}</td>` +
-            `<td>${escapeHtml(row.genreId || "")}</td>` +
-            `<td>${escapeHtml(row.aiCategory || "")}</td>` +
+            `<td class="diff ${catCls}"><span class="orig">${escapeHtml(row.genreId || "")}</span> → <span class="ai">${escapeHtml(row.aiCategory || "")}</span></td>` +
             `<td class="clip">${escapeHtml(row.aiCategoryPath || "")}</td>` +
             `<td>${escapeHtml(row.aiCategoryConfidence || "")}</td>` +
-            `<td>${escapeHtml(row.brand || "")}</td>` +
-            `<td>${escapeHtml(row.aiBrand || "")}</td>` +
+            `<td class="diff ${brandCls}"><span class="orig">${escapeHtml(row.brand || "")}</span> → <span class="ai">${escapeHtml(row.aiBrand || "")}</span></td>` +
             `<td class="clip">${escapeHtml(row.aiTitle || "")}</td>` +
             `<td>${reviewSelect(row.customerCategoryCheck, index, "customerCategoryCheck")}</td>` +
             `<td>${reviewSelect(row.customerBrandCheck, index, "customerBrandCheck")}</td>` +
             `<td><textarea data-row="${index}" data-review-key="customerNotes">${escapeHtml(row.customerNotes || "")}</textarea></td>` +
             `</tr>`
-          )).join("") +
+          );
+        }).join("");
+
+        evaluationResultsHost.innerHTML =
+          `<div class="results-table-wrap"><table class="results-table">` +
+          `<thead><tr>` +
+          `<th>图片</th><th>商品</th><th>分类 (原→AI)</th><th>AI分类Path</th><th>置信度</th>` +
+          `<th>品牌 (原→AI)</th><th>AI标题</th><th>分类校验</th><th>品牌校验</th><th>备注</th>` +
+          `</tr></thead><tbody>` +
+          tbody +
           `</tbody></table></div>`;
+
         renderEvaluationDetail();
         evaluationResultsHost.querySelectorAll("img.thumb").forEach((img) => {
           img.addEventListener("click", () => openLightbox(img.getAttribute("data-full"), 0));

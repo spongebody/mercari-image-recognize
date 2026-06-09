@@ -458,3 +458,15 @@
         box-shadow: none;
         background: rgba(255, 255, 255, 0.28);
       }
+
+      .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+      .chip { width: auto; padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid var(--border); background: #fff; color: var(--muted); box-shadow: none; cursor: pointer; }
+      .chip:not(:disabled):hover { transform: none; box-shadow: none; }
+      .chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+      .chip.chip-bad.active { background: var(--danger); border-color: var(--danger); }
+      .chip.chip-pending.active { background: #d97706; border-color: #d97706; }
+      .diff .orig { color: var(--muted); }
+      .diff.ok .ai { color: var(--success); font-weight: 700; }
+      .diff.bad .ai { color: var(--danger); font-weight: 700; }
+      .diff.warn .ai { color: #b45309; font-weight: 700; }
+      .results-table tr.row-bad td { background: #fef2f2; }
