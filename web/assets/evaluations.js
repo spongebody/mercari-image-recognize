@@ -34,6 +34,7 @@ function escapeHtml(s) {
       const evaluationSaveReviewBtn = document.getElementById("evaluation-save-review-btn");
       const evaluationResultsHost = document.getElementById("evaluation-results-host");
       const evaluationSaveAnalysisBtn = document.getElementById("evaluation-save-analysis-btn");
+      const evaluationCloneBtn = document.getElementById("evaluation-clone-btn");
       const evaluationAnalysisNotes = document.getElementById("evaluation-analysis-notes");
       const evaluationActions = document.getElementById("evaluation-actions");
       const evaluationNextRun = document.getElementById("evaluation-next-run");
@@ -120,12 +121,31 @@ function escapeHtml(s) {
             `<div class="run-id">${escapeHtml(run.runId)}</div>` +
             `<div class="run-meta">${escapeHtml(status)} · ${escapeHtml(run.reasoningEffort || "none")}</div>` +
             `<div class="run-meta">${escapeHtml(run.visionModel || "")}</div>` +
+            `<button class="run-clone" type="button" data-clone-id="${escapeHtml(run.runId)}">复用配置</button>` +
             `</div>`
           );
         }).join("");
         evaluationRunList.querySelectorAll("[data-run-id]").forEach((el) => {
           el.addEventListener("click", () => selectEvaluationRun(el.getAttribute("data-run-id")));
         });
+        evaluationRunList.querySelectorAll("[data-clone-id]").forEach((el) => {
+          el.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            cloneRunConfig(el.getAttribute("data-clone-id"));
+          });
+        });
+      }
+
+      function cloneRunConfig(runId) {
+        const run = evaluationState.runs.find((r) => r.runId === runId);
+        if (!run) return;
+        evaluationVisionModel.value = run.visionModel || evaluationVisionModel.value;
+        evaluationCategoryModel.value = run.categoryModel || evaluationCategoryModel.value;
+        evaluationProductModel.value = run.productDataModel || evaluationProductModel.value;
+        evaluationReasoning.value = run.reasoningEffort || "none";
+        if (run.language) evaluationLanguage.value = run.language;
+        setActiveTab("setup");
+        showEvaluationMessage(`已复用 ${runId} 的配置，请选择数据文件后开始测试。`, "success");
       }
 
       function parseAnalysisSection(markdown, title) {
@@ -152,6 +172,7 @@ function escapeHtml(s) {
         evaluationArchiveBtn.disabled = !evaluationState.activeRunId || isArchived;
         evaluationSaveReviewBtn.disabled = !isComplete || isArchived || !evaluationState.rows.length;
         evaluationSaveAnalysisBtn.disabled = !evaluationState.activeRunId || isArchived;
+        evaluationCloneBtn.disabled = !evaluationState.activeRunId;
         if (detail && detail.analysis) {
           evaluationAnalysisNotes.value = parseAnalysisSection(detail.analysis, "可优化点") || detail.analysis;
           evaluationActions.value = parseAnalysisSection(detail.analysis, "优化动作");
@@ -381,6 +402,9 @@ function escapeHtml(s) {
       evaluationSaveReviewBtn.addEventListener("click", saveEvaluationReview);
       evaluationSaveAnalysisBtn.addEventListener("click", saveEvaluationAnalysis);
       evaluationArchiveBtn.addEventListener("click", archiveEvaluation);
+      evaluationCloneBtn.addEventListener("click", () => {
+        if (evaluationState.activeRunId) cloneRunConfig(evaluationState.activeRunId);
+      });
 
       // ---------- Shell + sidebar ----------
       Shell.mount({
