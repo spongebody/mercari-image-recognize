@@ -44,32 +44,54 @@ def verify_session_token(token: Optional[str], password: str) -> bool:
     return int(data.get("exp", 0)) > int(time.time())
 
 
+def _password_from_header(authorization: str) -> Optional[str]:
+    scheme, _, value = authorization.partition(" ")
+    if scheme.lower() == "basic":
+        try:
+            decoded = base64.b64decode(value).decode("utf-8", errors="replace")
+            _, _, pw = decoded.partition(":")
+            return pw
+        except Exception:
+            return None
+    if scheme.lower() == "bearer":
+        return value
+    return None
+
+
+def _is_authed(authorization: Optional[str], cookie: Optional[str], password: str) -> bool:
+    if cookie and verify_session_token(cookie, password):
+        return True
+    if authorization:
+        provided = _password_from_header(authorization)
+        if provided and hmac.compare_digest(provided, password):
+            return True
+    return False
+
+
+def is_console_authed(request: Request, password: str) -> bool:
+    """True if the request carries a valid session cookie or auth header."""
+    if not password:
+        return False
+    return _is_authed(
+        request.headers.get("authorization"),
+        request.cookies.get(COOKIE_NAME),
+        password,
+    )
+
+
 def require_logs_auth(expected_password: str) -> Callable:
-    def _dep(authorization: Optional[str] = Header(default=None)) -> None:
+    def _dep(
+        authorization: Optional[str] = Header(default=None),
+        console_session: Optional[str] = Cookie(default=None),
+    ) -> None:
         if not expected_password:
             raise HTTPException(status_code=503, detail="Logs viewer not configured (set LOGS_PASSWORD).")
-        if not authorization:
-            raise HTTPException(
-                status_code=401,
-                detail="Unauthorized",
-                headers={"WWW-Authenticate": 'Basic realm="logs"'},
-            )
-        scheme, _, value = authorization.partition(" ")
-        provided: Optional[str] = None
-        if scheme.lower() == "basic":
-            try:
-                decoded = base64.b64decode(value).decode("utf-8", errors="replace")
-                _, _, pw = decoded.partition(":")
-                provided = pw
-            except Exception:
-                provided = None
-        elif scheme.lower() == "bearer":
-            provided = value
-        if not provided or not hmac.compare_digest(provided, expected_password):
-            raise HTTPException(
-                status_code=401,
-                detail="Unauthorized",
-                headers={"WWW-Authenticate": 'Basic realm="logs"'},
-            )
+        if _is_authed(authorization, console_session, expected_password):
+            return
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized",
+            headers={"WWW-Authenticate": 'Basic realm="logs"'},
+        )
 
     return _dep
