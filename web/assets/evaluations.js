@@ -197,7 +197,7 @@ function escapeHtml(s) {
             cloneRunConfig(el.getAttribute("data-clone-id"));
           });
         });
-        if (evaluationState.activeTab === "compare") renderComparePicker();
+        if (evaluationState.activeTab === "compare") renderCompare();
       }
 
       function cloneRunConfig(runId) {
@@ -587,6 +587,7 @@ function escapeHtml(s) {
       }
 
       async function ensureCompareDetail(id) {
+        // Cached for the session; compare summaries are not re-fetched after a review save elsewhere.
         if (evaluationState.compareDetails[id]) return;
         try { evaluationState.compareDetails[id] = await evaluationJson(`/api/v1/evaluations/${encodeURIComponent(id)}`); }
         catch (err) { evaluationState.compareDetails[id] = { error: String(err.message || err) }; }
@@ -632,7 +633,7 @@ function escapeHtml(s) {
         document.querySelectorAll("[data-panel]").forEach((panel) => {
           panel.classList.toggle("active", panel.getAttribute("data-panel") === tab);
         });
-        if (tab === "compare" && typeof renderCompare === "function") renderCompare();
+        if (tab === "compare") renderCompare();
       }
 
       document.querySelectorAll("#evaluation-tabs .tab").forEach((btn) => {
