@@ -35,6 +35,8 @@ function escapeHtml(s) {
         lightbox: { urls: [], index: 0 },
         reviewFilter: "all",
         selectedRows: new Set(),
+        compareRunIds: new Set(),
+        compareDetails: {},
       };
       // Defaults pulled from saved config so this standalone page can prefill models.
       let configDefaults = {};
@@ -64,6 +66,9 @@ function escapeHtml(s) {
       const evaluationNextRun = document.getElementById("evaluation-next-run");
       const evaluationFilterBar = document.getElementById("evaluation-filter-bar");
       const evaluationBatchCount = document.getElementById("evaluation-batch-count");
+
+      const evaluationComparePicker = document.getElementById("evaluation-compare-picker");
+      const evaluationCompareHost = document.getElementById("evaluation-compare-host");
 
       const lightboxEl = document.getElementById("evaluation-lightbox");
       const lightboxImg = document.getElementById("lightbox-img");
@@ -192,6 +197,7 @@ function escapeHtml(s) {
             cloneRunConfig(el.getAttribute("data-clone-id"));
           });
         });
+        if (evaluationState.activeTab === "compare") renderComparePicker();
       }
 
       function cloneRunConfig(runId) {
@@ -565,6 +571,56 @@ function escapeHtml(s) {
         trs[cur].classList.add("row-focus");
         trs[cur].scrollIntoView({ block: "nearest" });
       }
+
+      function renderComparePicker() {
+        evaluationComparePicker.innerHTML = evaluationState.runs.map((run) =>
+          `<label class="compare-chip"><input type="checkbox" data-compare-id="${escapeHtml(run.runId)}" ${evaluationState.compareRunIds.has(run.runId) ? "checked" : ""}/> ${escapeHtml(run.runId)}</label>`
+        ).join("") || "<span class='hint'>暂无运行</span>";
+        evaluationComparePicker.querySelectorAll("[data-compare-id]").forEach((cb) => {
+          cb.addEventListener("change", async () => {
+            const id = cb.getAttribute("data-compare-id");
+            if (cb.checked) { evaluationState.compareRunIds.add(id); await ensureCompareDetail(id); }
+            else evaluationState.compareRunIds.delete(id);
+            renderCompareTable();
+          });
+        });
+      }
+
+      async function ensureCompareDetail(id) {
+        if (evaluationState.compareDetails[id]) return;
+        try { evaluationState.compareDetails[id] = await evaluationJson(`/api/v1/evaluations/${encodeURIComponent(id)}`); }
+        catch (err) { evaluationState.compareDetails[id] = { error: String(err.message || err) }; }
+      }
+
+      const COMPARE_METRICS = [
+        ["分类准确率", (o) => o.categoryAccuracy, "pct", "max"],
+        ["品牌准确率", (o) => o.brandAccuracy, "pct", "max"],
+        ["复核后分类", (o) => o.categoryReviewedAccuracy, "pct", "max"],
+        ["复核后品牌", (o) => o.brandReviewedAccuracy, "pct", "max"],
+        ["待分类校验", (o) => o.categoryPendingReview, "num", "min"],
+        ["待品牌校验", (o) => o.brandPendingReview, "num", "min"],
+      ];
+
+      function renderCompareTable() {
+        const ids = evaluationState.runs.map((r) => r.runId).filter((id) => evaluationState.compareRunIds.has(id));
+        if (!ids.length) { evaluationCompareHost.innerHTML = "<div class='hint'>请选择至少一个运行。</div>"; return; }
+        const overalls = ids.map((id) => (evaluationState.compareDetails[id] && evaluationState.compareDetails[id].summary && evaluationState.compareDetails[id].summary.overall) || {});
+        const header = `<tr><th>指标</th>${ids.map((id) => `<th>${escapeHtml(id)}</th>`).join("")}</tr>`;
+        const body = COMPARE_METRICS.map(([label, get, fmt, dir]) => {
+          const vals = overalls.map((o) => { const v = Number(get(o)); return Number.isFinite(v) ? v : null; });
+          const present = vals.filter((v) => v !== null);
+          const best = present.length ? (dir === "max" ? Math.max(...present) : Math.min(...present)) : null;
+          const cells = vals.map((v) => {
+            const text = v === null ? "-" : (fmt === "pct" ? formatPercent(v) : String(v));
+            const isBest = best !== null && v === best && present.length > 1;
+            return `<td class="${isBest ? "compare-best" : ""}">${text}</td>`;
+          }).join("");
+          return `<tr><td class="compare-label">${escapeHtml(label)}</td>${cells}</tr>`;
+        }).join("");
+        evaluationCompareHost.innerHTML = `<div class="results-table-wrap"><table class="results-table compare-table"><thead>${header}</thead><tbody>${body}</tbody></table></div>`;
+      }
+
+      function renderCompare() { renderComparePicker(); renderCompareTable(); }
 
       function setActiveTab(tab) {
         evaluationState.activeTab = tab;
