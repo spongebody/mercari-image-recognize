@@ -361,17 +361,19 @@ function escapeHtml(s) {
       function setActiveTab(tab) {
         evaluationState.activeTab = tab;
         document.querySelectorAll("#evaluation-tabs .tab").forEach((btn) => {
-          btn.classList.toggle("active", btn.getAttribute("data-tab") === tab);
+          const isActive = btn.getAttribute("data-tab") === tab;
+          btn.classList.toggle("active", isActive);
+          btn.setAttribute("aria-selected", isActive ? "true" : "false");
         });
         document.querySelectorAll("[data-panel]").forEach((panel) => {
           panel.classList.toggle("active", panel.getAttribute("data-panel") === tab);
         });
         if (tab === "compare" && typeof renderCompare === "function") renderCompare();
       }
+
       document.querySelectorAll("#evaluation-tabs .tab").forEach((btn) => {
         btn.addEventListener("click", () => setActiveTab(btn.getAttribute("data-tab")));
       });
-
       evaluationCreateBtn.addEventListener("click", createEvaluation);
       evaluationRefreshBtn.addEventListener("click", () => {
         loadEvaluations().catch((err) => showEvaluationMessage(String(err.message || err), "error"));

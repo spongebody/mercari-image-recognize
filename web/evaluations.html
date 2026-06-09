@@ -20,13 +20,13 @@
         </aside>
 
         <main class="stack">
-          <nav class="tabbar" id="evaluation-tabs">
-            <button class="tab active" data-tab="setup">① 发起</button>
-            <button class="tab" data-tab="monitor">② 监控</button>
-            <button class="tab" data-tab="review">③ 校验</button>
-            <button class="tab" data-tab="analysis">④ 分析</button>
-            <button class="tab tab-compare" data-tab="compare">⇄ 多轮对比</button>
-          </nav>
+          <div class="tabbar" id="evaluation-tabs" role="tablist">
+            <button class="tab active" data-tab="setup" role="tab" aria-selected="true">① 发起</button>
+            <button class="tab" data-tab="monitor" role="tab" aria-selected="false">② 监控</button>
+            <button class="tab" data-tab="review" role="tab" aria-selected="false">③ 校验</button>
+            <button class="tab" data-tab="analysis" role="tab" aria-selected="false">④ 分析</button>
+            <button class="tab tab-compare" data-tab="compare" role="tab" aria-selected="false">⇄ 多轮对比</button>
+          </div>
 
           <section class="tab-panel active" data-panel="setup">
             <div class="card stack">
