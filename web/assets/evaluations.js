@@ -172,7 +172,7 @@ function escapeHtml(s) {
         evaluationArchiveBtn.disabled = !evaluationState.activeRunId || isArchived;
         evaluationSaveReviewBtn.disabled = !isComplete || isArchived || !evaluationState.rows.length;
         evaluationSaveAnalysisBtn.disabled = !evaluationState.activeRunId || isArchived;
-        evaluationCloneBtn.disabled = !evaluationState.activeRunId;
+        evaluationCloneBtn.disabled = !evaluationState.activeRunId; // cloning config is safe on archived runs too
         if (detail && detail.analysis) {
           evaluationAnalysisNotes.value = parseAnalysisSection(detail.analysis, "可优化点") || detail.analysis;
           evaluationActions.value = parseAnalysisSection(detail.analysis, "优化动作");
