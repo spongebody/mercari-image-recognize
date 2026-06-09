@@ -65,3 +65,47 @@ def test_logout_clears_cookie(monkeypatch):
         assert r.status_code == 200
         assert 'console_session=' in r.headers["set-cookie"]
         assert "Max-Age=0" in r.headers["set-cookie"] or "expires=" in r.headers["set-cookie"].lower()
+
+
+def test_login_page_served_without_auth(monkeypatch):
+    m = _reload(monkeypatch)
+    with TestClient(m.app) as client:
+        r = client.get("/login")
+        assert r.status_code == 200
+        assert "console/login" in r.text  # the page posts to the login endpoint
+
+
+def test_unauthenticated_index_redirects_to_login(monkeypatch):
+    m = _reload(monkeypatch)
+    with TestClient(m.app) as client:
+        r = client.get("/", follow_redirects=False)
+        assert r.status_code == 302
+        assert r.headers["location"].startswith("/login")
+
+
+def test_unauthenticated_config_redirects_to_login(monkeypatch):
+    m = _reload(monkeypatch)
+    with TestClient(m.app) as client:
+        r = client.get("/config", follow_redirects=False)
+        assert r.status_code == 302
+        assert "next=" in r.headers["location"]
+
+
+def test_session_cookie_grants_index_access(monkeypatch):
+    m = _reload(monkeypatch)
+    with TestClient(m.app) as client:
+        login = client.post("/api/v1/console/login",
+                            json={"username": "admin", "password": "secret", "remember": True})
+        assert login.status_code == 200
+        r = client.get("/", follow_redirects=False)
+        assert r.status_code == 200
+
+
+def test_authed_user_visiting_login_is_redirected_home(monkeypatch):
+    m = _reload(monkeypatch)
+    with TestClient(m.app) as client:
+        client.post("/api/v1/console/login",
+                    json={"username": "admin", "password": "secret", "remember": True})
+        r = client.get("/login", follow_redirects=False)
+        assert r.status_code == 302
+        assert r.headers["location"] == "/"

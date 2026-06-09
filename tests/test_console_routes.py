@@ -21,7 +21,9 @@ def test_index_requires_password(monkeypatch):
     m = _reload_with_password(monkeypatch, "secret")
     from fastapi.testclient import TestClient
     with TestClient(m.app) as client:
-        assert client.get("/").status_code == 401
+        r = client.get("/", follow_redirects=False)
+        assert r.status_code == 302
+        assert r.headers["location"].startswith("/login")
 
 
 def test_index_served_with_password(monkeypatch):
@@ -37,7 +39,9 @@ def test_evaluations_requires_password(monkeypatch):
     m = _reload_with_password(monkeypatch, "secret")
     from fastapi.testclient import TestClient
     with TestClient(m.app) as client:
-        assert client.get("/evaluations").status_code == 401
+        r = client.get("/evaluations", follow_redirects=False)
+        assert r.status_code == 302
+        assert r.headers["location"].startswith("/login")
 
 
 def test_evaluations_served_with_password(monkeypatch):

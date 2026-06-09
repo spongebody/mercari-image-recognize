@@ -675,15 +675,16 @@ ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 
 
-@app.get("/", response_class=HTMLResponse,
-         dependencies=[Depends(require_logs_auth(settings.logs_password))])
-def index_page():
+@app.get("/", response_class=HTMLResponse)
+def index_page(request: Request):
     """Serve the test UI from the same origin as the API.
 
     Because the page is served here, its relative API paths (e.g.
     /api/v1/mercari/image/price) resolve to this server automatically, so the
     endpoint field can be left blank.
     """
+    if not is_console_authed(request, settings.logs_password):
+        return RedirectResponse("/login?next=/", status_code=302)
     index_path = WEB_DIR / "index.html"
     if not index_path.exists():
         raise HTTPException(status_code=404, detail="Test UI not found.")
@@ -724,6 +725,15 @@ def console_logout(response: Response) -> Dict[str, Any]:
     return {"ok": True}
 
 
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    if settings.logs_password and is_console_authed(request, settings.logs_password):
+        return RedirectResponse("/", status_code=302)
+    if not LOGIN_PAGE_PATH.exists():
+        raise HTTPException(status_code=404, detail="Login page not found.")
+    return HTMLResponse(LOGIN_PAGE_PATH.read_text(encoding="utf-8"))
+
+
 @app.get("/favicon.ico")
 def favicon():
     icon = WEB_DIR / "favicon.ico"
@@ -732,27 +742,30 @@ def favicon():
     return _Resp(status_code=204)
 
 
-@app.get("/config", response_class=HTMLResponse,
-         dependencies=[Depends(require_logs_auth(settings.logs_password))])
-def config_page() -> HTMLResponse:
+@app.get("/config", response_class=HTMLResponse)
+def config_page(request: Request):
+    if not is_console_authed(request, settings.logs_password):
+        return RedirectResponse("/login?next=/config", status_code=302)
     try:
         return HTMLResponse(CONFIG_PAGE_PATH.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Config page not found.") from exc
 
 
-@app.get("/evaluations", response_class=HTMLResponse,
-         dependencies=[Depends(require_logs_auth(settings.logs_password))])
-def evaluations_page() -> HTMLResponse:
+@app.get("/evaluations", response_class=HTMLResponse)
+def evaluations_page(request: Request):
+    if not is_console_authed(request, settings.logs_password):
+        return RedirectResponse("/login?next=/evaluations", status_code=302)
     try:
         return HTMLResponse(EVALUATIONS_PAGE_PATH.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Evaluations page not found.") from exc
 
 
-@app.get("/logs", response_class=HTMLResponse,
-         dependencies=[Depends(require_logs_auth(settings.logs_password))])
-def logs_page():
+@app.get("/logs", response_class=HTMLResponse)
+def logs_page(request: Request):
+    if not is_console_authed(request, settings.logs_password):
+        return RedirectResponse("/login?next=/logs", status_code=302)
     return FileResponse(BASE_DIR / "web" / "logs.html")
 
 
