@@ -63,6 +63,7 @@ function escapeHtml(s) {
       const evaluationActions = document.getElementById("evaluation-actions");
       const evaluationNextRun = document.getElementById("evaluation-next-run");
       const evaluationFilterBar = document.getElementById("evaluation-filter-bar");
+      const evaluationBatchCount = document.getElementById("evaluation-batch-count");
 
       const lightboxEl = document.getElementById("evaluation-lightbox");
       const lightboxImg = document.getElementById("lightbox-img");
@@ -520,13 +521,23 @@ function escapeHtml(s) {
         }
       }
 
-      const evaluationBatchCount = document.getElementById("evaluation-batch-count");
-      function updateBatchCount() { evaluationBatchCount.textContent = `已选 ${evaluationState.selectedRows.size}`; }
-      function applyBatch(value) {
+      function updateBatchCount() {
+        evaluationBatchCount.textContent = `已选 ${evaluationState.selectedRows.size}`;
+        // Reconcile the header select-all to reflect the visible rows' checked state.
+        const selectAll = document.getElementById("evaluation-select-all");
+        if (!selectAll) return;
+        const boxes = evaluationResultsHost.querySelectorAll(".row-select");
+        const checked = [...boxes].filter((cb) => cb.checked).length;
+        selectAll.checked = boxes.length > 0 && checked === boxes.length;
+        selectAll.indeterminate = checked > 0 && checked < boxes.length;
+      }
+      // `verdict` is the review value (OK/ACCEPTABLE/NG); the target field comes from #evaluation-batch-field.
+      // Only currently-visible selected rows have DOM controls; filtered-out selections are silently skipped.
+      function applyBatch(verdict) {
         const field = document.getElementById("evaluation-batch-field").value;
         evaluationState.selectedRows.forEach((i) => {
           const el = evaluationResultsHost.querySelector(`[data-row="${i}"][data-review-key="${field}"]`);
-          if (el) el.value = value;
+          if (el) el.value = verdict;
         });
       }
 
@@ -546,7 +557,7 @@ function escapeHtml(s) {
         const map = { "1": ["customerCategoryCheck","OK"], "2": ["customerCategoryCheck","ACCEPTABLE"], "3": ["customerCategoryCheck","NG"],
                       "q": ["customerBrandCheck","OK"], "w": ["customerBrandCheck","ACCEPTABLE"], "e": ["customerBrandCheck","NG"] };
         if (ev.key === "ArrowDown") { cur = Math.min((cur < 0 ? -1 : cur) + 1, trs.length - 1); }
-        else if (ev.key === "ArrowUp") { cur = Math.max((cur < 0 ? trs.length : cur) - 1, 0); }
+        else if (ev.key === "ArrowUp") { cur = Math.max((cur < 0 ? trs.length - 1 : cur - 1), 0); }
         else if (map[ev.key]) { setVal(map[ev.key][0], map[ev.key][1]); return; }
         else return;
         ev.preventDefault();
