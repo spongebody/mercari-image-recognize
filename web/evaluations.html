@@ -12,54 +12,6 @@
       <div class="evaluation-layout">
         <aside class="stack">
           <section class="card stack">
-            <div>
-              <label for="evaluation-file">上传测试数据</label>
-              <input id="evaluation-file" type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" />
-              <div class="hint">TSV/CSV 需包含 itemName、genreId、image、brand 四个字段。</div>
-            </div>
-            <div>
-              <label for="evaluation-vision-model">图片识别模型</label>
-              <input id="evaluation-vision-model" type="text" placeholder="openai/gpt-4o-mini" />
-            </div>
-            <div>
-              <label for="evaluation-category-model">分类模型</label>
-              <input id="evaluation-category-model" type="text" placeholder="openai/gpt-4o-mini" />
-            </div>
-            <div>
-              <label for="evaluation-product-model">商品数据模型</label>
-              <input id="evaluation-product-model" type="text" placeholder="openai/gpt-4o-mini" />
-            </div>
-            <div class="controls-row">
-              <div>
-                <label for="evaluation-reasoning">推理程度</label>
-                <select id="evaluation-reasoning">
-                  <option value="none">none</option>
-                  <option value="low">low</option>
-                  <option value="medium">medium</option>
-                  <option value="high">high</option>
-                </select>
-              </div>
-              <div>
-                <label for="evaluation-limit">数量限制</label>
-                <input id="evaluation-limit" type="number" min="0" step="1" value="0" />
-              </div>
-            </div>
-            <div>
-              <label for="evaluation-language">语言</label>
-              <select id="evaluation-language">
-                <option value="ja">ja</option>
-                <option value="zh">zh</option>
-                <option value="en">en</option>
-              </select>
-            </div>
-            <div class="message" id="evaluations-message"></div>
-            <div class="compact-actions">
-              <button id="evaluation-create-btn" type="button">开始测试</button>
-              <button class="secondary" id="evaluation-refresh-btn" type="button">刷新列表</button>
-            </div>
-          </section>
-
-          <section class="card stack">
             <div class="entry-head">
               <span class="entry-title">测试记录</span>
             </div>
@@ -68,47 +20,113 @@
         </aside>
 
         <main class="stack">
-          <section class="card stack">
-            <div class="entry-head">
-              <span class="entry-title" id="evaluation-active-title">未选择测试</span>
-              <span class="pill" id="evaluation-active-status">idle</span>
-            </div>
-            <div class="hint" id="evaluation-active-meta">上传测试数据后会在这里展示实时进度和统计。</div>
-            <div class="metric-grid" id="evaluation-metrics"></div>
-            <div class="compact-actions">
-              <a id="evaluation-download-link" href="#" hidden>下载结果 CSV</a>
-              <button class="secondary" id="evaluation-archive-btn" type="button" disabled>归档</button>
+          <nav class="tabbar" id="evaluation-tabs">
+            <button class="tab active" data-tab="setup">① 发起</button>
+            <button class="tab" data-tab="monitor">② 监控</button>
+            <button class="tab" data-tab="review">③ 校验</button>
+            <button class="tab" data-tab="analysis">④ 分析</button>
+            <button class="tab tab-compare" data-tab="compare">⇄ 多轮对比</button>
+          </nav>
+
+          <section class="tab-panel active" data-panel="setup">
+            <div class="card stack">
+              <div>
+                <label for="evaluation-file">上传测试数据</label>
+                <input id="evaluation-file" type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" />
+                <div class="hint">TSV/CSV 需包含 itemName、genreId、image、brand 四个字段。</div>
+              </div>
+              <div>
+                <label for="evaluation-vision-model">图片识别模型</label>
+                <input id="evaluation-vision-model" type="text" placeholder="openai/gpt-4o-mini" />
+              </div>
+              <div>
+                <label for="evaluation-category-model">分类模型</label>
+                <input id="evaluation-category-model" type="text" placeholder="openai/gpt-4o-mini" />
+              </div>
+              <div>
+                <label for="evaluation-product-model">商品数据模型</label>
+                <input id="evaluation-product-model" type="text" placeholder="openai/gpt-4o-mini" />
+              </div>
+              <div class="controls-row">
+                <div>
+                  <label for="evaluation-reasoning">推理程度</label>
+                  <select id="evaluation-reasoning">
+                    <option value="none">none</option>
+                    <option value="low">low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="evaluation-limit">数量限制</label>
+                  <input id="evaluation-limit" type="number" min="0" step="1" value="0" />
+                </div>
+              </div>
+              <div>
+                <label for="evaluation-language">语言</label>
+                <select id="evaluation-language">
+                  <option value="ja">ja</option>
+                  <option value="zh">zh</option>
+                  <option value="en">en</option>
+                </select>
+              </div>
+              <div class="message" id="evaluations-message"></div>
+              <div class="compact-actions">
+                <button id="evaluation-create-btn" type="button">开始测试</button>
+                <button class="secondary" id="evaluation-refresh-btn" type="button">刷新列表</button>
+              </div>
             </div>
           </section>
 
-          <section class="card stack">
-            <div class="entry-head">
-              <span class="entry-title">客服校验</span>
-              <button class="secondary" id="evaluation-save-review-btn" type="button" disabled>保存校验</button>
+          <section class="tab-panel" data-panel="monitor">
+            <div class="card stack">
+              <div class="entry-head">
+                <span class="entry-title" id="evaluation-active-title">未选择测试</span>
+                <span class="pill" id="evaluation-active-status">idle</span>
+              </div>
+              <div class="hint" id="evaluation-active-meta">上传测试数据后会在这里展示实时进度和统计。</div>
+              <div class="metric-grid" id="evaluation-metrics"></div>
+              <div class="compact-actions">
+                <a id="evaluation-download-link" href="#" hidden>下载结果 CSV</a>
+                <button class="secondary" id="evaluation-archive-btn" type="button" disabled>归档</button>
+              </div>
             </div>
-            <div id="evaluation-results-host" class="hint">测试完成后展示 AI 结果和客服校验字段。</div>
           </section>
 
-          <section class="card stack">
-            <div class="entry-head">
-              <span class="entry-title">分析与迭代</span>
-              <button class="secondary" id="evaluation-save-analysis-btn" type="button" disabled>保存分析</button>
-            </div>
-            <div class="controls-row">
-              <div>
-                <label for="evaluation-analysis-notes">可优化点</label>
-                <textarea id="evaluation-analysis-notes" rows="5"></textarea>
+          <section class="tab-panel" data-panel="review">
+            <div class="card stack">
+              <div class="entry-head">
+                <span class="entry-title">客服校验</span>
+                <button class="secondary" id="evaluation-save-review-btn" type="button" disabled>保存校验</button>
               </div>
-              <div>
-                <label for="evaluation-actions">优化动作</label>
-                <textarea id="evaluation-actions" rows="5"></textarea>
-              </div>
-            </div>
-            <div>
-              <label for="evaluation-next-run">下一轮测试建议</label>
-              <textarea id="evaluation-next-run" rows="3"></textarea>
+              <div id="evaluation-results-host" class="hint">测试完成后展示 AI 结果和客服校验字段。</div>
             </div>
           </section>
+
+          <section class="tab-panel" data-panel="analysis">
+            <div class="card stack">
+              <div class="entry-head">
+                <span class="entry-title">分析与迭代</span>
+                <button class="secondary" id="evaluation-save-analysis-btn" type="button" disabled>保存分析</button>
+              </div>
+              <div class="controls-row">
+                <div>
+                  <label for="evaluation-analysis-notes">可优化点</label>
+                  <textarea id="evaluation-analysis-notes" rows="5"></textarea>
+                </div>
+                <div>
+                  <label for="evaluation-actions">优化动作</label>
+                  <textarea id="evaluation-actions" rows="5"></textarea>
+                </div>
+              </div>
+              <div>
+                <label for="evaluation-next-run">下一轮测试建议</label>
+                <textarea id="evaluation-next-run" rows="3"></textarea>
+              </div>
+            </div>
+          </section>
+
+          <section class="tab-panel" data-panel="compare"><!-- 多轮对比 placeholder, built in a later task --></section>
         </main>
       </div>
     </div>

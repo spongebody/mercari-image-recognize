@@ -10,6 +10,7 @@ function escapeHtml(s) {
         activeDetail: null,
         rows: [],
         poller: null,
+        activeTab: "setup",
       };
       // Defaults pulled from saved config so this standalone page can prefill models.
       let configDefaults = {};
@@ -284,6 +285,7 @@ function escapeHtml(s) {
           const data = await evaluationJson("/api/v1/evaluations", { method: "POST", body: form });
           evaluationState.activeRunId = data.runId;
           showEvaluationMessage(`已创建测试：${data.runId}`, "success");
+          setActiveTab("monitor");
           await loadEvaluations();
         } catch (err) {
           showEvaluationMessage(String(err.message || err), "error");
@@ -355,6 +357,20 @@ function escapeHtml(s) {
           renderEvaluationDetail();
         }
       }
+
+      function setActiveTab(tab) {
+        evaluationState.activeTab = tab;
+        document.querySelectorAll("#evaluation-tabs .tab").forEach((btn) => {
+          btn.classList.toggle("active", btn.getAttribute("data-tab") === tab);
+        });
+        document.querySelectorAll("[data-panel]").forEach((panel) => {
+          panel.classList.toggle("active", panel.getAttribute("data-panel") === tab);
+        });
+        if (tab === "compare" && typeof renderCompare === "function") renderCompare();
+      }
+      document.querySelectorAll("#evaluation-tabs .tab").forEach((btn) => {
+        btn.addEventListener("click", () => setActiveTab(btn.getAttribute("data-tab")));
+      });
 
       evaluationCreateBtn.addEventListener("click", createEvaluation);
       evaluationRefreshBtn.addEventListener("click", () => {
