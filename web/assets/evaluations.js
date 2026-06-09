@@ -267,7 +267,9 @@ function escapeHtml(s) {
         evaluationState.rows = [];
         evaluationState.reviewFilter = "all";
         evaluationState.selectedRows = new Set();
+        evaluationState.activeDetail = null; // avoid flashing the previous run's metrics while loading
         renderEvaluationList();
+        renderEvaluationDetail();
         evaluationResultsHost.textContent = "正在读取结果...";
         await loadEvaluationDetail(runId);
       }
@@ -550,6 +552,7 @@ function escapeHtml(s) {
 
       function reviewKeyHandler(ev) {
         if (evaluationState.activeTab !== "review" || !evaluationState.rows.length) return;
+        if (!lightboxEl.hidden) return; // let the lightbox own arrow keys while it's open
         const tag = (ev.target.tagName || "").toLowerCase();
         if (tag === "textarea" || tag === "select" || tag === "input") return;
         const trs = Array.from(evaluationResultsHost.querySelectorAll("tbody tr[data-row-index]"));
@@ -589,9 +592,10 @@ function escapeHtml(s) {
 
       async function ensureCompareDetail(id) {
         // Cached for the session; compare summaries are not re-fetched after a review save elsewhere.
+        // Failures are NOT cached so a later re-check retries instead of being stuck on empty data.
         if (evaluationState.compareDetails[id]) return;
         try { evaluationState.compareDetails[id] = await evaluationJson(`/api/v1/evaluations/${encodeURIComponent(id)}`); }
-        catch (err) { evaluationState.compareDetails[id] = { error: String(err.message || err) }; }
+        catch (err) { showEvaluationMessage(`读取 ${id} 详情失败：${err.message || err}`, "error"); }
       }
 
       const COMPARE_METRICS = [
