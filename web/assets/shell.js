@@ -58,21 +58,20 @@
       el('span', { class: 'brand-logo', html: `<span class="logo" aria-hidden="true">${escapeHtml(brand.logo)}</span>` }),
       el('span', { class: 'brand-text', text: brand.text }),
       el('span', { class: 'spacer' }),
+      el('button', {
+        class: 'shell-logout',
+        type: 'button',
+        title: '退出登录 / ログアウト',
+        'aria-label': '退出登录',
+        html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span>退出</span>',
+        onClick: logout,
+      }),
     ]);
 
     const sidebar = el('aside', { id: 'shellSidebar', class: 'shell-sidebar' });
     const pageContent = el('div', { id: 'shellPageContent', class: 'page-content' });
     preserved.forEach((n) => pageContent.appendChild(n));
-    const main = el('main', { id: 'shellMain', class: 'shell-main' }, [
-      el('div', { id: 'shellPageHeader', class: 'page-header' }, [
-        el('div', {}, [
-          el('h1', { id: 'shellPageTitle', text: '' }),
-          el('div', { id: 'shellPageCrumb', class: 'crumb', text: '' }),
-        ]),
-        el('div', { id: 'shellPageActions', class: 'actions' }),
-      ]),
-      pageContent,
-    ]);
+    const main = el('main', { id: 'shellMain', class: 'shell-main' }, [pageContent]);
     const body = el('div', { class: 'shell-body' }, [sidebar, main]);
 
     document.body.prepend(topbar);
@@ -125,16 +124,16 @@
     renderSidebar();
   }
 
-  function setHeader({ title, crumb, actions } = {}) {
-    const t = document.getElementById('shellPageTitle');
-    const c = document.getElementById('shellPageCrumb');
-    const a = document.getElementById('shellPageActions');
-    if (t) t.textContent = title || '';
-    if (c) c.textContent = crumb || '';
-    if (a) {
-      a.innerHTML = '';
-      if (Array.isArray(actions)) actions.forEach((x) => x && a.append(x));
-      else if (actions instanceof Node) a.append(actions);
+  // Page title is conveyed by the left nav (active group + sub-item), so the
+  // in-content page header was removed. Kept as a no-op for call-site
+  // compatibility across pages that still invoke it.
+  function setHeader() {}
+
+  async function logout() {
+    try {
+      await fetch('/api/v1/console/logout', { method: 'POST', credentials: 'same-origin' });
+    } finally {
+      window.location.replace('/login');
     }
   }
 

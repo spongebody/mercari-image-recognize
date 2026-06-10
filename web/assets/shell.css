@@ -37,12 +37,18 @@ body.shell-page {
 }
 .shell-topbar .brand-text { font-weight: 800; letter-spacing: -0.2px; }
 .shell-topbar .spacer { flex: 1; }
-.shell-topbar .tb-refresh {
-  width: 34px; height: 34px; border-radius: 8px;
-  border: 1px solid var(--shell-border); background: #fff;
-  color: var(--shell-muted); cursor: pointer; font-size: 16px;
+.shell-topbar .shell-logout {
+  display: inline-flex; align-items: center; gap: 6px;
+  width: auto; flex: none;
+  height: 30px; padding: 0 11px;
+  border: 1px solid var(--shell-border); border-radius: 8px;
+  background: #fff; color: var(--shell-muted);
+  font-size: 12px; font-weight: 600; font-family: inherit; cursor: pointer;
+  white-space: nowrap; line-height: 1;
+  transition: color .12s ease, border-color .12s ease, background .12s ease;
 }
-.shell-topbar .tb-refresh:hover { color: var(--shell-accent); border-color: var(--shell-accent); }
+.shell-topbar .shell-logout svg { width: 15px; height: 15px; }
+.shell-topbar .shell-logout:hover { color: var(--shell-text); border-color: var(--shell-muted); background: var(--shell-bg); }
 
 .shell-body {
   display: flex;
@@ -66,7 +72,8 @@ body.shell-page {
   font-weight: 700; font-size: 14px;
 }
 .shell-sidebar .nav-group .ic { color: var(--shell-muted); font-size: 11px; width: 12px; }
-.shell-sidebar .nav-group.on { background: #eef2ff; color: #1e3a8a; }
+.shell-sidebar .nav-group.on { color: var(--shell-accent); }
+.shell-sidebar .nav-group.on .ic { color: var(--shell-accent); }
 .shell-sidebar .sub-list { display: grid; gap: 2px; margin: 2px 0 8px 14px; }
 .shell-sidebar .sub-item {
   display: flex; align-items: center; justify-content: space-between;
@@ -74,21 +81,14 @@ body.shell-page {
   color: var(--shell-muted); text-decoration: none; font-size: 13px;
 }
 .shell-sidebar .sub-item:hover { background: #f5f7fb; color: var(--shell-text); }
-.shell-sidebar .sub-item.on { background: var(--shell-accent); color: #fff; font-weight: 700; }
+.shell-sidebar .sub-item.on { color: var(--shell-accent); font-weight: 700; }
 
 .shell-main {
   margin-left: var(--shell-sidebar-w);
   flex: 1;
   min-width: 0;
-  padding: 22px 24px 40px;
+  padding: 20px 24px 32px;
 }
-.shell-main .page-header {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; margin-bottom: 18px;
-}
-.shell-main .page-header h1 { margin: 0; font-size: 24px; letter-spacing: -0.2px; }
-.shell-main .page-header .crumb { color: var(--shell-muted); font-size: 13px; margin-top: 4px; }
-.shell-main .page-header .actions { display: flex; align-items: center; gap: 10px; }
 .shell-main .page-content { max-width: 1180px; }
 
 @media (max-width: 720px) {

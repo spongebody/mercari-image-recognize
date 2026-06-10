@@ -35,7 +35,7 @@
       .page {
         max-width: 1200px;
         margin: 0 auto;
-        padding: 28px 20px 40px;
+        padding: 0;
       }
 
       header {
@@ -966,7 +966,7 @@
 
       @media (max-width: 640px) {
         .page {
-          padding: 16px 12px 32px;
+          padding: 0;
         }
 
         h1 {
@@ -1061,7 +1061,7 @@
         }
       }
     </style>
-    <link rel="stylesheet" href="/assets/shell.css" />
+    <link rel="stylesheet" href="/assets/shell.css?v=20260610" />
   </head>
   <body>
     <div class="page">
@@ -1080,10 +1080,6 @@
             </select>
           </div>
           <span class="pill" id="beta-pill">批量测试版</span>
-          <button id="logout-btn" type="button"
-            style="height:36px;padding:0 14px;border:1px solid #e5e7eb;border-radius:999px;background:#fff;color:#374151;font-size:13px;font-family:inherit;cursor:pointer">
-            退出登录 / ログアウト
-          </button>
         </div>
       </header>
 
@@ -1324,7 +1320,7 @@
       </div>
     </div>
 
-    <script src="/assets/shell.js"></script>
+    <script src="/assets/shell.js?v=20260610"></script>
     <script>
       const translations = {
         zh: {
@@ -3480,14 +3476,5 @@
       <button type="button" class="image-lightbox-close" onclick="closeImageLightbox()" aria-label="Close">×</button>
       <img id="image-lightbox-img" alt="preview" />
     </div>
-    <script>
-      (function(){
-        var btn = document.getElementById("logout-btn");
-        if (btn) btn.addEventListener("click", async function(){
-          try { await fetch("/api/v1/console/logout", {method:"POST", credentials:"same-origin"}); }
-          finally { location.replace("/login"); }
-        });
-      })();
-    </script>
   </body>
 </html>
