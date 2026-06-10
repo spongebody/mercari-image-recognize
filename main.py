@@ -720,8 +720,18 @@ def console_login(payload: Dict[str, Any], request: Request, response: Response)
 
 
 @app.post("/api/v1/console/logout")
-def console_logout(response: Response) -> Dict[str, Any]:
-    response.delete_cookie(COOKIE_NAME, path="/")
+def console_logout(request: Request, response: Response) -> Dict[str, Any]:
+    # Mirror the attributes used when the cookie was set (see console_login) so
+    # the browser reliably clears it. Over HTTPS the session cookie is Secure;
+    # a delete that omits Secure/SameSite can fail to match, leaving the user
+    # logged in so logout appears to "do nothing".
+    response.delete_cookie(
+        COOKIE_NAME,
+        path="/",
+        httponly=True,
+        samesite="lax",
+        secure=request.url.scheme == "https",
+    )
     return {"ok": True}
 
 
