@@ -921,16 +921,6 @@ def save_evaluation_review(run_id: str, payload: Dict[str, Any]) -> Dict[str, An
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.put("/api/v1/evaluations/{run_id}/analysis")
-def save_evaluation_analysis(run_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-    try:
-        evaluation_store.save_analysis(run_id, payload)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="Evaluation run not found.") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"ok": True}
-
 
 @app.post("/api/v1/evaluations/{run_id}/archive")
 def archive_evaluation(run_id: str) -> Dict[str, Any]:

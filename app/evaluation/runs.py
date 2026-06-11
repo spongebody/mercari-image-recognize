@@ -123,16 +123,10 @@ class EvaluationRunStore:
             if (path / "summary.json").exists()
             else {}
         )
-        analysis = (
-            (path / "analysis.md").read_text(encoding="utf-8")
-            if (path / "analysis.md").exists()
-            else ""
-        )
         return {
             "run": self._read_json(path / "run_config.json"),
             "status": self._read_json(path / "status.json"),
             "summary": summary,
-            "analysis": analysis,
         }
 
     def load_config(self, run_id: str) -> EvaluationRunConfig:
@@ -270,23 +264,6 @@ class EvaluationRunStore:
         summary = summarize_rows(rows)
         self._write_json(self.run_path(run_id) / "summary.json", summary)
         return summary
-
-    def save_analysis(self, run_id: str, payload: Dict[str, Any]) -> None:
-        if self._is_archived(run_id):
-            raise ValueError("Run is archived and cannot be edited.")
-        text = (
-            "# Evaluation Analysis\n\n"
-            "## 可优化点\n\n"
-            + str(payload.get("analysisNotes", "")).strip()
-            + "\n\n"
-            "## 优化动作\n\n"
-            + str(payload.get("optimizationActions", "")).strip()
-            + "\n\n"
-            "## 下一轮测试建议\n\n"
-            + str(payload.get("nextRunSuggestion", "")).strip()
-            + "\n"
-        )
-        (self.run_path(run_id) / "analysis.md").write_text(text, encoding="utf-8")
 
     def archive(self, run_id: str) -> Dict[str, Any]:
         path = self.run_path(run_id)

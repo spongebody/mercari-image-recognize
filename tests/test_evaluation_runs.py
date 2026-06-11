@@ -206,3 +206,23 @@ def test_read_errors_raises_for_missing_run_directory(tmp_path):
     store = EvaluationRunStore(tmp_path)
     with pytest.raises(FileNotFoundError):
         store.read_errors("does-not-exist")
+
+
+def test_read_run_omits_analysis_field(tmp_path):
+    store = EvaluationRunStore(tmp_path)
+    input_path = tmp_path / "input.tsv"
+    input_path.write_text(
+        "itemName\tgenreId\timage\tbrand\nitem\t100\thttp://example.com/a.jpg\tnike\n",
+        encoding="utf-8",
+    )
+    run = store.create_run(
+        input_path=input_path,
+        config=EvaluationRunConfig(
+            visionModel="v", categoryModel="c", productDataModel="p"
+        ),
+    )
+
+    data = store.read_run(run.runId)
+
+    assert "analysis" not in data
+    assert not hasattr(store, "save_analysis")

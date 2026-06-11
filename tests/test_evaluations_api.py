@@ -109,3 +109,11 @@ def test_read_evaluation_errors_404_for_unknown_run(monkeypatch, tmp_path):
     client = TestClient(main.app)
 
     assert client.get("/api/v1/evaluations/nope/errors").status_code == 404
+
+
+def test_analysis_endpoint_removed():
+    client = TestClient(main.app)
+
+    response = client.put("/api/v1/evaluations/some-run/analysis", json={})
+
+    assert response.status_code in (404, 405)
