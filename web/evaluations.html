@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>模型测试</title>
-    <link rel="stylesheet" href="/assets/evaluations.css?v=20260613" />
-    <link rel="stylesheet" href="/assets/shell.css?v=20260613" />
+    <link rel="stylesheet" href="/assets/evaluations.css?v=20260614" />
+    <link rel="stylesheet" href="/assets/shell.css?v=20260614" />
   </head>
   <body>
     <div class="page">
@@ -95,8 +95,8 @@
         <span class="entry-title">新建测试</span>
         <button class="secondary mini" id="drawer-close-btn" type="button" aria-label="关闭">×</button>
       </div>
-      <div class="stack">
-        <div>
+      <div class="drawer-body">
+        <div class="drawer-col">
           <label for="f-file">测试数据</label>
           <div class="dropzone" id="f-dropzone" role="button" tabindex="0" aria-label="选择或拖拽测试数据文件">
             <input id="f-file" type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" hidden />
@@ -112,43 +112,45 @@
           </div>
           <div class="hint">TSV/CSV 需包含 itemName、genreId、image、brand 四个字段。</div>
         </div>
-        <div>
-          <label for="f-vision">图片识别模型</label>
-          <input id="f-vision" type="text" placeholder="openai/gpt-4o-mini" />
-        </div>
-        <div>
-          <label for="f-category">分类模型</label>
-          <input id="f-category" type="text" placeholder="openai/gpt-4o-mini" />
-        </div>
-        <div>
-          <label for="f-product">商品数据模型</label>
-          <input id="f-product" type="text" placeholder="openai/gpt-4o-mini" />
-        </div>
-        <div class="controls-row">
+        <div class="drawer-col stack">
           <div>
-            <label for="f-reasoning">推理程度</label>
-            <select id="f-reasoning">
-              <option value="none">none</option>
-              <option value="low">low</option>
-              <option value="medium">medium</option>
-              <option value="high">high</option>
-            </select>
+            <label for="f-vision">图片识别模型</label>
+            <input id="f-vision" type="text" placeholder="openai/gpt-4o-mini" />
           </div>
           <div>
-            <label for="f-limit">数量限制</label>
-            <input id="f-limit" type="number" min="0" step="1" value="0" />
+            <label for="f-category">分类模型</label>
+            <input id="f-category" type="text" placeholder="openai/gpt-4o-mini" />
           </div>
           <div>
-            <label for="f-language">语言</label>
-            <select id="f-language">
-              <option value="ja">ja</option>
-              <option value="zh">zh</option>
-              <option value="en">en</option>
-            </select>
+            <label for="f-product">商品数据模型</label>
+            <input id="f-product" type="text" placeholder="openai/gpt-4o-mini" />
           </div>
+          <div class="controls-row">
+            <div>
+              <label for="f-reasoning">推理程度</label>
+              <select id="f-reasoning">
+                <option value="none">none</option>
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+              </select>
+            </div>
+            <div>
+              <label for="f-limit">数量限制</label>
+              <input id="f-limit" type="number" min="0" step="1" value="0" />
+            </div>
+            <div>
+              <label for="f-language">语言</label>
+              <select id="f-language">
+                <option value="ja">ja</option>
+                <option value="zh">zh</option>
+                <option value="en">en</option>
+              </select>
+            </div>
+          </div>
+          <div class="message" id="drawer-message"></div>
+          <button id="create-btn" type="button">开始测试</button>
         </div>
-        <div class="message" id="drawer-message"></div>
-        <button id="create-btn" type="button">开始测试</button>
       </div>
     </aside>
 
@@ -169,7 +171,7 @@
       <button class="lightbox-nav lightbox-next" id="lightbox-next" type="button" aria-label="下一张">›</button>
     </div>
 
-    <script src="/assets/shell.js?v=20260613"></script>
-    <script src="/assets/evaluations.js?v=20260613"></script>
+    <script src="/assets/shell.js?v=20260614"></script>
+    <script src="/assets/evaluations.js?v=20260614"></script>
   </body>
 </html>
