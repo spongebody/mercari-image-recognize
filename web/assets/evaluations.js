@@ -35,7 +35,6 @@ const state = {
   rows: [],
   dirty: new Set(),        // row indices with unsaved review edits
   selectedRows: new Set(),
-  expandedRows: new Set(),
   focusIndex: -1,          // original row index, not visible position
   filter: "all",
   poller: null,
@@ -142,7 +141,6 @@ async function selectRun(runId) {
   state.rows = [];
   state.filter = "all";
   state.selectedRows = new Set();
-  state.expandedRows = new Set();
   state.focusIndex = -1;
   state.detail = null; // avoid flashing the previous run's metrics while loading
   setView("run");
@@ -377,35 +375,32 @@ function renderReview() {
     const thumb = url
       ? `<img class="thumb" src="${escapeHtml(url)}" loading="lazy" alt="" data-full="${escapeHtml(row.image)}" data-thumb-row="${i}" />`
       : `<span class="thumb thumb-empty">无图</span>`;
-    let html =
+    const clamp = (text) => {
+      const safe = escapeHtml(text || "");
+      return `<div class="clamp2" title="${safe}">${safe}</div>`;
+    };
+    return (
       `<tr${classes.length ? ` class="${classes.join(" ")}"` : ""} data-row-index="${i}">` +
       `<td><input type="checkbox" class="row-select" data-row="${i}" ${state.selectedRows.has(i) ? "checked" : ""}${dis ? " disabled" : ""} /></td>` +
-      `<td><button class="caret" type="button" data-expand="${i}">${state.expandedRows.has(i) ? "▾" : "▸"}</button></td>` +
       `<td>${thumb}</td>` +
-      `<td class="clip">${escapeHtml(row.itemName || "")}</td>` +
+      `<td class="cell-name">${clamp(row.itemName)}</td>` +
       `<td class="diff ${catCls}"><span class="orig">${escapeHtml(row.genreId || "")}</span> → <span class="ai">${escapeHtml(row.aiCategory || "")}</span></td>` +
+      `<td class="cell-path">${clamp(row.aiCategoryPath)}</td>` +
+      `<td>${escapeHtml(row.aiCategoryConfidence || "")}</td>` +
       `<td class="diff ${brandCls}"><span class="orig">${escapeHtml(row.brand || "")}</span> → <span class="ai">${escapeHtml(row.aiBrand || "")}</span></td>` +
+      `<td class="cell-title">${clamp(row.aiTitle)}</td>` +
       `<td>${reviewSelect(row.customerCategoryCheck, i, "customerCategoryCheck", dis)}</td>` +
       `<td>${reviewSelect(row.customerBrandCheck, i, "customerBrandCheck", dis)}</td>` +
       `<td><textarea data-row="${i}" data-review-key="customerNotes"${dis ? " disabled" : ""}>${escapeHtml(row.customerNotes || "")}</textarea></td>` +
-      `</tr>`;
-    if (state.expandedRows.has(i)) {
-      html +=
-        `<tr class="detail-row" data-detail-for="${i}"><td></td><td></td><td colspan="7">` +
-        `<div class="detail-grid">` +
-        `<div><span class="detail-label">AI 分类 Path</span>${escapeHtml(row.aiCategoryPath || "-")}</div>` +
-        `<div><span class="detail-label">置信度</span>${escapeHtml(row.aiCategoryConfidence || "-")}</div>` +
-        `<div><span class="detail-label">AI 标题</span>${escapeHtml(row.aiTitle || "-")}</div>` +
-        `</div></td></tr>`;
-    }
-    return html;
+      `</tr>`
+    );
   }).join("");
 
   host.innerHTML =
     `<div class="results-table-wrap"><table class="results-table"><thead><tr>` +
     `<th><input type="checkbox" id="select-all"${dis ? " disabled" : ""} /></th>` +
-    `<th></th><th>图片</th><th>商品</th><th>分类 (原→AI)</th><th>品牌 (原→AI)</th>` +
-    `<th>分类校验</th><th>品牌校验</th><th>备注</th>` +
+    `<th>图片</th><th>商品</th><th>分类 (原→AI)</th><th>AI 分类 Path</th><th>置信度</th>` +
+    `<th>品牌 (原→AI)</th><th>AI 标题</th><th>分类校验</th><th>品牌校验</th><th>备注</th>` +
     `</tr></thead><tbody>${body}</tbody></table></div>`;
 
   bindReviewEvents(host);
@@ -416,14 +411,6 @@ function bindReviewEvents(host) {
   host.querySelectorAll("img.thumb").forEach((img) => {
     img.addEventListener("click", () => {
       openLightbox(img.getAttribute("data-full"), 0, Number(img.getAttribute("data-thumb-row")));
-    });
-  });
-  host.querySelectorAll("[data-expand]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const i = Number(btn.getAttribute("data-expand"));
-      if (state.expandedRows.has(i)) state.expandedRows.delete(i);
-      else state.expandedRows.add(i);
-      renderReview();
     });
   });
   host.querySelectorAll(".row-select").forEach((cb) => {

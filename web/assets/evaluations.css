@@ -20,7 +20,12 @@ body {
   min-height: 100vh;
 }
 
-.page { max-width: 1180px; margin: 0 auto; padding: 0; }
+/* Desktop-only console page: fill the viewport width and let the shell's own
+   padding provide the breathing room. Overrides the shell's 1180px content cap
+   (this stylesheet only loads on /evaluations, so other pages keep the cap). */
+.page { max-width: none; margin: 0; padding: 0; }
+/* shell.css loads after this sheet, so out-specify its 1180px cap. */
+main.shell-main .page-content { max-width: none; }
 
 .card {
   background: var(--card);
@@ -230,7 +235,7 @@ button.secondary:not(:disabled):hover { box-shadow: none; }
   border-radius: 10px;
   max-height: calc(100vh - 340px);
 }
-table.results-table { width: 100%; border-collapse: collapse; min-width: 920px; background: #fff; }
+table.results-table { width: 100%; border-collapse: collapse; min-width: 1180px; background: #fff; }
 .results-table th, .results-table td {
   border-bottom: 1px solid var(--border);
   padding: 8px 10px;
@@ -252,20 +257,25 @@ table.results-table { width: 100%; border-collapse: collapse; min-width: 920px; 
 .results-table select, .results-table textarea { min-width: 96px; padding: 8px 10px; border-width: 1px; border-radius: 8px; font-size: 12px; }
 .results-table textarea { min-width: 160px; min-height: 44px; }
 .results-table tr.row-bad td { background: #fef2f2; }
-.results-table tr.row-focus td { box-shadow: inset 3px 0 0 var(--accent); background: #f0f7ff; }
+/* Focus marker only on the leading cell; an inset shadow on every td painted a
+   blue bar at each column boundary. */
+.results-table tr.row-focus td { background: #f0f7ff; }
+.results-table tr.row-focus td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 
-.clip { max-width: 220px; white-space: normal; word-break: break-word; }
+.clamp2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+.cell-name .clamp2, .cell-title .clamp2 { max-width: 240px; }
+.cell-path .clamp2 { max-width: 260px; }
 
 .diff .orig { color: var(--muted); }
 .diff.ok .ai { color: var(--success); font-weight: 700; }
 .diff.bad .ai { color: var(--danger); font-weight: 700; }
 .diff.warn .ai { color: #b45309; font-weight: 700; }
-
-.caret { width: auto; padding: 2px 7px; font-size: 12px; line-height: 1.2; background: #fff; color: var(--muted); border: 1px solid var(--border); border-radius: 6px; box-shadow: none; }
-.caret:not(:disabled):hover { transform: none; box-shadow: none; border-color: var(--accent); color: var(--accent); }
-.detail-row td { background: #f8fafc; }
-.detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 16px; font-size: 12px; }
-.detail-label { display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 2px; }
 
 .thumb { width: 46px; height: 46px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); cursor: zoom-in; background: #f1f5f9; }
 .thumb-empty { display: inline-flex; align-items: center; justify-content: center; color: var(--muted); font-size: 11px; cursor: default; }
@@ -309,9 +319,3 @@ table.results-table { width: 100%; border-collapse: collapse; min-width: 920px; 
 .lightbox-next { right: 18px; }
 .lightbox-close:hover { transform: none; box-shadow: none; background: rgba(255, 255, 255, 0.28); }
 .lightbox-nav:hover { transform: translateY(-50%); box-shadow: none; background: rgba(255, 255, 255, 0.28); }
-
-@media (max-width: 860px) {
-  .evaluation-layout { grid-template-columns: 1fr; }
-  .review-toolbar { position: static; }
-  .results-table-wrap { max-height: none; }
-}
