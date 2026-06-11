@@ -217,6 +217,24 @@ class EvaluationRunStore:
         with path.open(encoding="utf-8-sig", newline="") as f:
             return list(csv.DictReader(f, delimiter="\t"))
 
+    def read_errors(self, run_id: str, limit: int = 20) -> List[Dict[str, Any]]:
+        path = self.run_path(run_id) / "errors.jsonl"
+        if not path.exists():
+            return []
+        errors: List[Dict[str, Any]] = []
+        with path.open(encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    errors.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue  # keep serving partial diagnostics over failing hard
+                if len(errors) >= limit:
+                    break
+        return errors
+
     def write_results_to_path(self, path: Path, rows: List[Dict[str, str]]) -> None:
         with path.open("w", encoding="utf-8-sig", newline="") as f:
             writer = csv.DictWriter(

@@ -163,3 +163,40 @@ def test_execute_run_updates_status_and_writes_results(tmp_path):
     assert (run.path / "results.csv").exists()
     summary = json.loads((run.path / "summary.json").read_text(encoding="utf-8"))
     assert summary["overall"]["categoryAccuracy"] == 1.0
+
+
+def test_read_errors_parses_jsonl_and_skips_bad_lines(tmp_path):
+    store = EvaluationRunStore(tmp_path)
+    run_dir = tmp_path / "2026-06-11-10-00"
+    run_dir.mkdir(parents=True)
+    (run_dir / "errors.jsonl").write_text(
+        '{"caseIndex": 1, "itemName": "a", "error": "boom"}\n'
+        "not-json\n"
+        '{"caseIndex": 2, "itemName": "b", "error": "bang"}\n',
+        encoding="utf-8",
+    )
+
+    errors = store.read_errors("2026-06-11-10-00")
+
+    assert errors == [
+        {"caseIndex": 1, "itemName": "a", "error": "boom"},
+        {"caseIndex": 2, "itemName": "b", "error": "bang"},
+    ]
+
+
+def test_read_errors_returns_empty_when_file_missing(tmp_path):
+    store = EvaluationRunStore(tmp_path)
+    run_dir = tmp_path / "2026-06-11-10-01"
+    run_dir.mkdir(parents=True)
+
+    assert store.read_errors("2026-06-11-10-01") == []
+
+
+def test_read_errors_respects_limit(tmp_path):
+    store = EvaluationRunStore(tmp_path)
+    run_dir = tmp_path / "2026-06-11-10-02"
+    run_dir.mkdir(parents=True)
+    lines = "".join(f'{{"caseIndex": {i}, "error": "e{i}"}}\n' for i in range(30))
+    (run_dir / "errors.jsonl").write_text(lines, encoding="utf-8")
+
+    assert len(store.read_errors("2026-06-11-10-02")) == 20

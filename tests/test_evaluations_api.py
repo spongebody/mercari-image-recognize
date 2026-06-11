@@ -80,3 +80,32 @@ def test_create_evaluation_returns_run_id_and_submits_background(monkeypatch, tm
     assert response.status_code == 200
     assert response.json() == {"runId": "2026-06-05-14-30", "status": "pending"}
     assert len(calls) >= 2
+
+
+def test_read_evaluation_errors_endpoint(monkeypatch, tmp_path):
+    from app.evaluation.runs import EvaluationRunStore
+
+    store = EvaluationRunStore(tmp_path)
+    run_dir = tmp_path / "2026-06-11-09-00"
+    run_dir.mkdir(parents=True)
+    (run_dir / "errors.jsonl").write_text(
+        '{"caseIndex": 1, "itemName": "x", "error": "boom"}\n', encoding="utf-8"
+    )
+    monkeypatch.setattr(main, "evaluation_store", store)
+    client = TestClient(main.app)
+
+    response = client.get("/api/v1/evaluations/2026-06-11-09-00/errors")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "errors": [{"caseIndex": 1, "itemName": "x", "error": "boom"}]
+    }
+
+
+def test_read_evaluation_errors_404_for_unknown_run(monkeypatch, tmp_path):
+    from app.evaluation.runs import EvaluationRunStore
+
+    monkeypatch.setattr(main, "evaluation_store", EvaluationRunStore(tmp_path))
+    client = TestClient(main.app)
+
+    assert client.get("/api/v1/evaluations/nope/errors").status_code == 404

@@ -901,6 +901,14 @@ def download_evaluation_results(run_id: str):
         raise HTTPException(status_code=404, detail="Evaluation run not found.") from exc
 
 
+@app.get("/api/v1/evaluations/{run_id}/errors")
+def read_evaluation_errors(run_id: str) -> Dict[str, Any]:
+    try:
+        return {"errors": evaluation_store.read_errors(run_id)}
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Evaluation run not found.") from exc
+
+
 @app.put("/api/v1/evaluations/{run_id}/review")
 def save_evaluation_review(run_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
