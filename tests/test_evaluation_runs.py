@@ -200,3 +200,9 @@ def test_read_errors_respects_limit(tmp_path):
     (run_dir / "errors.jsonl").write_text(lines, encoding="utf-8")
 
     assert len(store.read_errors("2026-06-11-10-02")) == 20
+
+
+def test_read_errors_raises_for_missing_run_directory(tmp_path):
+    store = EvaluationRunStore(tmp_path)
+    with pytest.raises(FileNotFoundError):
+        store.read_errors("does-not-exist")

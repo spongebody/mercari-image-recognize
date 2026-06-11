@@ -218,6 +218,8 @@ class EvaluationRunStore:
             return list(csv.DictReader(f, delimiter="\t"))
 
     def read_errors(self, run_id: str, limit: int = 20) -> List[Dict[str, Any]]:
+        if limit <= 0:
+            return []
         path = self.run_path(run_id) / "errors.jsonl"
         if not path.exists():
             return []

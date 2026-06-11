@@ -906,6 +906,8 @@ def read_evaluation_errors(run_id: str) -> Dict[str, Any]:
     try:
         return {"errors": evaluation_store.read_errors(run_id)}
     except FileNotFoundError as exc:
+        # Raised by run_path() for a missing run directory; a missing
+        # errors.jsonl is handled inside read_errors() by returning [].
         raise HTTPException(status_code=404, detail="Evaluation run not found.") from exc
 
 
