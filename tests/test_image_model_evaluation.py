@@ -217,3 +217,33 @@ def test_build_model_combinations_expands_cartesian_product():
         ModelCombination("vision-b", "category-a", "product-a", "none"),
         ModelCombination("vision-b", "category-a", "product-a", "medium"),
     ]
+
+
+def test_summary_includes_average_durations():
+    rows = [
+        {
+            "genreId": "1", "aiCategory": "1", "brand": "nike", "aiBrand": "nike",
+            "categoryDurationS": "1.0", "productDataDurationS": "2.0", "totalDurationS": "3.0",
+        },
+        {
+            "genreId": "2", "aiCategory": "2", "brand": "nike", "aiBrand": "nike",
+            # productDataDurationS 为空串（行失败时的留空格式），不应计入均值
+            "categoryDurationS": "2.0", "productDataDurationS": "", "totalDurationS": "5.0",
+        },
+    ]
+
+    summary = summarize_rows(rows)
+
+    assert summary["overall"]["avgTotalDurationS"] == 4.0
+    assert summary["overall"]["avgCategoryDurationS"] == 1.5
+    assert summary["overall"]["avgProductDataDurationS"] == 2.0
+
+
+def test_summary_average_durations_none_when_all_missing():
+    rows = [{"genreId": "1", "aiCategory": "1", "brand": "", "aiBrand": ""}]
+
+    summary = summarize_rows(rows)
+
+    assert summary["overall"]["avgTotalDurationS"] is None
+    assert summary["overall"]["avgCategoryDurationS"] is None
+    assert summary["overall"]["avgProductDataDurationS"] is None

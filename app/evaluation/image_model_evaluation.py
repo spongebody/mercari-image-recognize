@@ -295,6 +295,29 @@ def _review_check_is_positive(value: Any) -> bool:
     return _clean(value).upper() in {"OK", "ACCEPTABLE"}
 
 
+def _duration_seconds(value: Any) -> Optional[float]:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number < 0:
+        return None
+    return number
+
+
+def _average_duration(rows: Sequence[Dict[str, Any]], field: str) -> Optional[float]:
+    values = [
+        seconds
+        for seconds in (_duration_seconds(row.get(field)) for row in rows)
+        if seconds is not None
+    ]
+    if not values:
+        return None
+    return round(sum(values) / len(values), 3)
+
+
 def _summary_bucket(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     total = len(rows)
     category_correct = sum(1 for row in rows if _is_category_correct(row))
@@ -339,6 +362,9 @@ def _summary_bucket(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         else 0.0,
         "categoryPendingReview": category_pending_review,
         "brandPendingReview": brand_pending_review,
+        "avgTotalDurationS": _average_duration(rows, "totalDurationS"),
+        "avgCategoryDurationS": _average_duration(rows, "categoryDurationS"),
+        "avgProductDataDurationS": _average_duration(rows, "productDataDurationS"),
     }
 
 
