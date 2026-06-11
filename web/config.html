@@ -14,7 +14,6 @@
         --border: #e5e7eb;
         --danger: #e11d48;
         --success: #16a34a;
-        --shadow: 0 14px 40px rgba(15, 23, 42, 0.08);
       }
 
       * {
@@ -23,32 +22,20 @@
 
       body {
         margin: 0;
-        background: radial-gradient(circle at 10% 20%, #eef2ff 0, transparent 25%),
-          radial-gradient(circle at 80% 0%, #e0f2fe 0, transparent 28%),
-          var(--bg);
+        background: var(--bg);
         color: var(--text);
         font-family: "Inter", "Noto Sans SC", "Noto Sans JP", system-ui, -apple-system, sans-serif;
         min-height: 100vh;
       }
 
+      /* Desktop console: fill the viewport, shell padding is the margin. */
       .page {
-        max-width: 980px;
-        margin: 0 auto;
+        max-width: none;
+        margin: 0;
         padding: 0;
       }
-
-      header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 18px;
-      }
-
-      h1 {
-        margin: 0;
-        font-size: 26px;
-        letter-spacing: -0.2px;
+      main.shell-main .page-content {
+        max-width: none;
       }
 
       .status {
@@ -71,33 +58,46 @@
         box-shadow: 0 0 12px rgba(22, 163, 74, 0.5);
       }
 
-      .pill {
-        background: #e0e7ff;
-        color: #1e3a8a;
-        padding: 6px 12px;
-        border-radius: 999px;
-        font-size: 12px;
-        font-weight: 700;
-      }
-
       .card {
         background: var(--card);
         border: 1px solid var(--border);
         border-radius: 14px;
-        padding: 18px;
-        box-shadow: var(--shadow);
+        padding: 18px 20px;
+        box-shadow: 0 6px 20px rgba(15, 23, 42, 0.05);
       }
 
-      .grid {
+      .stack {
+        display: grid;
+        gap: 14px;
+      }
+
+      .section-head {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .section-head h2 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--text);
+      }
+
+      .section-sub {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .field-grid {
         display: grid;
         gap: 16px;
       }
 
-      .controls-row {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        gap: 12px;
-      }
+      .field-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+      .field-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+      .field-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
 
       label {
         display: block;
@@ -109,16 +109,15 @@
 
       input[type="text"],
       input[type="number"],
-      input[type="file"],
       select,
       textarea {
         width: 100%;
-        padding: 12px 16px;
+        padding: 11px 14px;
         border: 2px solid var(--border);
         border-radius: 10px;
         background: #fdfdfd;
         font-size: 14px;
-        transition: all 0.2s ease;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
         font-family: inherit;
       }
 
@@ -134,12 +133,14 @@
       textarea {
         resize: vertical;
         line-height: 1.55;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 13px;
       }
 
       details.collapsible {
         background: var(--card);
         border: 1px solid var(--border);
-        border-radius: 12px;
+        border-radius: 14px;
         padding: 0;
         overflow: hidden;
       }
@@ -147,12 +148,12 @@
       details.collapsible > summary {
         list-style: none;
         cursor: pointer;
-        padding: 14px 18px;
+        padding: 16px 20px;
         display: flex;
         align-items: center;
         justify-content: space-between;
         font-weight: 700;
-        font-size: 14px;
+        font-size: 15px;
         color: var(--text);
         user-select: none;
       }
@@ -186,7 +187,7 @@
       }
 
       details.collapsible .collapsible-body {
-        padding: 4px 18px 18px;
+        padding: 4px 20px 20px;
         display: grid;
         gap: 16px;
       }
@@ -205,24 +206,17 @@
         line-height: 1.5;
       }
 
-      .actions {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
-      }
-
       button {
-        width: 100%;
         border: none;
         background: linear-gradient(135deg, var(--accent), #1d4ed8);
         color: white;
-        padding: 14px 16px;
-        border-radius: 12px;
-        font-size: 15px;
+        padding: 12px 22px;
+        border-radius: 10px;
+        font-size: 14px;
         font-weight: 700;
         cursor: pointer;
         transition: transform 0.08s ease, box-shadow 0.08s ease;
-        box-shadow: 0 10px 25px rgba(47, 128, 237, 0.2);
+        box-shadow: 0 6px 18px rgba(47, 128, 237, 0.2);
       }
 
       button.secondary {
@@ -238,8 +232,34 @@
       }
 
       button:not(:disabled):hover {
-        transform: translateY(-2px);
-        box-shadow: 0 12px 32px rgba(47, 128, 237, 0.28);
+        transform: translateY(-1px);
+        box-shadow: 0 10px 26px rgba(47, 128, 237, 0.26);
+      }
+
+      button.secondary:not(:disabled):hover {
+        box-shadow: none;
+      }
+
+      /* Sticky save bar: always reachable without scrolling back down. */
+      .save-bar {
+        position: sticky;
+        bottom: 12px;
+        z-index: 5;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        background: rgba(255, 255, 255, 0.96);
+        backdrop-filter: blur(4px);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: 0 10px 32px rgba(15, 23, 42, 0.12);
+      }
+
+      .save-bar .message {
+        flex: 1;
+        margin: 0;
+        padding: 8px 12px;
       }
 
       .message {
@@ -264,34 +284,6 @@
         background: #fee2e2;
         color: #991b1b;
         border: 1px solid #fecdd3;
-      }
-      .tabs {
-        display: flex;
-        gap: 8px;
-        margin-bottom: 18px;
-      }
-
-      .tab-btn {
-        width: auto;
-        background: white;
-        color: var(--muted);
-        border: 2px solid var(--border);
-        box-shadow: none;
-        padding: 10px 22px;
-        font-size: 14px;
-      }
-
-      .tab-btn.active {
-        background: linear-gradient(135deg, var(--accent), #1d4ed8);
-        color: white;
-        border-color: transparent;
-        box-shadow: 0 10px 25px rgba(47, 128, 237, 0.2);
-      }
-
-      .tab-btn:not(.active):hover {
-        transform: none;
-        border-color: var(--accent);
-        color: var(--accent);
       }
 
       .tab-panel[hidden] {
@@ -376,9 +368,8 @@
         padding: 9px 18px;
         font-size: 13px;
       }
-
     </style>
-    <link rel="stylesheet" href="/assets/shell.css?v=20260610" />
+    <link rel="stylesheet" href="/assets/shell.css?v=20260614" />
   </head>
   <body>
     <div class="page">
@@ -388,141 +379,141 @@
       </div>
 
       <div class="tab-panel" id="tab-api">
-      <main class="card grid">
-        <div class="controls-row">
-          <div>
-            <label for="VISION_MODEL">图片识别默认模型</label>
-            <input id="VISION_MODEL" type="text" placeholder="例如 openai/gpt-4.1-mini" />
-            <div class="hint">保存后，未在请求中覆盖 vision_model 的图片识别会使用该模型。</div>
-          </div>
-          <div>
-            <label for="CATEGORY_MODEL">分类默认模型</label>
-            <input id="CATEGORY_MODEL" type="text" placeholder="例如 openai/gpt-4.1-mini" />
-            <div class="hint">保存后，标题分类和图片后的分类选择会使用该模型。</div>
-          </div>
-          <div>
-            <label for="PRODUCT_DATA_MODEL">商品数据生成默认模型</label>
-            <input id="PRODUCT_DATA_MODEL" type="text" placeholder="例如 google/gemini-2.5-flash" />
-            <div class="hint">用于多图生成标题、描述和品牌信息；不再生成价格字段。</div>
-          </div>
-        </div>
-
-        <div class="controls-row">
-          <div>
-            <label for="PRODUCT_DATA_FALLBACK_MODEL">商品数据保底模型</label>
-            <input id="PRODUCT_DATA_FALLBACK_MODEL" type="text" placeholder="例如 openai/gpt-4o-mini" />
-            <div class="hint">与主模型并行调用的快速小模型。主模型在限定时间内未返回时直接采用该结果。留空可关闭保底。</div>
-          </div>
-          <div>
-            <label for="PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS">商品数据保底超时秒数</label>
-            <input id="PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS" type="number" min="0.1" step="0.5" />
-            <div class="hint">主模型超过该时间仍未完成时，使用保底模型结果（默认 10 秒）。</div>
-          </div>
-        </div>
-
-        <div class="controls-row">
-          <div>
-            <label for="SHOWCASE_MODEL">图片合成默认模型</label>
-            <input id="SHOWCASE_MODEL" type="text" placeholder="例如 google/gemini-3.1-flash-image-preview" />
-            <div class="hint">用于 /api/v1/showcase/generate；必须支持 OpenRouter 图生图（image+text → image）modalities。请求中 model 字段为空时使用该默认值。</div>
-          </div>
-          <div>
-            <label for="CLASSIFICATION_REASONING_ENABLED">分类链路推理（reasoning）</label>
-            <select id="CLASSIFICATION_REASONING_ENABLED">
-              <option value="false">关闭（更快，推荐）</option>
-              <option value="true">开启</option>
-            </select>
-            <div class="hint">关闭后分类的视觉识别与类目选择会禁用模型推理，显著加快返回（推荐配合 gemini-2.5-flash，可达 2-5 秒）。开启则沿用全局 reasoning 设置。不影响商品数据生成。保存后立即生效。</div>
-          </div>
-        </div>
-
-        <div class="controls-row">
-          <div>
-            <label for="VISION_FALLBACK_MODELS">图片识别回退模型（一行一个）</label>
-            <textarea id="VISION_FALLBACK_MODELS" rows="6" placeholder="google/gemini-2.5-flash"></textarea>
-            <div class="hint">主模型 3 次重试后会按顺序逐个尝试。</div>
-          </div>
-          <div>
-            <label for="CATEGORY_FALLBACK_MODELS">分类回退模型（一行一个）</label>
-            <textarea id="CATEGORY_FALLBACK_MODELS" rows="6" placeholder="google/gemini-2.5-flash"></textarea>
-            <div class="hint">分类阶段主模型失败后按顺序尝试。</div>
-          </div>
-        </div>
-
-        <div class="controls-row">
-          <div>
-            <label for="PRODUCT_DATA_FALLBACK_MODELS">商品数据回退模型（一行一个）</label>
-            <textarea id="PRODUCT_DATA_FALLBACK_MODELS" rows="6" placeholder="openai/gpt-4o"></textarea>
-            <div class="hint">主模型与保底模型均失败后按顺序尝试。</div>
-          </div>
-          <div>
-            <label for="SHOWCASE_FALLBACK_MODELS">图片合成回退模型（一行一个）</label>
-            <textarea id="SHOWCASE_FALLBACK_MODELS" rows="6" placeholder="google/gemini-3-pro-image-preview"></textarea>
-            <div class="hint">主模型重试耗尽后按顺序尝试。</div>
-          </div>
-        </div>
-
-        <details class="collapsible" id="advanced-section">
-          <summary>
-            <span>其他配置<span class="summary-hint">日志、超时、重试等高级参数</span></span>
-          </summary>
-          <div class="collapsible-body">
-            <div class="controls-row">
+        <div class="stack">
+          <section class="card">
+            <div class="section-head">
+              <h2>默认模型</h2>
+              <span class="section-sub">请求未显式指定模型时，各链路使用的默认值</span>
+            </div>
+            <div class="field-grid cols-4">
               <div>
-                <label for="LOG_REQUESTS">打印请求日志</label>
-                <select id="LOG_REQUESTS">
+                <label for="VISION_MODEL">图片识别</label>
+                <input id="VISION_MODEL" type="text" placeholder="例如 openai/gpt-4.1-mini" />
+                <div class="hint">未在请求中覆盖 vision_model 时使用。</div>
+              </div>
+              <div>
+                <label for="CATEGORY_MODEL">分类</label>
+                <input id="CATEGORY_MODEL" type="text" placeholder="例如 openai/gpt-4.1-mini" />
+                <div class="hint">标题分类与图片后的类目选择。</div>
+              </div>
+              <div>
+                <label for="PRODUCT_DATA_MODEL">商品数据生成</label>
+                <input id="PRODUCT_DATA_MODEL" type="text" placeholder="例如 google/gemini-2.5-flash" />
+                <div class="hint">多图生成标题、描述和品牌信息。</div>
+              </div>
+              <div>
+                <label for="SHOWCASE_MODEL">图片合成</label>
+                <input id="SHOWCASE_MODEL" type="text" placeholder="例如 google/gemini-3.1-flash-image-preview" />
+                <div class="hint">需支持 OpenRouter 图生图（image+text → image）。</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="section-head">
+              <h2>链路行为</h2>
+              <span class="section-sub">速度与保底策略</span>
+            </div>
+            <div class="field-grid cols-3">
+              <div>
+                <label for="CLASSIFICATION_REASONING_ENABLED">分类链路推理（reasoning）</label>
+                <select id="CLASSIFICATION_REASONING_ENABLED">
+                  <option value="false">关闭（更快，推荐）</option>
                   <option value="true">开启</option>
-                  <option value="false">关闭</option>
                 </select>
-                <div class="hint">开启后会记录 API 请求日志。</div>
+                <div class="hint">关闭后分类链路禁用模型推理，配合 gemini-2.5-flash 可达 2-5 秒；不影响商品数据生成。</div>
+              </div>
+              <div>
+                <label for="PRODUCT_DATA_FALLBACK_MODEL">商品数据保底模型</label>
+                <input id="PRODUCT_DATA_FALLBACK_MODEL" type="text" placeholder="例如 openai/gpt-4o-mini" />
+                <div class="hint">与主模型并行调用的快速小模型；留空关闭保底。</div>
+              </div>
+              <div>
+                <label for="PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS">商品数据保底超时（秒）</label>
+                <input id="PRODUCT_DATA_FALLBACK_TIMEOUT_SECONDS" type="number" min="0.1" step="0.5" />
+                <div class="hint">主模型超过该时间未完成时改用保底结果（默认 10）。</div>
               </div>
             </div>
+          </section>
 
-            <div class="controls-row">
+          <section class="card">
+            <div class="section-head">
+              <h2>回退模型</h2>
+              <span class="section-sub">一行一个；主模型重试耗尽后按顺序逐个尝试</span>
+            </div>
+            <div class="field-grid cols-4">
               <div>
-                <label for="ENABLE_DEBUG">允许 debug 响应字段</label>
-                <select id="ENABLE_DEBUG">
-                  <option value="true">开启</option>
-                  <option value="false">关闭</option>
-                </select>
+                <label for="VISION_FALLBACK_MODELS">图片识别</label>
+                <textarea id="VISION_FALLBACK_MODELS" rows="6" placeholder="google/gemini-2.5-flash"></textarea>
               </div>
               <div>
-                <label for="IMAGE_COMPRESSION_THRESHOLD_MB">图片压缩阈值 MB</label>
-                <input id="IMAGE_COMPRESSION_THRESHOLD_MB" type="number" min="0" step="1" />
-                <div class="hint">设置为 0 可以关闭后端压缩。</div>
+                <label for="CATEGORY_FALLBACK_MODELS">分类</label>
+                <textarea id="CATEGORY_FALLBACK_MODELS" rows="6" placeholder="google/gemini-2.5-flash"></textarea>
+              </div>
+              <div>
+                <label for="PRODUCT_DATA_FALLBACK_MODELS">商品数据</label>
+                <textarea id="PRODUCT_DATA_FALLBACK_MODELS" rows="6" placeholder="openai/gpt-4o"></textarea>
+                <div class="hint">主模型与保底模型均失败后尝试。</div>
+              </div>
+              <div>
+                <label for="SHOWCASE_FALLBACK_MODELS">图片合成</label>
+                <textarea id="SHOWCASE_FALLBACK_MODELS" rows="6" placeholder="google/gemini-3-pro-image-preview"></textarea>
               </div>
             </div>
+          </section>
 
-            <div class="controls-row">
-              <div>
-                <label for="REQUEST_TIMEOUT">OpenRouter 单次调用超时秒数</label>
-                <input id="REQUEST_TIMEOUT" type="number" min="1" step="1" />
-                <div class="hint">单次 LLM 请求最多等多久。</div>
+          <details class="collapsible" id="advanced-section">
+            <summary>
+              <span>高级设置<span class="summary-hint">日志、超时、重试等参数</span></span>
+            </summary>
+            <div class="collapsible-body">
+              <div class="field-grid cols-3">
+                <div>
+                  <label for="LOG_REQUESTS">打印请求日志</label>
+                  <select id="LOG_REQUESTS">
+                    <option value="true">开启</option>
+                    <option value="false">关闭</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="ENABLE_DEBUG">允许 debug 响应字段</label>
+                  <select id="ENABLE_DEBUG">
+                    <option value="true">开启</option>
+                    <option value="false">关闭</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="IMAGE_COMPRESSION_THRESHOLD_MB">图片压缩阈值（MB）</label>
+                  <input id="IMAGE_COMPRESSION_THRESHOLD_MB" type="number" min="0" step="1" />
+                  <div class="hint">设为 0 关闭后端压缩。</div>
+                </div>
               </div>
-              <div>
-                <label for="MODEL_CALL_MAX_RETRIES">主模型重试次数</label>
-                <input id="MODEL_CALL_MAX_RETRIES" type="number" min="0" step="1" />
-                <div class="hint">总尝试数 = 1 次初始 + 这里设置的重试次数（默认 3）。</div>
+              <div class="field-grid cols-3">
+                <div>
+                  <label for="REQUEST_TIMEOUT">单次调用超时（秒）</label>
+                  <input id="REQUEST_TIMEOUT" type="number" min="1" step="1" />
+                  <div class="hint">单次 LLM 请求的最长等待时间。</div>
+                </div>
+                <div>
+                  <label for="MODEL_CALL_MAX_RETRIES">主模型重试次数</label>
+                  <input id="MODEL_CALL_MAX_RETRIES" type="number" min="0" step="1" />
+                  <div class="hint">总尝试数 = 1 次初始 + 重试次数（默认 3）。</div>
+                </div>
+                <div>
+                  <label for="MODEL_CALL_TOTAL_BUDGET_SECONDS">单阶段总预算（秒）</label>
+                  <input id="MODEL_CALL_TOTAL_BUDGET_SECONDS" type="number" min="1" step="1" />
+                  <div class="hint">vision / category 阶段各自的总耗时上限（默认 120）。</div>
+                </div>
               </div>
             </div>
+          </details>
 
-            <div class="controls-row">
-              <div>
-                <label for="MODEL_CALL_TOTAL_BUDGET_SECONDS">单阶段总预算秒数</label>
-                <input id="MODEL_CALL_TOTAL_BUDGET_SECONDS" type="number" min="1" step="1" />
-                <div class="hint">vision / category 阶段各自的总耗时上限（默认 120）。</div>
-              </div>
-            </div>
+          <div class="save-bar">
+            <button id="save-btn">保存配置并立即生效</button>
+            <button class="secondary" id="reload-btn">重新读取</button>
+            <div class="message" id="message"></div>
           </div>
-        </details>
-
-        <div class="message" id="message"></div>
-
-        <div class="actions">
-          <button id="save-btn">保存配置并立即生效</button>
-          <button class="secondary" id="reload-btn">重新读取</button>
         </div>
-      </main>
       </div>
 
       <div class="tab-panel" id="tab-prompts" hidden>
@@ -539,7 +530,7 @@
 
     </div>
 
-    <script src="/assets/shell.js?v=20260610"></script>
+    <script src="/assets/shell.js?v=20260614"></script>
     <script>
       const fields = [
         "VISION_MODEL",

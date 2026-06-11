@@ -32,10 +32,47 @@
         min-height: 100vh;
       }
 
+      /* Desktop console: fill the viewport, shell padding is the margin. */
       .page {
-        max-width: 1200px;
-        margin: 0 auto;
+        max-width: none;
+        margin: 0;
         padding: 0;
+      }
+      main.shell-main .page-content {
+        max-width: none;
+      }
+
+      /* UI language switcher lives in the shell topbar, left of the logout button. */
+      select.topbar-lang {
+        width: auto;
+        height: 30px;
+        padding: 0 26px 0 11px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: #fff;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+        cursor: pointer;
+      }
+
+      .image-card-body {
+        display: grid;
+        grid-template-columns: 5fr 7fr;
+        gap: 24px;
+        align-items: start;
+      }
+
+      .image-card-body > .grid {
+        gap: 14px;
+      }
+
+      .image-card-body .upload-area {
+        min-height: 240px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
       }
 
       header {
@@ -69,7 +106,7 @@
 
       .main-layout {
         display: grid;
-        grid-template-columns: 1fr 320px;
+        grid-template-columns: 1fr;
         gap: 16px;
       }
 
@@ -1065,92 +1102,84 @@
   </head>
   <body>
     <div class="page">
-      <header>
-        <div>
-          <p class="status">
-            <span class="dot" id="status-dot"></span>
-            <span id="status-text">待命</span>
-          </p>
-        </div>
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <div>
-            <select id="ui-language" style="width: auto; padding: 8px 30px 8px 12px; border-radius: 999px;">
-              <option value="zh" selected>中文</option>
-              <option value="ja">日语</option>
-            </select>
-          </div>
-          <span class="pill" id="beta-pill">批量测试版</span>
-        </div>
-      </header>
+      <select id="ui-language" hidden>
+        <option value="zh" selected>中文</option>
+        <option value="ja">日语</option>
+      </select>
 
       <div class="main-layout">
-        <!-- 左侧主要内容 -->
+        <!-- 主要内容 -->
         <div class="grid">
 
-          <div class="card grid" id="image-card">
-            <!-- 批量文件上传 -->
-            <div>
-              <label id="upload-label">商品图片（支持批量上传）</label>
-              <div class="upload-area" id="upload-area">
-                <div class="upload-icon">📸</div>
-                <div class="upload-text" id="upload-text">点击或拖拽图片到此处</div>
-                <div class="upload-hint" id="upload-hint">支持多选，JPG、PNG、GIF 等格式</div>
-                <input type="file" id="image" accept="image/*" multiple />
-              </div>
-            </div>
+          <div class="card" id="image-card">
+            <div class="image-card-body">
+              <!-- 左：上传与预览 -->
+              <div class="grid">
+                <div>
+                  <label id="upload-label">商品图片（支持批量上传）</label>
+                  <div class="upload-area" id="upload-area">
+                    <div class="upload-icon">📸</div>
+                    <div class="upload-text" id="upload-text">点击或拖拽图片到此处</div>
+                    <div class="upload-hint" id="upload-hint">支持多选，JPG、PNG、GIF 等格式</div>
+                    <input type="file" id="image" accept="image/*" multiple />
+                  </div>
+                </div>
 
-            <!-- 批量预览 -->
-            <div id="preview-container" style="display: none">
-              <label id="preview-label">已选择 <span id="file-count">0</span> 张图片</label>
-              <div class="preview-grid" id="preview-grid"></div>
-            </div>
-
-            <!-- 配置选项 -->
-            <div class="controls-row">
-              <div>
-                <label for="language" id="output-language-label">标题/描述语言</label>
-                <select id="language">
-                  <option value="ja" selected id="lang-opt-ja">日语</option>
-                  <option value="en" id="lang-opt-en">英语</option>
-                  <option value="zh" id="lang-opt-zh">简体中文</option>
-                </select>
+                <div id="preview-container" style="display: none">
+                  <label id="preview-label">已选择 <span id="file-count">0</span> 张图片</label>
+                  <div class="preview-grid" id="preview-grid"></div>
+                </div>
               </div>
-            </div>
 
-            <div class="models-row">
-              <div>
-                <label for="vision-model" id="vision-model-label">视觉模型</label>
-                <input type="text" id="vision-model" value="" placeholder="留空使用默认视觉模型" />
-              </div>
-              <div>
-                <label for="category-model" id="category-model-label">分类模型</label>
-                <input type="text" id="category-model" value="" placeholder="留空使用默认分类模型" />
-              </div>
-            </div>
+              <!-- 右：配置与操作 -->
+              <div class="grid">
+                <div class="controls-row">
+                  <div>
+                    <label for="language" id="output-language-label">标题/描述语言</label>
+                    <select id="language">
+                      <option value="ja" selected id="lang-opt-ja">日语</option>
+                      <option value="en" id="lang-opt-en">英语</option>
+                      <option value="zh" id="lang-opt-zh">简体中文</option>
+                    </select>
+                  </div>
+                </div>
 
-            <!-- 操作按钮 -->
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-              <button id="submit-btn">
-                <span id="button-text">开始识别</span>
-              </button>
-              <button class="secondary" id="clear-files-btn">清空图片</button>
-            </div>
-            <button id="price-btn" style="width: 100%; margin-top: 12px;">
-              <span id="price-button-text">⚡ 快速识别价格</span>
-            </button>
-            <button id="size-btn" style="width: 100%; margin-top: 12px;">
-              <span id="size-button-text">📏 识别尺寸</span>
-            </button>
+                <div class="models-row">
+                  <div>
+                    <label for="vision-model" id="vision-model-label">视觉模型</label>
+                    <input type="text" id="vision-model" value="" placeholder="留空使用默认视觉模型" />
+                  </div>
+                  <div>
+                    <label for="category-model" id="category-model-label">分类模型</label>
+                    <input type="text" id="category-model" value="" placeholder="留空使用默认分类模型" />
+                  </div>
+                </div>
 
-            <!-- 进度显示 -->
-            <div id="progress-section" style="display: none;">
-              <label id="progress-label">处理进度</label>
-              <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px;">
-                <span id="progress-text">0 / 0</span>
-                <span id="progress-percent">0%</span>
-              </div>
-              <div class="progress-bar">
-                <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                  <button id="submit-btn">
+                    <span id="button-text">开始识别</span>
+                  </button>
+                  <button class="secondary" id="clear-files-btn">清空图片</button>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                  <button id="price-btn">
+                    <span id="price-button-text">⚡ 快速识别价格</span>
+                  </button>
+                  <button id="size-btn">
+                    <span id="size-button-text">📏 识别尺寸</span>
+                  </button>
+                </div>
+
+                <div id="progress-section" style="display: none;">
+                  <label id="progress-label">处理进度</label>
+                  <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px;">
+                    <span id="progress-text">0 / 0</span>
+                    <span id="progress-percent">0%</span>
+                  </div>
+                  <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1262,61 +1291,6 @@
           </div>
         </div>
 
-        <!-- 右侧统计面板 -->
-        <div class="stats-panel">
-          <div class="card">
-            <div class="stats-header">
-              <h2 id="stats-title">测试统计</h2>
-              <button class="clear-btn" id="clear-stats-btn">清空</button>
-            </div>
-
-            <div class="stat-card">
-              <div class="stat-label" id="total-tests-label">总测试次数</div>
-              <div class="stat-value" id="total-count">0</div>
-            </div>
-
-            <div class="stat-breakdown">
-              <div class="stat-item accurate">
-                <span class="stat-item-label" id="accurate-label">✅ 准确</span>
-                <div>
-                  <span class="stat-item-value" id="accurate-count">0</span>
-                  <span class="stat-item-percent" id="accurate-percent">0%</span>
-                </div>
-              </div>
-              <div class="stat-item moderate">
-                <span class="stat-item-label" id="moderate-label">⚠️ 一般</span>
-                <div>
-                  <span class="stat-item-value" id="moderate-count">0</span>
-                  <span class="stat-item-percent" id="moderate-percent">0%</span>
-                </div>
-              </div>
-              <div class="stat-item inaccurate">
-                <span class="stat-item-label" id="inaccurate-label">❌ 错误</span>
-                <div>
-                  <span class="stat-item-value" id="inaccurate-count">0</span>
-                  <span class="stat-item-percent" id="inaccurate-percent">0%</span>
-                </div>
-              </div>
-            </div>
-
-            <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
-              <div class="stat-label" id="accuracy-label">准确率</div>
-              <div class="stat-value" style="font-size: 24px; color: var(--success);" id="accuracy-rate">--</div>
-            </div>
-          </div>
-
-          <div class="card" style="margin-top: 12px;">
-            <div class="stats-header">
-              <h2 id="api-title">接口地址</h2>
-            </div>
-            <input
-              type="text"
-              id="api-endpoint"
-              value=""
-              placeholder="请输入API地址，默认 /api/v1/mercari/image/analyze"
-            />
-          </div>
-        </div>
       </div>
     </div>
 
@@ -1685,15 +1659,10 @@
 
       let statusState = "idle";
 
+      // The header status indicator was removed; processing feedback lives in
+      // the buttons and progress bar. Keep the state for the button labels.
       function setStatus(state) {
         statusState = state;
-        const statusKey = state === "processing" ? "statusProcessing" : state === "done" ? "statusDone" : "statusIdle";
-        statusText.textContent = t(statusKey);
-        if (state === "processing") {
-          statusDot.classList.add("live");
-        } else {
-          statusDot.classList.remove("live");
-        }
       }
 
       // 全局状态
@@ -1711,8 +1680,8 @@
       let activeTab = "image";
 
       // DOM 元素
-      const betaPill = document.getElementById("beta-pill");
       const uiLanguageSelect = document.getElementById("ui-language");
+      const DEFAULT_IMAGE_API = "/api/v1/mercari/image/analyze";
       const imageInput = document.getElementById("image");
       const uploadArea = document.getElementById("upload-area");
       const previewContainer = document.getElementById("preview-container");
@@ -1731,7 +1700,6 @@
       const categoryModelLabel = document.getElementById("category-model-label");
       const visionModelInput = document.getElementById("vision-model");
       const categoryModelInput = document.getElementById("category-model");
-      const apiInput = document.getElementById("api-endpoint");
       const submitBtn = document.getElementById("submit-btn");
       const buttonText = document.getElementById("button-text");
       const priceBtn = document.getElementById("price-btn");
@@ -1746,31 +1714,11 @@
       const progressFill = document.getElementById("progress-fill");
       const resultsList = document.getElementById("results-list");
       const resultsTitle = document.getElementById("results-title");
-      const statusText = document.getElementById("status-text");
-      const statusDot = document.getElementById("status-dot");
-      const clearStatsBtn = document.getElementById("clear-stats-btn");
-      const statsTitle = document.getElementById("stats-title");
-      const totalTestsLabel = document.getElementById("total-tests-label");
-      const accurateLabel = document.getElementById("accurate-label");
-      const moderateLabel = document.getElementById("moderate-label");
-      const inaccurateLabel = document.getElementById("inaccurate-label");
-      const accuracyLabel = document.getElementById("accuracy-label");
       const tabImageBtn = document.getElementById("tab-image");
       const tabTitleBtn = document.getElementById("tab-title");
       const imageCard = document.getElementById("image-card");
       const titleCard = document.getElementById("title-card");
       const imageResultsSection = document.getElementById("image-results-section");
-      const apiTitle = document.getElementById("api-title");
-
-      // 统计元素
-      const totalCountEl = document.getElementById("total-count");
-      const accurateCountEl = document.getElementById("accurate-count");
-      const accuratePercentEl = document.getElementById("accurate-percent");
-      const moderateCountEl = document.getElementById("moderate-count");
-      const moderatePercentEl = document.getElementById("moderate-percent");
-      const inaccurateCountEl = document.getElementById("inaccurate-count");
-      const inaccuratePercentEl = document.getElementById("inaccurate-percent");
-      const accuracyRateEl = document.getElementById("accuracy-rate");
       const titleCardHeading = document.getElementById("title-card-heading");
       const titleCardPill = document.getElementById("title-card-pill");
       const titleInputLabel = document.getElementById("title-input-label");
@@ -1825,7 +1773,6 @@
       function applyTranslations() {
         document.documentElement.lang = uiLanguage === "ja" ? "ja" : "zh";
         document.title = t("documentTitle");
-        betaPill.textContent = t("betaPill");
         uiLanguageSelect.value = uiLanguage;
         uiLanguageSelect.querySelector('option[value="zh"]').textContent = t("uiLangZh");
         uiLanguageSelect.querySelector('option[value="ja"]').textContent = t("uiLangJa");
@@ -1852,17 +1799,6 @@
         clearFilesBtn.textContent = t("clearImages");
         progressLabel.textContent = t("progressLabel");
         resultsTitle.textContent = t("resultsTitle");
-
-        statsTitle.textContent = t("statsTitle");
-        clearStatsBtn.textContent = t("clearStats");
-        totalTestsLabel.textContent = t("totalTestsLabel");
-        accurateLabel.textContent = t("statAccurate");
-        moderateLabel.textContent = t("statModerate");
-        inaccurateLabel.textContent = t("statInaccurate");
-        accuracyLabel.textContent = t("accuracyLabel");
-
-        apiTitle.textContent = t("apiTitle");
-        apiInput.placeholder = t("apiPlaceholder");
 
         titleCardHeading.textContent = t("titleCardHeading");
         titleCardPill.textContent = t("titleCardPill");
@@ -1910,35 +1846,10 @@
         return data ? JSON.parse(data) : { accurate: 0, moderate: 0, inaccurate: 0, history: [] };
       }
 
+      // The stats panel was removed from the page; ratings are still recorded
+      // to localStorage so the data keeps accumulating for offline analysis.
       function saveStats(stats) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(stats));
-        updateStatsDisplay();
-      }
-
-      function updateStatsDisplay() {
-        const stats = loadStats();
-        const total = stats.accurate + stats.moderate + stats.inaccurate;
-        
-        totalCountEl.textContent = total;
-        accurateCountEl.textContent = stats.accurate;
-        moderateCountEl.textContent = stats.moderate;
-        inaccurateCountEl.textContent = stats.inaccurate;
-        
-        if (total > 0) {
-          const accuratePercent = ((stats.accurate / total) * 100).toFixed(1);
-          const moderatePercent = ((stats.moderate / total) * 100).toFixed(1);
-          const inaccuratePercent = ((stats.inaccurate / total) * 100).toFixed(1);
-          
-          accuratePercentEl.textContent = `${accuratePercent}%`;
-          moderatePercentEl.textContent = `${moderatePercent}%`;
-          inaccuratePercentEl.textContent = `${inaccuratePercent}%`;
-          accuracyRateEl.textContent = `${accuratePercent}%`;
-        } else {
-          accuratePercentEl.textContent = "0%";
-          moderatePercentEl.textContent = "0%";
-          inaccuratePercentEl.textContent = "0%";
-          accuracyRateEl.textContent = "--";
-        }
       }
 
       function recordRating(resultId, newRating) {
@@ -2590,7 +2501,7 @@
           return;
         }
         
-        const endpoint = apiInput.value.trim() || '/api/v1/mercari/image/analyze';
+        const endpoint = DEFAULT_IMAGE_API;
         if (!endpoint) {
           alert(t("alertNoEndpoint"));
           return;
@@ -2713,7 +2624,7 @@
       }
 
       function buildPriceEndpoint() {
-        const base = (apiInput.value.trim() || "/api/v1/mercari/image/analyze").replace(/\/$/, "");
+        const base = DEFAULT_IMAGE_API;
         if (base.includes("/api/v1/mercari/image/analyze")) {
           return base.replace("/api/v1/mercari/image/analyze", "/api/v1/mercari/image/price");
         }
@@ -2763,7 +2674,7 @@
       }
 
       function buildSizeEndpoint() {
-        const base = (apiInput.value.trim() || "/api/v1/mercari/image/analyze").replace(/\/$/, "");
+        const base = DEFAULT_IMAGE_API;
         if (base.includes("/api/v1/mercari/image/analyze")) {
           return base.replace("/api/v1/mercari/image/analyze", "/api/v1/mercari/image/size");
         }
@@ -2879,7 +2790,7 @@
       }
 
       function buildRegenerateEndpoint() {
-        const endpoint = (apiInput.value.trim() || "/api/v1/mercari/image/analyze").replace(/\/$/, "");
+        const endpoint = DEFAULT_IMAGE_API;
         if (endpoint.includes("/api/v1/mercari/image/analyze")) {
           return endpoint.replace("/api/v1/mercari/image/analyze", "/api/v1/mercari/product-data/regenerate");
         }
@@ -3147,15 +3058,6 @@
         recordRating(resultId, rating);
       };
 
-      // 清空统计
-      clearStatsBtn.addEventListener("click", () => {
-        if (confirm(t("confirmClearStats"))) {
-          localStorage.removeItem(STORAGE_KEY);
-          resultRatings = {};
-          updateStatsDisplay();
-          renderResults();
-        }
-      });
 
       // 拉取默认模型（health）
       async function fetchDefaults() {
@@ -3463,10 +3365,18 @@
         onRouteChange: (route) => setActiveTab(route),
       });
 
+      // 界面语言切换挂到顶栏，放在「退出」按钮左侧
+      (function mountLanguageSwitch() {
+        const logoutBtn = document.querySelector(".shell-topbar .shell-logout");
+        if (!logoutBtn) return;
+        uiLanguageSelect.hidden = false;
+        uiLanguageSelect.className = "topbar-lang";
+        logoutBtn.parentNode.insertBefore(uiLanguageSelect, logoutBtn);
+      })();
+
       // 初始化
       applyTranslations();
       setStatus("idle");
-      updateStatsDisplay();
       fetchDefaults();
       renderTitleResult(null, true);
       renderShowcaseResult();
