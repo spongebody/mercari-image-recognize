@@ -237,6 +237,7 @@ def test_summary_includes_average_durations():
     assert summary["overall"]["avgTotalDurationS"] == 4.0
     assert summary["overall"]["avgCategoryDurationS"] == 1.5
     assert summary["overall"]["avgProductDataDurationS"] == 2.0
+    assert summary["byModel"][0]["avgTotalDurationS"] == 4.0
 
 
 def test_summary_average_durations_none_when_all_missing():
