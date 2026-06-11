@@ -1,685 +1,855 @@
+// ---------- generic helpers ----------
 function escapeHtml(s) {
-        return String(s == null ? "" : s)
-          .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function firstImageUrl(image) {
+  return String(image || "").split("|").map((s) => s.trim()).filter(Boolean)[0] || "";
+}
+
+// ---------- correctness helpers (mirror backend image_model_evaluation.py) ----------
+function isCategoryCorrect(row) {
+  return String(row.genreId ?? "").trim() === String(row.aiCategory ?? "").trim();
+}
+function normalizeBrand(value) {
+  return String(value ?? "")
+    .normalize("NFKC")
+    .replace(/[®™©]/g, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]/gu, "");
+}
+function isBrandCorrect(row) {
+  const expected = normalizeBrand(row.brand);
+  const actual = normalizeBrand(row.aiBrand);
+  return Boolean(expected && actual && expected === actual);
+}
+
+// ---------- state ----------
+const state = {
+  runs: [],
+  view: "run", // "run" | "compare"
+  activeRunId: "",
+  detail: null,
+  rows: [],
+  dirty: new Set(),        // row indices with unsaved review edits
+  selectedRows: new Set(),
+  expandedRows: new Set(),
+  focusIndex: -1,          // original row index, not visible position
+  filter: "all",
+  poller: null,
+  lightbox: { urls: [], index: 0, rowIndex: -1 },
+  compareIds: new Set(),
+  compareDetails: {},
+};
+let configDefaults = {};
+
+const el = (id) => document.getElementById(id);
+
+// ---------- messages / api ----------
+function showMessage(text, type, host) {
+  const node = host || el("message");
+  node.textContent = text;
+  node.className = `message show ${type}`;
+}
+function clearMessage(host) {
+  const node = host || el("message");
+  node.className = "message";
+  node.textContent = "";
+}
+
+async function api(url, options) {
+  const resp = await fetch(url, options);
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(data.detail || "请求失败");
+  return data;
+}
+
+async function loadConfigDefaults() {
+  try {
+    const resp = await fetch("/api/v1/config");
+    if (resp.ok) configDefaults = await resp.json();
+  } catch (err) { /* fall back to placeholders */ }
+}
+
+// ---------- formatters ----------
+function fmtPct(value) {
+  const num = Number(value);
+  if (value === null || value === undefined || value === "" || !Number.isFinite(num)) return "-";
+  return `${Math.round(num * 1000) / 10}%`;
+}
+function fmtDur(value) {
+  if (value === null || value === undefined || value === "") return "--";
+  const num = Number(value);
+  if (!Number.isFinite(num) || num < 0) return "--";
+  return `${Math.round(num * 10) / 10}s`;
+}
+
+function isArchivedActive() {
+  const d = state.detail || {};
+  return ((d.status || {}).status === "archived") || Boolean((d.run || {}).archived);
+}
+
+// ---------- sidebar ----------
+function renderRunList() {
+  const host = el("run-list");
+  if (!state.runs.length) { host.textContent = "暂无测试记录"; return; }
+  host.innerHTML = state.runs.map((run) => {
+    const active = run.runId === state.activeRunId && state.view === "run" ? " active" : "";
+    const status = run.status || (run.archived ? "archived" : "pending");
+    return (
+      `<div class="run-item${active}" data-run-id="${escapeHtml(run.runId)}">` +
+      `<div class="run-id">${escapeHtml(run.runId)}</div>` +
+      `<div class="run-meta">${escapeHtml(status)} · ${escapeHtml(run.reasoningEffort || "none")}</div>` +
+      `<div class="run-meta">${escapeHtml(run.visionModel || "")}</div>` +
+      `<button class="run-clone" type="button" data-clone-id="${escapeHtml(run.runId)}">复用配置</button>` +
+      `</div>`
+    );
+  }).join("");
+  host.querySelectorAll("[data-run-id]").forEach((node) => {
+    node.addEventListener("click", () => selectRun(node.getAttribute("data-run-id")));
+  });
+  host.querySelectorAll("[data-clone-id]").forEach((node) => {
+    node.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const run = state.runs.find((r) => r.runId === node.getAttribute("data-clone-id"));
+      openDrawer(run || null);
+    });
+  });
+}
+
+async function refreshRuns() {
+  const data = await api("/api/v1/evaluations");
+  state.runs = data.runs || [];
+  renderRunList();
+}
+
+// ---------- views ----------
+function setView(view) {
+  state.view = view;
+  el("view-run").classList.toggle("active", view === "run");
+  el("view-compare").classList.toggle("active", view === "compare");
+  el("compare-toggle-btn").classList.toggle("on", view === "compare");
+  renderRunList();
+  if (view === "compare") enterCompare();
+}
+
+async function selectRun(runId) {
+  if (state.dirty.size && !window.confirm("有未保存的校验修改，切换后将丢失，确认切换？")) return;
+  state.dirty = new Set();
+  state.activeRunId = runId;
+  state.rows = [];
+  state.filter = "all";
+  state.selectedRows = new Set();
+  state.expandedRows = new Set();
+  state.focusIndex = -1;
+  state.detail = null; // avoid flashing the previous run's metrics while loading
+  setView("run");
+  renderRunDetail();
+  el("results-host").textContent = "正在读取结果...";
+  try {
+    await loadDetail(runId);
+  } catch (err) {
+    showMessage(String(err.message || err), "error");
+  }
+}
+
+// ---------- run detail ----------
+function ensurePolling(status) {
+  const running = status === "pending" || status === "running";
+  if (running && !state.poller) {
+    state.poller = window.setInterval(() => {
+      if (state.activeRunId) {
+        loadDetail(state.activeRunId).catch(() => {});
+        refreshRuns().catch(() => {});
       }
+    }, 2500);
+  }
+  if (!running && state.poller) {
+    window.clearInterval(state.poller);
+    state.poller = null;
+  }
+}
 
-      function firstImageUrl(image) {
-        return String(image || "").split("|").map((s) => s.trim()).filter(Boolean)[0] || "";
+async function loadDetail(runId) {
+  const detail = await api(`/api/v1/evaluations/${encodeURIComponent(runId)}`);
+  if (runId !== state.activeRunId) return; // stale response after a quick run switch
+  state.detail = detail;
+  renderRunDetail();
+  const status = detail.status && detail.status.status;
+  ensurePolling(status);
+  if (status === "completed" || status === "archived") {
+    await loadResults(runId);
+  } else {
+    state.rows = [];
+  }
+}
+
+async function loadResults(runId) {
+  const data = await api(`/api/v1/evaluations/${encodeURIComponent(runId)}/results`);
+  if (runId !== state.activeRunId) return;
+  if (!state.dirty.size) state.rows = data.rows || []; // never clobber unsaved edits
+  renderReview();
+}
+
+function renderRunDetail() {
+  const detail = state.detail || {};
+  const run = detail.run || {};
+  const status = detail.status || {};
+  const st = status.status || "idle";
+  const isArchived = st === "archived" || Boolean(run.archived);
+  const isComplete = st === "completed" || isArchived;
+  const isRunning = st === "pending" || st === "running";
+
+  el("run-title").textContent = state.activeRunId || "未选择测试";
+  const pill = el("run-status");
+  pill.textContent = st;
+  pill.className = `pill ${st}`;
+
+  el("run-meta").textContent = state.activeRunId
+    ? `${run.visionModel || "-"} · ${run.categoryModel || "-"} · ${run.productDataModel || "-"}` +
+      ` · effort: ${run.reasoningEffort || "none"} · ${run.language || "ja"}` +
+      (Number(run.limit) > 0 ? ` · 限 ${run.limit} 条` : "")
+    : "从左侧选择一条测试记录，或点击「＋ 新建测试」。";
+
+  el("reuse-btn").disabled = !state.activeRunId;
+  const exportTop = el("export-link-top");
+  exportTop.hidden = !isComplete;
+  exportTop.href = state.activeRunId
+    ? `/api/v1/evaluations/${encodeURIComponent(state.activeRunId)}/results.csv`
+    : "#";
+  el("archive-btn").hidden = !isComplete || isArchived;
+
+  const progress = el("progress-block");
+  progress.hidden = !isRunning;
+  if (isRunning) {
+    const done = Number(status.completed || 0);
+    const total = Number(status.total || 0);
+    el("progress-num").textContent = `${done} / ${total}`;
+    el("progress-fill").style.width = total ? `${Math.round((done / total) * 100)}%` : "0%";
+    const eta = Number(status.etaSeconds || 0);
+    el("progress-meta").textContent =
+      `失败 ${status.failed || 0} · ${eta > 0 ? `预计剩余 ${Math.round(eta)}s` : "计算中..."} · ${status.message || ""}`;
+  }
+
+  renderStats(isComplete);
+  el("review-card").hidden = !isComplete;
+}
+
+function renderStats(isComplete) {
+  const host = el("stat-row");
+  host.hidden = !isComplete;
+  if (!isComplete) { host.innerHTML = ""; return; }
+  const detail = state.detail || {};
+  const status = detail.status || {};
+  const overall = (detail.summary && detail.summary.overall) || {};
+  const pendingCat = Number(overall.categoryPendingReview || 0);
+  const pendingBrand = Number(overall.brandPendingReview || 0);
+  const failed = Number(status.failed || 0);
+  const cards = [
+    { label: "分类准确率", value: fmtPct(overall.categoryAccuracy), sub: `复核后 ${fmtPct(overall.categoryReviewedAccuracy)}`, cls: "" },
+    { label: "品牌准确率", value: fmtPct(overall.brandAccuracy), sub: `复核后 ${fmtPct(overall.brandReviewedAccuracy)}`, cls: "" },
+    { label: "平均耗时 / 条", value: fmtDur(overall.avgTotalDurationS), sub: `分类 ${fmtDur(overall.avgCategoryDurationS)} · 商品数据 ${fmtDur(overall.avgProductDataDurationS)}`, cls: "" },
+    { label: "待校验", value: String(pendingCat + pendingBrand), sub: `分类 ${pendingCat} · 品牌 ${pendingBrand}`, cls: pendingCat + pendingBrand > 0 ? "stat-warn" : "" },
+    { label: "失败", value: String(failed), sub: `共 ${status.total || 0} 条`, cls: failed > 0 ? "stat-bad stat-click" : "" },
+  ];
+  host.innerHTML = cards.map((c, i) =>
+    `<div class="stat ${c.cls}"${i === 4 && failed > 0 ? ' id="stat-failed" role="button" tabindex="0"' : ""}>` +
+    `<div class="stat-label">${escapeHtml(c.label)}</div>` +
+    `<div class="stat-value">${escapeHtml(c.value)}</div>` +
+    `<div class="stat-sub">${escapeHtml(c.sub)}</div>` +
+    `</div>`
+  ).join("");
+  const failedCard = el("stat-failed");
+  if (failedCard) failedCard.addEventListener("click", openErrors);
+}
+
+async function openErrors() {
+  try {
+    const data = await api(`/api/v1/evaluations/${encodeURIComponent(state.activeRunId)}/errors`);
+    const errors = data.errors || [];
+    el("errors-host").innerHTML = errors.length
+      ? errors.map((e) =>
+          `<div class="error-item"><b>#${escapeHtml(String(e.caseIndex ?? "?"))}</b> ${escapeHtml(e.itemName || "")}` +
+          `<div class="error-text">${escapeHtml(e.error || "")}</div></div>`
+        ).join("")
+      : "<div class='hint'>无失败明细。</div>";
+    el("errors-backdrop").hidden = false;
+  } catch (err) {
+    showMessage(String(err.message || err), "error");
+  }
+}
+
+// ---------- review ----------
+function rowMatchesFilter(row, filter) {
+  switch (filter) {
+    case "categoryWrong": return !isCategoryCorrect(row);
+    case "brandWrong": return !isBrandCorrect(row);
+    case "pending":
+      return (!isCategoryCorrect(row) && !String(row.customerCategoryCheck || "").trim())
+          || (!isBrandCorrect(row) && !String(row.customerBrandCheck || "").trim());
+    default: return true;
+  }
+}
+
+function visibleIndices() {
+  const out = [];
+  state.rows.forEach((row, i) => { if (rowMatchesFilter(row, state.filter)) out.push(i); });
+  return out;
+}
+
+function renderFilterBar() {
+  const rows = state.rows;
+  const counts = {
+    all: rows.length,
+    categoryWrong: rows.filter((r) => !isCategoryCorrect(r)).length,
+    brandWrong: rows.filter((r) => !isBrandCorrect(r)).length,
+    pending: rows.filter((r) => rowMatchesFilter(r, "pending")).length,
+  };
+  const chips = [
+    ["all", "全部", counts.all, "chip-all"],
+    ["categoryWrong", "分类错", counts.categoryWrong, "chip-bad"],
+    ["brandWrong", "品牌错", counts.brandWrong, "chip-bad"],
+    ["pending", "待校验", counts.pending, "chip-pending"],
+  ];
+  const host = el("filter-bar");
+  host.innerHTML = rows.length
+    ? chips.map(([key, label, n, cls]) =>
+        `<button class="chip ${cls}${state.filter === key ? " active" : ""}" data-filter="${key}" type="button">${label} ${n}</button>`
+      ).join("")
+    : "";
+  host.querySelectorAll("[data-filter]").forEach((node) => {
+    node.addEventListener("click", () => {
+      state.filter = node.getAttribute("data-filter");
+      state.focusIndex = -1;
+      renderReview();
+    });
+  });
+}
+
+function renderDirtyBar() {
+  const n = state.dirty.size;
+  const span = el("dirty-count");
+  span.hidden = n === 0;
+  span.textContent = `未保存 ${n} 条修改`;
+  el("save-review-btn").disabled = isArchivedActive() || n === 0;
+  const link = el("export-link");
+  link.hidden = !state.rows.length;
+  link.href = state.activeRunId
+    ? `/api/v1/evaluations/${encodeURIComponent(state.activeRunId)}/results.csv`
+    : "#";
+}
+
+function reviewSelect(value, rowIndex, key, disabled) {
+  const current = String(value || "");
+  const options = [["", "待校验"], ["OK", "正确"], ["ACCEPTABLE", "可接受"], ["NG", "错误"]];
+  return `<select data-row="${rowIndex}" data-review-key="${key}"${disabled ? " disabled" : ""}>` +
+    options.map(([val, label]) => `<option value="${val}"${current === val ? " selected" : ""}>${label}</option>`).join("") +
+    `</select>`;
+}
+
+function renderReview() {
+  renderFilterBar();
+  renderDirtyBar();
+  const host = el("results-host");
+  const archived = isArchivedActive();
+  el("batch-actions").style.display = archived ? "none" : "";
+  if (!state.rows.length) { host.textContent = "暂无结果。"; return; }
+  const vis = visibleIndices();
+  if (!vis.length) { host.innerHTML = "<div class='hint'>当前筛选无匹配条目。</div>"; return; }
+
+  const dis = archived;
+  const body = vis.map((i) => {
+    const row = state.rows[i];
+    const catCls = isCategoryCorrect(row) ? "ok" : "bad";
+    const brandCls = isBrandCorrect(row) ? "ok" : (String(row.aiBrand || "").trim() ? "warn" : "bad");
+    const classes = [];
+    if (!isCategoryCorrect(row) && !isBrandCorrect(row)) classes.push("row-bad");
+    if (i === state.focusIndex) classes.push("row-focus");
+    const url = firstImageUrl(row.image);
+    const thumb = url
+      ? `<img class="thumb" src="${escapeHtml(url)}" loading="lazy" alt="" data-full="${escapeHtml(row.image)}" data-thumb-row="${i}" />`
+      : `<span class="thumb thumb-empty">无图</span>`;
+    let html =
+      `<tr${classes.length ? ` class="${classes.join(" ")}"` : ""} data-row-index="${i}">` +
+      `<td><input type="checkbox" class="row-select" data-row="${i}" ${state.selectedRows.has(i) ? "checked" : ""}${dis ? " disabled" : ""} /></td>` +
+      `<td><button class="caret" type="button" data-expand="${i}">${state.expandedRows.has(i) ? "▾" : "▸"}</button></td>` +
+      `<td>${thumb}</td>` +
+      `<td class="clip">${escapeHtml(row.itemName || "")}</td>` +
+      `<td class="diff ${catCls}"><span class="orig">${escapeHtml(row.genreId || "")}</span> → <span class="ai">${escapeHtml(row.aiCategory || "")}</span></td>` +
+      `<td class="diff ${brandCls}"><span class="orig">${escapeHtml(row.brand || "")}</span> → <span class="ai">${escapeHtml(row.aiBrand || "")}</span></td>` +
+      `<td>${reviewSelect(row.customerCategoryCheck, i, "customerCategoryCheck", dis)}</td>` +
+      `<td>${reviewSelect(row.customerBrandCheck, i, "customerBrandCheck", dis)}</td>` +
+      `<td><textarea data-row="${i}" data-review-key="customerNotes"${dis ? " disabled" : ""}>${escapeHtml(row.customerNotes || "")}</textarea></td>` +
+      `</tr>`;
+    if (state.expandedRows.has(i)) {
+      html +=
+        `<tr class="detail-row" data-detail-for="${i}"><td></td><td></td><td colspan="7">` +
+        `<div class="detail-grid">` +
+        `<div><span class="detail-label">AI 分类 Path</span>${escapeHtml(row.aiCategoryPath || "-")}</div>` +
+        `<div><span class="detail-label">置信度</span>${escapeHtml(row.aiCategoryConfidence || "-")}</div>` +
+        `<div><span class="detail-label">AI 标题</span>${escapeHtml(row.aiTitle || "-")}</div>` +
+        `</div></td></tr>`;
+    }
+    return html;
+  }).join("");
+
+  host.innerHTML =
+    `<div class="results-table-wrap"><table class="results-table"><thead><tr>` +
+    `<th><input type="checkbox" id="select-all"${dis ? " disabled" : ""} /></th>` +
+    `<th></th><th>图片</th><th>商品</th><th>分类 (原→AI)</th><th>品牌 (原→AI)</th>` +
+    `<th>分类校验</th><th>品牌校验</th><th>备注</th>` +
+    `</tr></thead><tbody>${body}</tbody></table></div>`;
+
+  bindReviewEvents(host);
+  updateBatchCount();
+}
+
+function bindReviewEvents(host) {
+  host.querySelectorAll("img.thumb").forEach((img) => {
+    img.addEventListener("click", () => {
+      openLightbox(img.getAttribute("data-full"), 0, Number(img.getAttribute("data-thumb-row")));
+    });
+  });
+  host.querySelectorAll("[data-expand]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const i = Number(btn.getAttribute("data-expand"));
+      if (state.expandedRows.has(i)) state.expandedRows.delete(i);
+      else state.expandedRows.add(i);
+      renderReview();
+    });
+  });
+  host.querySelectorAll(".row-select").forEach((cb) => {
+    cb.addEventListener("change", () => {
+      const i = Number(cb.getAttribute("data-row"));
+      if (cb.checked) state.selectedRows.add(i); else state.selectedRows.delete(i);
+      updateBatchCount();
+    });
+  });
+  const selectAll = el("select-all");
+  if (selectAll) selectAll.addEventListener("change", () => {
+    host.querySelectorAll(".row-select").forEach((cb) => {
+      cb.checked = selectAll.checked;
+      const i = Number(cb.getAttribute("data-row"));
+      if (selectAll.checked) state.selectedRows.add(i); else state.selectedRows.delete(i);
+    });
+    updateBatchCount();
+  });
+  host.querySelectorAll("select[data-review-key], textarea[data-review-key]").forEach((node) => {
+    node.addEventListener("change", () => {
+      markEdit(Number(node.getAttribute("data-row")), node.getAttribute("data-review-key"), node.value);
+    });
+  });
+  host.querySelectorAll("tbody tr[data-row-index]").forEach((tr) => {
+    tr.addEventListener("click", (ev) => {
+      const tag = (ev.target.tagName || "").toLowerCase();
+      if (["input", "select", "textarea", "button", "img", "a", "option"].includes(tag)) return;
+      state.focusIndex = Number(tr.getAttribute("data-row-index"));
+      refreshFocusClass();
+    });
+  });
+}
+
+function markEdit(i, key, value) {
+  state.rows[i][key] = value;
+  state.dirty.add(i);
+  renderDirtyBar();
+  renderFilterBar(); // pending counts may have changed
+}
+
+function updateBatchCount() {
+  el("batch-count").textContent = `已选 ${state.selectedRows.size}`;
+  const selectAll = el("select-all");
+  if (!selectAll) return;
+  const boxes = el("results-host").querySelectorAll(".row-select");
+  const checked = [...boxes].filter((cb) => cb.checked).length;
+  selectAll.checked = boxes.length > 0 && checked === boxes.length;
+  selectAll.indeterminate = checked > 0 && checked < boxes.length;
+}
+
+function applyBatch(verdict) {
+  if (isArchivedActive() || !state.selectedRows.size) return;
+  const field = el("batch-field").value;
+  state.selectedRows.forEach((i) => {
+    state.rows[i][field] = verdict;
+    state.dirty.add(i);
+  });
+  renderReview();
+}
+
+function refreshFocusClass() {
+  el("results-host").querySelectorAll("tr[data-row-index]").forEach((tr) => {
+    tr.classList.toggle("row-focus", Number(tr.getAttribute("data-row-index")) === state.focusIndex);
+  });
+}
+
+function scrollFocusIntoView() {
+  const tr = el("results-host").querySelector(`tr[data-row-index="${state.focusIndex}"]`);
+  if (tr) tr.scrollIntoView({ block: "nearest" });
+}
+
+function applyVerdictToFocused(field, value) {
+  if (state.focusIndex < 0 || isArchivedActive()) return;
+  const prevVis = visibleIndices();
+  const prevPos = prevVis.indexOf(state.focusIndex);
+  state.rows[state.focusIndex][field] = value;
+  state.dirty.add(state.focusIndex);
+  // Auto-advance within the current filter. If the row just left the filter
+  // (e.g. marked while on the pending chip), focus whatever took its place.
+  const vis = visibleIndices();
+  if (!vis.length) state.focusIndex = -1;
+  else if (vis.includes(state.focusIndex)) {
+    const p = vis.indexOf(state.focusIndex);
+    state.focusIndex = vis[Math.min(p + 1, vis.length - 1)];
+  } else {
+    state.focusIndex = vis[Math.min(Math.max(prevPos, 0), vis.length - 1)];
+  }
+  renderReview();
+  scrollFocusIntoView();
+}
+
+async function saveReview() {
+  if (!state.dirty.size) return;
+  const updates = [...state.dirty].map((i) => ({
+    rowIndex: i,
+    customerCategoryCheck: state.rows[i].customerCategoryCheck || "",
+    customerBrandCheck: state.rows[i].customerBrandCheck || "",
+    customerNotes: state.rows[i].customerNotes || "",
+  }));
+  const btn = el("save-review-btn");
+  btn.disabled = true;
+  btn.textContent = "保存中...";
+  try {
+    await api(`/api/v1/evaluations/${encodeURIComponent(state.activeRunId)}/review`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: updates }),
+    });
+    state.dirty = new Set();
+    delete state.compareDetails[state.activeRunId]; // summary changed, drop stale cache
+    showMessage("校验已保存，统计已刷新。", "success");
+    await loadDetail(state.activeRunId);
+  } catch (err) {
+    showMessage(String(err.message || err), "error");
+  } finally {
+    btn.textContent = "保存校验";
+    renderDirtyBar();
+  }
+}
+
+async function archiveRun() {
+  if (!state.activeRunId || !window.confirm("归档后将锁定校验，确认归档？")) return;
+  try {
+    await api(`/api/v1/evaluations/${encodeURIComponent(state.activeRunId)}/archive`, { method: "POST" });
+    delete state.compareDetails[state.activeRunId];
+    showMessage("测试已归档。", "success");
+    await refreshRuns();
+    await loadDetail(state.activeRunId);
+  } catch (err) {
+    showMessage(String(err.message || err), "error");
+  }
+}
+
+// ---------- drawer ----------
+function openDrawer(prefillRun) {
+  const src = prefillRun
+    || state.runs.find((r) => r.runId === state.activeRunId)
+    || state.runs[0]
+    || {};
+  el("f-vision").value = src.visionModel || configDefaults.VISION_MODEL || "openai/gpt-4o-mini";
+  el("f-category").value = src.categoryModel || configDefaults.CATEGORY_MODEL || "openai/gpt-4o-mini";
+  el("f-product").value = src.productDataModel || configDefaults.PRODUCT_DATA_MODEL || "openai/gpt-4o-mini";
+  el("f-reasoning").value = src.reasoningEffort || "none";
+  el("f-language").value = src.language || "ja";
+  el("f-limit").value = String(src.limit ?? 0);
+  clearMessage(el("drawer-message"));
+  el("drawer-backdrop").hidden = false;
+  el("drawer").hidden = false;
+}
+
+function closeDrawer() {
+  el("drawer").hidden = true;
+  el("drawer-backdrop").hidden = true;
+}
+
+async function createRun() {
+  const fileInput = el("f-file");
+  if (!fileInput.files || !fileInput.files[0]) {
+    showMessage("请先选择测试数据文件。", "error", el("drawer-message"));
+    return;
+  }
+  const form = new FormData();
+  form.append("file", fileInput.files[0]);
+  form.append("visionModel", el("f-vision").value.trim());
+  form.append("categoryModel", el("f-category").value.trim());
+  form.append("productDataModel", el("f-product").value.trim());
+  form.append("reasoningEffort", el("f-reasoning").value);
+  form.append("language", el("f-language").value);
+  form.append("limit", String(Number(el("f-limit").value || 0)));
+  const btn = el("create-btn");
+  btn.disabled = true;
+  btn.textContent = "提交中...";
+  try {
+    const data = await api("/api/v1/evaluations", { method: "POST", body: form });
+    closeDrawer();
+    fileInput.value = "";
+    showMessage(`已创建测试：${data.runId}`, "success");
+    await refreshRuns();
+    await selectRun(data.runId);
+  } catch (err) {
+    showMessage(String(err.message || err), "error", el("drawer-message"));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "开始测试";
+  }
+}
+
+// ---------- compare ----------
+function completedRunIds() {
+  return state.runs.filter((r) => {
+    const st = r.status || (r.archived ? "archived" : "");
+    return st === "completed" || st === "archived";
+  }).map((r) => r.runId);
+}
+
+async function enterCompare() {
+  if (!state.compareIds.size) {
+    completedRunIds().slice(0, 2).forEach((id) => state.compareIds.add(id));
+  }
+  renderComparePicker();
+  await Promise.all([...state.compareIds].map(ensureCompareDetail));
+  renderCompareTable();
+}
+
+function renderComparePicker() {
+  const ids = completedRunIds();
+  const host = el("compare-picker");
+  host.innerHTML = ids.length
+    ? ids.map((id) =>
+        `<button class="compare-pill${state.compareIds.has(id) ? " on" : ""}" data-compare-id="${escapeHtml(id)}" type="button">${escapeHtml(id)}</button>`
+      ).join("")
+    : "<span class='hint'>暂无已完成的测试。</span>";
+  host.querySelectorAll("[data-compare-id]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-compare-id");
+      if (state.compareIds.has(id)) state.compareIds.delete(id);
+      else { state.compareIds.add(id); await ensureCompareDetail(id); }
+      renderComparePicker();
+      renderCompareTable();
+    });
+  });
+}
+
+async function ensureCompareDetail(id) {
+  // Cached for the session; failures are NOT cached so a later click retries.
+  if (state.compareDetails[id]) return;
+  try {
+    state.compareDetails[id] = await api(`/api/v1/evaluations/${encodeURIComponent(id)}`);
+  } catch (err) {
+    showMessage(`读取 ${id} 详情失败：${err.message || err}`, "error");
+  }
+}
+
+const COMPARE_SECTIONS = [
+  { title: "配置（蓝色 = 不同）", kind: "config", rows: [
+    ["图片识别模型", (d) => (d.run || {}).visionModel || "-"],
+    ["分类模型", (d) => (d.run || {}).categoryModel || "-"],
+    ["商品数据模型", (d) => (d.run || {}).productDataModel || "-"],
+    ["推理程度", (d) => (d.run || {}).reasoningEffort || "none"],
+    ["语言", (d) => (d.run || {}).language || "-"],
+    ["数据量", (d) => String(((d.summary || {}).overall || {}).total ?? (d.status || {}).total ?? "-")],
+  ]},
+  { title: "质量（绿色 = 最优）", kind: "metric", rows: [
+    ["分类准确率", (o) => o.categoryAccuracy, "pct", "max"],
+    ["品牌准确率", (o) => o.brandAccuracy, "pct", "max"],
+    ["复核后分类", (o) => o.categoryReviewedAccuracy, "pct", "max"],
+    ["复核后品牌", (o) => o.brandReviewedAccuracy, "pct", "max"],
+    ["待分类校验", (o) => o.categoryPendingReview, "num", "min"],
+    ["待品牌校验", (o) => o.brandPendingReview, "num", "min"],
+  ]},
+  { title: "耗时（绿色 = 最快）", kind: "metric", rows: [
+    ["平均耗时 / 条", (o) => o.avgTotalDurationS, "dur", "min"],
+    ["分类阶段", (o) => o.avgCategoryDurationS, "dur", "min"],
+    ["商品数据阶段", (o) => o.avgProductDataDurationS, "dur", "min"],
+  ]},
+];
+
+function renderCompareTable() {
+  const ids = completedRunIds().filter((id) => state.compareIds.has(id));
+  const host = el("compare-host");
+  if (!ids.length) {
+    host.innerHTML = "<div class='hint'>请选择至少一轮已完成的测试。</div>";
+    return;
+  }
+  const details = ids.map((id) => state.compareDetails[id] || {});
+  const header = `<tr><th>指标</th>${ids.map((id) => `<th>${escapeHtml(id)}</th>`).join("")}</tr>`;
+  const sections = COMPARE_SECTIONS.map((section) => {
+    const head = `<tr class="compare-section"><td colspan="${ids.length + 1}">${escapeHtml(section.title)}</td></tr>`;
+    const rows = section.rows.map((rowDef) => {
+      if (section.kind === "config") {
+        const [label, get] = rowDef;
+        const values = details.map((d) => get(d));
+        const differs = values.length > 1 && !values.every((v) => v === values[0]);
+        const cells = values.map((v) => `<td${differs ? ' class="compare-diff"' : ""}>${escapeHtml(String(v))}</td>`).join("");
+        return `<tr><td class="compare-label">${escapeHtml(label)}</td>${cells}</tr>`;
       }
-
-      // ---------- Correctness helpers (mirror backend image_model_evaluation.py) ----------
-      function isCategoryCorrect(row) {
-        return String(row.genreId ?? "").trim() === String(row.aiCategory ?? "").trim();
-      }
-      function normalizeBrand(value) {
-        return String(value ?? "")
-          .normalize("NFKC")
-          .replace(/[®™©]/g, "")
-          .toLowerCase()
-          .replace(/[^\p{L}\p{N}]/gu, "");
-      }
-      function isBrandCorrect(row) {
-        const expected = normalizeBrand(row.brand);
-        const actual = normalizeBrand(row.aiBrand);
-        return Boolean(expected && actual && expected === actual);
-      }
-
-      // ---------- Evaluation SOP ----------
-      const evaluationState = {
-        runs: [],
-        activeRunId: "",
-        activeDetail: null,
-        rows: [],
-        poller: null,
-        activeTab: "setup",
-        lightbox: { urls: [], index: 0 },
-        reviewFilter: "all",
-        selectedRows: new Set(),
-        compareRunIds: new Set(),
-        compareDetails: {},
-      };
-      // Defaults pulled from saved config so this standalone page can prefill models.
-      let configDefaults = {};
-      const evaluationFile = document.getElementById("evaluation-file");
-      const evaluationVisionModel = document.getElementById("evaluation-vision-model");
-      const evaluationCategoryModel = document.getElementById("evaluation-category-model");
-      const evaluationProductModel = document.getElementById("evaluation-product-model");
-      const evaluationReasoning = document.getElementById("evaluation-reasoning");
-      const evaluationLimit = document.getElementById("evaluation-limit");
-      const evaluationLanguage = document.getElementById("evaluation-language");
-      const evaluationMessage = document.getElementById("evaluations-message");
-      const evaluationCreateBtn = document.getElementById("evaluation-create-btn");
-      const evaluationRefreshBtn = document.getElementById("evaluation-refresh-btn");
-      const evaluationRunList = document.getElementById("evaluation-run-list");
-      const evaluationActiveTitle = document.getElementById("evaluation-active-title");
-      const evaluationActiveStatus = document.getElementById("evaluation-active-status");
-      const evaluationActiveMeta = document.getElementById("evaluation-active-meta");
-      const evaluationMetrics = document.getElementById("evaluation-metrics");
-      const evaluationDownloadLink = document.getElementById("evaluation-download-link");
-      const evaluationArchiveBtn = document.getElementById("evaluation-archive-btn");
-      const evaluationSaveReviewBtn = document.getElementById("evaluation-save-review-btn");
-      const evaluationResultsHost = document.getElementById("evaluation-results-host");
-      const evaluationSaveAnalysisBtn = document.getElementById("evaluation-save-analysis-btn");
-      const evaluationCloneBtn = document.getElementById("evaluation-clone-btn");
-      const evaluationAnalysisNotes = document.getElementById("evaluation-analysis-notes");
-      const evaluationActions = document.getElementById("evaluation-actions");
-      const evaluationNextRun = document.getElementById("evaluation-next-run");
-      const evaluationFilterBar = document.getElementById("evaluation-filter-bar");
-      const evaluationBatchCount = document.getElementById("evaluation-batch-count");
-
-      const evaluationComparePicker = document.getElementById("evaluation-compare-picker");
-      const evaluationCompareHost = document.getElementById("evaluation-compare-host");
-
-      const lightboxEl = document.getElementById("evaluation-lightbox");
-      const lightboxImg = document.getElementById("lightbox-img");
-      const lightboxPrev = document.getElementById("lightbox-prev");
-      const lightboxNext = document.getElementById("lightbox-next");
-
-      function openLightbox(image, startIndex) {
-        const urls = String(image || "").split("|").map((s) => s.trim()).filter(Boolean);
-        if (!urls.length) return;
-        evaluationState.lightbox = { urls, index: startIndex || 0 };
-        renderLightbox();
-        lightboxEl.hidden = false;
-      }
-
-      function renderLightbox() {
-        const { urls, index } = evaluationState.lightbox;
-        lightboxImg.src = urls[index] || "";
-        lightboxPrev.style.visibility = urls.length > 1 ? "visible" : "hidden";
-        lightboxNext.style.visibility = urls.length > 1 ? "visible" : "hidden";
-      }
-
-      function closeLightbox() {
-        lightboxEl.hidden = true;
-        evaluationState.lightbox = { urls: [], index: 0 };
-      }
-
-      function stepLightbox(delta) {
-        const { urls, index } = evaluationState.lightbox;
-        if (!urls.length) return;
-        evaluationState.lightbox.index = (index + delta + urls.length) % urls.length;
-        renderLightbox();
-      }
-
-      function showEvaluationMessage(text, type) {
-        evaluationMessage.textContent = text;
-        evaluationMessage.className = `message show ${type}`;
-      }
-
-      function clearEvaluationMessage() {
-        evaluationMessage.className = "message";
-        evaluationMessage.textContent = "";
-      }
-
-      async function loadConfigDefaults() {
-        try {
-          const resp = await fetch("/api/v1/config");
-          if (resp.ok) configDefaults = await resp.json();
-        } catch (err) {
-          /* fall back to placeholders */
-        }
-        applyConfigDefaultsToEvaluation();
-      }
-
-      function applyConfigDefaultsToEvaluation() {
-        evaluationVisionModel.value = evaluationVisionModel.value || configDefaults.VISION_MODEL || "openai/gpt-4o-mini";
-        evaluationCategoryModel.value = evaluationCategoryModel.value || configDefaults.CATEGORY_MODEL || "openai/gpt-4o-mini";
-        evaluationProductModel.value = evaluationProductModel.value || configDefaults.PRODUCT_DATA_MODEL || "openai/gpt-4o-mini";
-      }
-
-      async function evaluationJson(url, options) {
-        const resp = await fetch(url, options);
-        const data = await resp.json().catch(() => ({}));
-        if (!resp.ok) throw new Error(data.detail || "请求失败");
-        return data;
-      }
-
-      function formatPercent(value) {
-        const num = Number(value);
-        if (!Number.isFinite(num)) return "-";
-        return `${Math.round(num * 1000) / 10}%`;
-      }
-
-      function formatSeconds(value) {
-        const num = Number(value);
-        if (!Number.isFinite(num) || num <= 0) return "-";
-        return `${Math.round(num)}s`;
-      }
-
-      function summaryOverall() {
-        return (evaluationState.activeDetail && evaluationState.activeDetail.summary && evaluationState.activeDetail.summary.overall) || {};
-      }
-
-      function renderEvaluationMetrics() {
-        const detail = evaluationState.activeDetail || {};
-        const status = detail.status || {};
-        const overall = summaryOverall();
-        const metrics = [
-          ["进度", `${status.completed || 0}/${status.total || 0}`],
-          ["失败", String(status.failed || 0)],
-          ["分类准确率", formatPercent(overall.categoryAccuracy)],
-          ["品牌准确率", formatPercent(overall.brandAccuracy)],
-          ["复核后分类", formatPercent(overall.categoryReviewedAccuracy)],
-          ["复核后品牌", formatPercent(overall.brandReviewedAccuracy)],
-          ["待分类校验", String(overall.categoryPendingReview ?? "-")],
-          ["待品牌校验", String(overall.brandPendingReview ?? "-")],
-          ["ETA", formatSeconds(status.etaSeconds)],
-        ];
-        evaluationMetrics.innerHTML = metrics.map(([label, value]) =>
-          `<div class="metric"><div class="metric-label">${escapeHtml(label)}</div><div class="metric-value">${escapeHtml(value)}</div></div>`
-        ).join("");
-      }
-
-      function renderEvaluationList() {
-        if (!evaluationState.runs.length) {
-          evaluationRunList.textContent = "暂无测试记录";
-          return;
-        }
-        evaluationRunList.innerHTML = evaluationState.runs.map((run) => {
-          const active = run.runId === evaluationState.activeRunId ? " active" : "";
-          const status = run.status || (run.archived ? "archived" : "pending");
-          return (
-            `<div class="run-item${active}" data-run-id="${escapeHtml(run.runId)}">` +
-            `<div class="run-id">${escapeHtml(run.runId)}</div>` +
-            `<div class="run-meta">${escapeHtml(status)} · ${escapeHtml(run.reasoningEffort || "none")}</div>` +
-            `<div class="run-meta">${escapeHtml(run.visionModel || "")}</div>` +
-            `<button class="run-clone" type="button" data-clone-id="${escapeHtml(run.runId)}">复用配置</button>` +
-            `</div>`
-          );
-        }).join("");
-        evaluationRunList.querySelectorAll("[data-run-id]").forEach((el) => {
-          el.addEventListener("click", () => selectEvaluationRun(el.getAttribute("data-run-id")));
-        });
-        evaluationRunList.querySelectorAll("[data-clone-id]").forEach((el) => {
-          el.addEventListener("click", (ev) => {
-            ev.stopPropagation();
-            cloneRunConfig(el.getAttribute("data-clone-id"));
-          });
-        });
-        if (evaluationState.activeTab === "compare") renderCompare();
-      }
-
-      function cloneRunConfig(runId) {
-        const run = evaluationState.runs.find((r) => r.runId === runId);
-        if (!run) return;
-        evaluationVisionModel.value = run.visionModel || evaluationVisionModel.value;
-        evaluationCategoryModel.value = run.categoryModel || evaluationCategoryModel.value;
-        evaluationProductModel.value = run.productDataModel || evaluationProductModel.value;
-        evaluationReasoning.value = run.reasoningEffort || "none";
-        if (run.language) evaluationLanguage.value = run.language;
-        setActiveTab("setup");
-        showEvaluationMessage(`已复用 ${runId} 的配置，请选择数据文件后开始测试。`, "success");
-      }
-
-      function parseAnalysisSection(markdown, title) {
-        const pattern = new RegExp(`## ${title}\\n\\n([\\s\\S]*?)(?=\\n\\n## |$)`);
-        const match = String(markdown || "").match(pattern);
-        return match ? match[1].trim() : "";
-      }
-
-      function renderEvaluationDetail() {
-        const detail = evaluationState.activeDetail;
-        const run = detail && detail.run ? detail.run : {};
-        const status = detail && detail.status ? detail.status : {};
-        const isArchived = status.status === "archived" || run.archived;
-        const isComplete = status.status === "completed" || isArchived;
-        evaluationActiveTitle.textContent = evaluationState.activeRunId || "未选择测试";
-        evaluationActiveStatus.textContent = status.status || "idle";
-        evaluationActiveStatus.className = `pill ${status.status || "idle"}`;
-        evaluationActiveMeta.textContent = evaluationState.activeRunId
-          ? `${run.visionModel || "-"} / ${run.categoryModel || "-"} / ${run.productDataModel || "-"} · reasoning=${run.reasoningEffort || "none"} · ${status.message || ""}`
-          : "上传测试数据后会在这里展示实时进度和统计。";
-        evaluationDownloadLink.hidden = !isComplete;
-        evaluationDownloadLink.href = evaluationState.activeRunId
-          ? `/api/v1/evaluations/${encodeURIComponent(evaluationState.activeRunId)}/results.csv`
-          : "#";
-        evaluationArchiveBtn.disabled = !evaluationState.activeRunId || isArchived;
-        evaluationSaveReviewBtn.disabled = !isComplete || isArchived || !evaluationState.rows.length;
-        evaluationSaveAnalysisBtn.disabled = !evaluationState.activeRunId || isArchived;
-        evaluationCloneBtn.disabled = !evaluationState.activeRunId; // cloning config is safe on archived runs too
-        if (detail && detail.analysis) {
-          evaluationAnalysisNotes.value = parseAnalysisSection(detail.analysis, "可优化点") || detail.analysis;
-          evaluationActions.value = parseAnalysisSection(detail.analysis, "优化动作");
-          evaluationNextRun.value = parseAnalysisSection(detail.analysis, "下一轮测试建议");
-        } else if (!evaluationState.activeRunId) {
-          evaluationAnalysisNotes.value = "";
-          evaluationActions.value = "";
-          evaluationNextRun.value = "";
-        }
-        renderEvaluationMetrics();
-      }
-
-      async function loadEvaluations() {
-        const data = await evaluationJson("/api/v1/evaluations");
-        evaluationState.runs = data.runs || [];
-        if (!evaluationState.activeRunId && evaluationState.runs[0]) {
-          evaluationState.activeRunId = evaluationState.runs[0].runId;
-        }
-        renderEvaluationList();
-        if (evaluationState.activeRunId) {
-          await loadEvaluationDetail(evaluationState.activeRunId);
-        }
-      }
-
-      async function selectEvaluationRun(runId) {
-        evaluationState.activeRunId = runId;
-        evaluationState.rows = [];
-        evaluationState.reviewFilter = "all";
-        evaluationState.selectedRows = new Set();
-        evaluationState.activeDetail = null; // avoid flashing the previous run's metrics while loading
-        renderEvaluationList();
-        renderEvaluationDetail();
-        evaluationResultsHost.textContent = "正在读取结果...";
-        await loadEvaluationDetail(runId);
-      }
-
-      function ensureEvaluationPolling(status) {
-        const running = status === "pending" || status === "running";
-        if (running && !evaluationState.poller) {
-          evaluationState.poller = window.setInterval(() => {
-            if (evaluationState.activeRunId) {
-              loadEvaluationDetail(evaluationState.activeRunId).catch((err) => showEvaluationMessage(String(err.message || err), "error"));
-              loadEvaluations().catch(() => {});
-            }
-          }, 2500);
-        }
-        if (!running && evaluationState.poller) {
-          window.clearInterval(evaluationState.poller);
-          evaluationState.poller = null;
-        }
-      }
-
-      async function loadEvaluationDetail(runId) {
-        const detail = await evaluationJson(`/api/v1/evaluations/${encodeURIComponent(runId)}`);
-        evaluationState.activeDetail = detail;
-        renderEvaluationDetail();
-        const status = detail.status && detail.status.status;
-        ensureEvaluationPolling(status);
-        if (status === "completed" || status === "archived") {
-          await loadEvaluationResults(runId);
-        } else {
-          evaluationState.rows = [];
-          evaluationResultsHost.textContent = "测试运行中，完成后展示结果。";
-        }
-      }
-
-      function reviewSelect(value, rowIndex, key) {
-        const current = String(value || "");
-        const options = [
-          ["", "待校验"],
-          ["OK", "正确"],
-          ["ACCEPTABLE", "可接受"],
-          ["NG", "错误"],
-        ];
-        return `<select data-row="${rowIndex}" data-review-key="${key}">` +
-          options.map(([val, label]) => `<option value="${val}"${current === val ? " selected" : ""}>${label}</option>`).join("") +
-          `</select>`;
-      }
-
-      function rowMatchesFilter(row, filter) {
-        switch (filter) {
-          case "categoryWrong": return !isCategoryCorrect(row);
-          case "brandWrong": return !isBrandCorrect(row);
-          case "pending":
-            return (!isCategoryCorrect(row) && !String(row.customerCategoryCheck || "").trim())
-                || (!isBrandCorrect(row) && !String(row.customerBrandCheck || "").trim());
-          default: return true;
-        }
-      }
-
-      function renderFilterBar() {
-        const rows = evaluationState.rows;
-        const counts = {
-          all: rows.length,
-          categoryWrong: rows.filter((r) => !isCategoryCorrect(r)).length,
-          brandWrong: rows.filter((r) => !isBrandCorrect(r)).length,
-          pending: rows.filter((r) => rowMatchesFilter(r, "pending")).length,
-        };
-        const chips = [
-          ["all", "全部", counts.all, "chip-all"],
-          ["categoryWrong", "分类错", counts.categoryWrong, "chip-bad"],
-          ["brandWrong", "品牌错", counts.brandWrong, "chip-bad"],
-          ["pending", "待校验", counts.pending, "chip-pending"],
-        ];
-        evaluationFilterBar.innerHTML = rows.length
-          ? chips.map(([key, label, n, cls]) =>
-              `<button class="chip ${cls}${evaluationState.reviewFilter === key ? " active" : ""}" data-filter="${key}">${label} ${n}</button>`
-            ).join("")
-          : "";
-        evaluationFilterBar.querySelectorAll("[data-filter]").forEach((el) => {
-          el.addEventListener("click", () => { evaluationState.reviewFilter = el.getAttribute("data-filter"); renderEvaluationResults(); });
-        });
-      }
-
-      function renderEvaluationResults() {
-        renderFilterBar();
-        if (!evaluationState.rows.length) {
-          evaluationResultsHost.textContent = "暂无结果。";
-          evaluationSaveReviewBtn.disabled = true;
-          return;
-        }
-
-        const visible = evaluationState.rows
-          .map((row, index) => ({ row, index }))
-          .filter(({ row }) => rowMatchesFilter(row, evaluationState.reviewFilter));
-
-        if (!visible.length) {
-          evaluationResultsHost.innerHTML = `<div class="hint">当前筛选无匹配条目。</div>`;
-          renderEvaluationDetail();
-          return;
-        }
-
-        const tbody = visible.map(({ row, index }) => {
-          const catCls = isCategoryCorrect(row) ? "ok" : "bad";
-          const brandCls = isBrandCorrect(row) ? "ok" : (String(row.aiBrand || "").trim() ? "warn" : "bad");
-          const rowCls = (!isCategoryCorrect(row) && !isBrandCorrect(row)) ? " row-bad" : "";
-          const thumbHtml = (() => {
-            const url = firstImageUrl(row.image);
-            return url
-              ? `<img class="thumb" src="${escapeHtml(url)}" loading="lazy" alt="" data-full="${escapeHtml(row.image)}" />`
-              : `<span class="thumb thumb-empty">无图</span>`;
-          })();
-          return (
-            `<tr${rowCls ? ` class="${rowCls.trim()}"` : ""} data-row-index="${index}">` +
-            `<td><input type="checkbox" class="row-select" data-row="${index}" ${evaluationState.selectedRows.has(index) ? "checked" : ""} /></td>` +
-            `<td>${thumbHtml}</td>` +
-            `<td class="clip">${escapeHtml(row.itemName || "")}</td>` +
-            `<td class="diff ${catCls}"><span class="orig">${escapeHtml(row.genreId || "")}</span> → <span class="ai">${escapeHtml(row.aiCategory || "")}</span></td>` +
-            `<td class="clip">${escapeHtml(row.aiCategoryPath || "")}</td>` +
-            `<td>${escapeHtml(row.aiCategoryConfidence || "")}</td>` +
-            `<td class="diff ${brandCls}"><span class="orig">${escapeHtml(row.brand || "")}</span> → <span class="ai">${escapeHtml(row.aiBrand || "")}</span></td>` +
-            `<td class="clip">${escapeHtml(row.aiTitle || "")}</td>` +
-            `<td>${reviewSelect(row.customerCategoryCheck, index, "customerCategoryCheck")}</td>` +
-            `<td>${reviewSelect(row.customerBrandCheck, index, "customerBrandCheck")}</td>` +
-            `<td><textarea data-row="${index}" data-review-key="customerNotes">${escapeHtml(row.customerNotes || "")}</textarea></td>` +
-            `</tr>`
-          );
-        }).join("");
-
-        evaluationResultsHost.innerHTML =
-          `<div class="results-table-wrap"><table class="results-table">` +
-          `<thead><tr>` +
-          `<th><input type="checkbox" id="evaluation-select-all" /></th>` +
-          `<th>图片</th><th>商品</th><th>分类 (原→AI)</th><th>AI分类Path</th><th>置信度</th>` +
-          `<th>品牌 (原→AI)</th><th>AI标题</th><th>分类校验</th><th>品牌校验</th><th>备注</th>` +
-          `</tr></thead><tbody>` +
-          tbody +
-          `</tbody></table></div>`;
-
-        renderEvaluationDetail();
-        evaluationResultsHost.querySelectorAll("img.thumb").forEach((img) => {
-          img.addEventListener("click", () => openLightbox(img.getAttribute("data-full"), 0));
-        });
-        evaluationResultsHost.querySelectorAll(".row-select").forEach((cb) => {
-          cb.addEventListener("change", () => {
-            const i = Number(cb.getAttribute("data-row"));
-            if (cb.checked) evaluationState.selectedRows.add(i); else evaluationState.selectedRows.delete(i);
-            updateBatchCount();
-          });
-        });
-        const selectAll = document.getElementById("evaluation-select-all");
-        if (selectAll) selectAll.addEventListener("change", () => {
-          evaluationResultsHost.querySelectorAll(".row-select").forEach((cb) => {
-            cb.checked = selectAll.checked;
-            const i = Number(cb.getAttribute("data-row"));
-            if (selectAll.checked) evaluationState.selectedRows.add(i); else evaluationState.selectedRows.delete(i);
-          });
-          updateBatchCount();
-        });
-        updateBatchCount();
-      }
-
-      async function loadEvaluationResults(runId) {
-        const data = await evaluationJson(`/api/v1/evaluations/${encodeURIComponent(runId)}/results`);
-        evaluationState.rows = data.rows || [];
-        renderEvaluationResults();
-      }
-
-      async function createEvaluation() {
-        clearEvaluationMessage();
-        applyConfigDefaultsToEvaluation();
-        if (!evaluationFile.files || !evaluationFile.files[0]) {
-          showEvaluationMessage("请先选择测试数据文件。", "error");
-          return;
-        }
-        const form = new FormData();
-        form.append("file", evaluationFile.files[0]);
-        form.append("visionModel", evaluationVisionModel.value.trim());
-        form.append("categoryModel", evaluationCategoryModel.value.trim());
-        form.append("productDataModel", evaluationProductModel.value.trim());
-        form.append("reasoningEffort", evaluationReasoning.value);
-        form.append("language", evaluationLanguage.value);
-        form.append("limit", String(Number(evaluationLimit.value || 0)));
-        evaluationCreateBtn.disabled = true;
-        evaluationCreateBtn.textContent = "提交中...";
-        try {
-          const data = await evaluationJson("/api/v1/evaluations", { method: "POST", body: form });
-          evaluationState.activeRunId = data.runId;
-          showEvaluationMessage(`已创建测试：${data.runId}`, "success");
-          setActiveTab("monitor");
-          await loadEvaluations();
-        } catch (err) {
-          showEvaluationMessage(String(err.message || err), "error");
-        } finally {
-          evaluationCreateBtn.disabled = false;
-          evaluationCreateBtn.textContent = "开始测试";
-        }
-      }
-
-      async function saveEvaluationReview() {
-        const updates = evaluationState.rows.map((row, index) => {
-          const categoryEl = evaluationResultsHost.querySelector(`[data-row="${index}"][data-review-key="customerCategoryCheck"]`);
-          const brandEl = evaluationResultsHost.querySelector(`[data-row="${index}"][data-review-key="customerBrandCheck"]`);
-          const notesEl = evaluationResultsHost.querySelector(`[data-row="${index}"][data-review-key="customerNotes"]`);
-          return {
-            rowIndex: index,
-            customerCategoryCheck: categoryEl ? categoryEl.value : row.customerCategoryCheck,
-            customerBrandCheck: brandEl ? brandEl.value : row.customerBrandCheck,
-            customerNotes: notesEl ? notesEl.value : row.customerNotes,
-          };
-        });
-        evaluationSaveReviewBtn.disabled = true;
-        try {
-          await evaluationJson(`/api/v1/evaluations/${encodeURIComponent(evaluationState.activeRunId)}/review`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ rows: updates }),
-          });
-          showEvaluationMessage("客服校验已保存，统计已刷新。", "success");
-          await loadEvaluationDetail(evaluationState.activeRunId);
-        } catch (err) {
-          showEvaluationMessage(String(err.message || err), "error");
-        } finally {
-          renderEvaluationDetail();
-        }
-      }
-
-      async function saveEvaluationAnalysis() {
-        evaluationSaveAnalysisBtn.disabled = true;
-        try {
-          await evaluationJson(`/api/v1/evaluations/${encodeURIComponent(evaluationState.activeRunId)}/analysis`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              analysisNotes: evaluationAnalysisNotes.value,
-              optimizationActions: evaluationActions.value,
-              nextRunSuggestion: evaluationNextRun.value,
-            }),
-          });
-          showEvaluationMessage("分析已保存。", "success");
-          await loadEvaluationDetail(evaluationState.activeRunId);
-        } catch (err) {
-          showEvaluationMessage(String(err.message || err), "error");
-        } finally {
-          renderEvaluationDetail();
-        }
-      }
-
-      async function archiveEvaluation() {
-        if (!evaluationState.activeRunId || !window.confirm("归档后将锁定客服校验和分析，确认归档？")) return;
-        evaluationArchiveBtn.disabled = true;
-        try {
-          await evaluationJson(`/api/v1/evaluations/${encodeURIComponent(evaluationState.activeRunId)}/archive`, { method: "POST" });
-          showEvaluationMessage("测试已归档。", "success");
-          await loadEvaluations();
-        } catch (err) {
-          showEvaluationMessage(String(err.message || err), "error");
-        } finally {
-          renderEvaluationDetail();
-        }
-      }
-
-      function updateBatchCount() {
-        evaluationBatchCount.textContent = `已选 ${evaluationState.selectedRows.size}`;
-        // Reconcile the header select-all to reflect the visible rows' checked state.
-        const selectAll = document.getElementById("evaluation-select-all");
-        if (!selectAll) return;
-        const boxes = evaluationResultsHost.querySelectorAll(".row-select");
-        const checked = [...boxes].filter((cb) => cb.checked).length;
-        selectAll.checked = boxes.length > 0 && checked === boxes.length;
-        selectAll.indeterminate = checked > 0 && checked < boxes.length;
-      }
-      // `verdict` is the review value (OK/ACCEPTABLE/NG); the target field comes from #evaluation-batch-field.
-      // Only currently-visible selected rows have DOM controls; filtered-out selections are silently skipped.
-      function applyBatch(verdict) {
-        const field = document.getElementById("evaluation-batch-field").value;
-        evaluationState.selectedRows.forEach((i) => {
-          const el = evaluationResultsHost.querySelector(`[data-row="${i}"][data-review-key="${field}"]`);
-          if (el) el.value = verdict;
-        });
-      }
-
-      function reviewKeyHandler(ev) {
-        if (evaluationState.activeTab !== "review" || !evaluationState.rows.length) return;
-        if (!lightboxEl.hidden) return; // let the lightbox own arrow keys while it's open
-        const tag = (ev.target.tagName || "").toLowerCase();
-        if (tag === "textarea" || tag === "select" || tag === "input") return;
-        const trs = Array.from(evaluationResultsHost.querySelectorAll("tbody tr[data-row-index]"));
-        if (!trs.length) return;
-        let cur = trs.findIndex((tr) => tr.classList.contains("row-focus"));
-        const setVal = (field, value) => {
-          if (cur < 0) return;
-          const i = trs[cur].getAttribute("data-row-index");
-          const el = evaluationResultsHost.querySelector(`[data-row="${i}"][data-review-key="${field}"]`);
-          if (el) el.value = value;
-        };
-        const map = { "1": ["customerCategoryCheck","OK"], "2": ["customerCategoryCheck","ACCEPTABLE"], "3": ["customerCategoryCheck","NG"],
-                      "q": ["customerBrandCheck","OK"], "w": ["customerBrandCheck","ACCEPTABLE"], "e": ["customerBrandCheck","NG"] };
-        if (ev.key === "ArrowDown") { cur = Math.min((cur < 0 ? -1 : cur) + 1, trs.length - 1); }
-        else if (ev.key === "ArrowUp") { cur = Math.max((cur < 0 ? trs.length - 1 : cur - 1), 0); }
-        else if (map[ev.key]) { setVal(map[ev.key][0], map[ev.key][1]); return; }
-        else return;
-        ev.preventDefault();
-        trs.forEach((tr) => tr.classList.remove("row-focus"));
-        trs[cur].classList.add("row-focus");
-        trs[cur].scrollIntoView({ block: "nearest" });
-      }
-
-      function renderComparePicker() {
-        evaluationComparePicker.innerHTML = evaluationState.runs.map((run) =>
-          `<label class="compare-chip"><input type="checkbox" data-compare-id="${escapeHtml(run.runId)}" ${evaluationState.compareRunIds.has(run.runId) ? "checked" : ""}/> ${escapeHtml(run.runId)}</label>`
-        ).join("") || "<span class='hint'>暂无运行</span>";
-        evaluationComparePicker.querySelectorAll("[data-compare-id]").forEach((cb) => {
-          cb.addEventListener("change", async () => {
-            const id = cb.getAttribute("data-compare-id");
-            if (cb.checked) { evaluationState.compareRunIds.add(id); await ensureCompareDetail(id); }
-            else evaluationState.compareRunIds.delete(id);
-            renderCompareTable();
-          });
-        });
-      }
-
-      async function ensureCompareDetail(id) {
-        // Cached for the session; compare summaries are not re-fetched after a review save elsewhere.
-        // Failures are NOT cached so a later re-check retries instead of being stuck on empty data.
-        if (evaluationState.compareDetails[id]) return;
-        try { evaluationState.compareDetails[id] = await evaluationJson(`/api/v1/evaluations/${encodeURIComponent(id)}`); }
-        catch (err) { showEvaluationMessage(`读取 ${id} 详情失败：${err.message || err}`, "error"); }
-      }
-
-      const COMPARE_METRICS = [
-        ["分类准确率", (o) => o.categoryAccuracy, "pct", "max"],
-        ["品牌准确率", (o) => o.brandAccuracy, "pct", "max"],
-        ["复核后分类", (o) => o.categoryReviewedAccuracy, "pct", "max"],
-        ["复核后品牌", (o) => o.brandReviewedAccuracy, "pct", "max"],
-        ["待分类校验", (o) => o.categoryPendingReview, "num", "min"],
-        ["待品牌校验", (o) => o.brandPendingReview, "num", "min"],
-      ];
-
-      function renderCompareTable() {
-        const ids = evaluationState.runs.map((r) => r.runId).filter((id) => evaluationState.compareRunIds.has(id));
-        if (!ids.length) { evaluationCompareHost.innerHTML = "<div class='hint'>请选择至少一个运行。</div>"; return; }
-        const overalls = ids.map((id) => (evaluationState.compareDetails[id] && evaluationState.compareDetails[id].summary && evaluationState.compareDetails[id].summary.overall) || {});
-        const header = `<tr><th>指标</th>${ids.map((id) => `<th>${escapeHtml(id)}</th>`).join("")}</tr>`;
-        const body = COMPARE_METRICS.map(([label, get, fmt, dir]) => {
-          const vals = overalls.map((o) => { const v = Number(get(o)); return Number.isFinite(v) ? v : null; });
-          const present = vals.filter((v) => v !== null);
-          const best = present.length ? (dir === "max" ? Math.max(...present) : Math.min(...present)) : null;
-          const cells = vals.map((v) => {
-            const text = v === null ? "-" : (fmt === "pct" ? formatPercent(v) : String(v));
-            const isBest = best !== null && v === best && present.length > 1;
-            return `<td class="${isBest ? "compare-best" : ""}">${text}</td>`;
-          }).join("");
-          return `<tr><td class="compare-label">${escapeHtml(label)}</td>${cells}</tr>`;
-        }).join("");
-        evaluationCompareHost.innerHTML = `<div class="results-table-wrap"><table class="results-table compare-table"><thead>${header}</thead><tbody>${body}</tbody></table></div>`;
-      }
-
-      function renderCompare() { renderComparePicker(); renderCompareTable(); }
-
-      function setActiveTab(tab) {
-        evaluationState.activeTab = tab;
-        document.querySelectorAll("#evaluation-tabs .tab").forEach((btn) => {
-          const isActive = btn.getAttribute("data-tab") === tab;
-          btn.classList.toggle("active", isActive);
-          btn.setAttribute("aria-selected", isActive ? "true" : "false");
-        });
-        document.querySelectorAll("[data-panel]").forEach((panel) => {
-          panel.classList.toggle("active", panel.getAttribute("data-panel") === tab);
-        });
-        if (tab === "compare") renderCompare();
-      }
-
-      document.querySelectorAll("#evaluation-tabs .tab").forEach((btn) => {
-        btn.addEventListener("click", () => setActiveTab(btn.getAttribute("data-tab")));
+      const [label, get, fmt, dir] = rowDef;
+      const overalls = details.map((d) => ((d.summary || {}).overall) || {});
+      const vals = overalls.map((o) => {
+        const raw = get(o);
+        const num = Number(raw);
+        return raw === null || raw === undefined || raw === "" || !Number.isFinite(num) ? null : num;
       });
-      evaluationCreateBtn.addEventListener("click", createEvaluation);
-      evaluationRefreshBtn.addEventListener("click", () => {
-        loadEvaluations().catch((err) => showEvaluationMessage(String(err.message || err), "error"));
-      });
-      evaluationSaveReviewBtn.addEventListener("click", saveEvaluationReview);
-      evaluationSaveAnalysisBtn.addEventListener("click", saveEvaluationAnalysis);
-      evaluationArchiveBtn.addEventListener("click", archiveEvaluation);
-      evaluationCloneBtn.addEventListener("click", () => {
-        if (evaluationState.activeRunId) cloneRunConfig(evaluationState.activeRunId);
-      });
-      document.querySelectorAll("#evaluation-batch-actions .batch-btn").forEach((btn) => {
-        btn.addEventListener("click", () => applyBatch(btn.getAttribute("data-batch")));
-      });
-      document.addEventListener("keydown", reviewKeyHandler);
-      document.getElementById("lightbox-close").addEventListener("click", closeLightbox);
-      lightboxPrev.addEventListener("click", () => stepLightbox(-1));
-      lightboxNext.addEventListener("click", () => stepLightbox(1));
-      lightboxEl.addEventListener("click", (ev) => { if (ev.target === lightboxEl) closeLightbox(); });
-      document.addEventListener("keydown", (ev) => {
-        if (lightboxEl.hidden) return;
-        if (ev.key === "Escape") closeLightbox();
-        else if (ev.key === "ArrowLeft") stepLightbox(-1);
-        else if (ev.key === "ArrowRight") stepLightbox(1);
-      });
+      const present = vals.filter((v) => v !== null);
+      const best = present.length ? (dir === "max" ? Math.max(...present) : Math.min(...present)) : null;
+      const cells = vals.map((v) => {
+        const text = v === null ? "-" : fmt === "pct" ? fmtPct(v) : fmt === "dur" ? fmtDur(v) : String(v);
+        const isBest = best !== null && v === best && present.length > 1;
+        return `<td${isBest ? ' class="compare-best"' : ""}>${text}</td>`;
+      }).join("");
+      return `<tr><td class="compare-label">${escapeHtml(label)}</td>${cells}</tr>`;
+    }).join("");
+    return head + rows;
+  }).join("");
+  host.innerHTML = `<div class="results-table-wrap"><table class="results-table compare-table"><thead>${header}</thead><tbody>${sections}</tbody></table></div>`;
+}
 
-      // ---------- Shell + sidebar ----------
-      Shell.mount({
-        page: "evaluations",
-        defaultRoute: "evaluations",
-        brand: { logo: "M", text: "Mercari 识别" },
-        sidebar: () => [{ id: "evaluations", label: "模型测试" }],
-        onRouteChange: () => {
-          Shell.setHeader({ title: "模型测试", crumb: "" });
-        },
-      });
+// ---------- lightbox ----------
+function openLightbox(image, startIndex, rowIndex) {
+  const urls = String(image || "").split("|").map((s) => s.trim()).filter(Boolean);
+  if (!urls.length) return;
+  state.lightbox = { urls, index: startIndex || 0, rowIndex: rowIndex ?? -1 };
+  if (state.lightbox.rowIndex >= 0) {
+    state.focusIndex = state.lightbox.rowIndex;
+    refreshFocusClass();
+  }
+  renderLightbox();
+  el("lightbox").hidden = false;
+}
 
-      // ---------- Init ----------
-      loadConfigDefaults();
-      loadEvaluations().catch((err) => showEvaluationMessage(String(err.message || err), "error"));
+function renderLightbox() {
+  const { urls, index } = state.lightbox;
+  el("lightbox-img").src = urls[index] || "";
+  el("lightbox-prev").style.visibility = urls.length > 1 ? "visible" : "hidden";
+  el("lightbox-next").style.visibility = urls.length > 1 ? "visible" : "hidden";
+}
+
+function closeLightbox() {
+  el("lightbox").hidden = true;
+  state.lightbox = { urls: [], index: 0, rowIndex: -1 };
+  renderReview(); // reflect any verdicts marked while the lightbox was open
+}
+
+function stepLightbox(delta) {
+  const { urls, index } = state.lightbox;
+  if (!urls.length) return;
+  state.lightbox.index = (index + delta + urls.length) % urls.length;
+  renderLightbox();
+}
+
+// ---------- keyboard ----------
+const VERDICT_KEYS = {
+  "1": ["customerCategoryCheck", "OK"],
+  "2": ["customerCategoryCheck", "ACCEPTABLE"],
+  "3": ["customerCategoryCheck", "NG"],
+  "q": ["customerBrandCheck", "OK"],
+  "w": ["customerBrandCheck", "ACCEPTABLE"],
+  "e": ["customerBrandCheck", "NG"],
+};
+
+document.addEventListener("keydown", (ev) => {
+  if (!el("lightbox").hidden) {
+    if (ev.key === "Escape") closeLightbox();
+    else if (ev.key === "ArrowLeft") stepLightbox(-1);
+    else if (ev.key === "ArrowRight") stepLightbox(1);
+    else if (VERDICT_KEYS[ev.key] && state.lightbox.rowIndex >= 0 && !isArchivedActive()) {
+      // Mark the row whose images are on screen; stay on it (no auto-advance).
+      const [field, value] = VERDICT_KEYS[ev.key];
+      state.rows[state.lightbox.rowIndex][field] = value;
+      state.dirty.add(state.lightbox.rowIndex);
+      renderDirtyBar();
+    }
+    return;
+  }
+  if (!el("errors-backdrop").hidden) {
+    if (ev.key === "Escape") el("errors-backdrop").hidden = true;
+    return;
+  }
+  if (!el("drawer").hidden) {
+    if (ev.key === "Escape") closeDrawer();
+    return;
+  }
+  if (state.view !== "run" || !state.rows.length || el("review-card").hidden) return;
+  const tag = (ev.target.tagName || "").toLowerCase();
+  if (tag === "textarea" || tag === "select" || tag === "input") return;
+  const vis = visibleIndices();
+  if (!vis.length) return;
+  if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+    ev.preventDefault();
+    const pos = vis.indexOf(state.focusIndex);
+    if (ev.key === "ArrowDown") state.focusIndex = vis[Math.min(pos < 0 ? 0 : pos + 1, vis.length - 1)];
+    else state.focusIndex = vis[Math.max(pos < 0 ? vis.length - 1 : pos - 1, 0)];
+    refreshFocusClass();
+    scrollFocusIntoView();
+  } else if (ev.key === " ") {
+    if (state.focusIndex < 0 || isArchivedActive()) return;
+    ev.preventDefault();
+    if (state.selectedRows.has(state.focusIndex)) state.selectedRows.delete(state.focusIndex);
+    else state.selectedRows.add(state.focusIndex);
+    renderReview();
+  } else if (VERDICT_KEYS[ev.key]) {
+    applyVerdictToFocused(...VERDICT_KEYS[ev.key]);
+  }
+});
+
+// ---------- wiring ----------
+el("refresh-btn").addEventListener("click", () => {
+  refreshRuns().catch((err) => showMessage(String(err.message || err), "error"));
+});
+el("new-run-btn").addEventListener("click", () => openDrawer(null));
+el("compare-toggle-btn").addEventListener("click", () => {
+  setView(state.view === "compare" ? "run" : "compare");
+});
+el("reuse-btn").addEventListener("click", () => {
+  openDrawer(state.runs.find((r) => r.runId === state.activeRunId) || null);
+});
+el("archive-btn").addEventListener("click", archiveRun);
+el("save-review-btn").addEventListener("click", saveReview);
+document.querySelectorAll("#batch-actions .batch-btn").forEach((btn) => {
+  btn.addEventListener("click", () => applyBatch(btn.getAttribute("data-batch")));
+});
+el("drawer-close-btn").addEventListener("click", closeDrawer);
+el("drawer-backdrop").addEventListener("click", closeDrawer);
+el("create-btn").addEventListener("click", createRun);
+el("errors-close-btn").addEventListener("click", () => { el("errors-backdrop").hidden = true; });
+el("errors-backdrop").addEventListener("click", (ev) => {
+  if (ev.target === el("errors-backdrop")) el("errors-backdrop").hidden = true;
+});
+el("lightbox-close").addEventListener("click", closeLightbox);
+el("lightbox-prev").addEventListener("click", () => stepLightbox(-1));
+el("lightbox-next").addEventListener("click", () => stepLightbox(1));
+el("lightbox").addEventListener("click", (ev) => { if (ev.target === el("lightbox")) closeLightbox(); });
+window.addEventListener("beforeunload", (ev) => {
+  if (state.dirty.size) { ev.preventDefault(); ev.returnValue = ""; }
+});
+
+// ---------- shell + init ----------
+Shell.mount({
+  page: "evaluations",
+  defaultRoute: "evaluations",
+  brand: { logo: "M", text: "Mercari 识别" },
+  sidebar: () => [{ id: "evaluations", label: "模型测试" }],
+  onRouteChange: () => {
+    Shell.setHeader({ title: "模型测试", crumb: "" });
+  },
+});
+
+(async function init() {
+  await loadConfigDefaults();
+  try {
+    await refreshRuns();
+    if (state.runs[0]) await selectRun(state.runs[0].runId);
+  } catch (err) {
+    showMessage(String(err.message || err), "error");
+  }
+})();

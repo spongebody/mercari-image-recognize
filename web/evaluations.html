@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>模型测试</title>
-    <link rel="stylesheet" href="/assets/evaluations.css?v=20260610" />
-    <link rel="stylesheet" href="/assets/shell.css?v=20260610" />
+    <link rel="stylesheet" href="/assets/evaluations.css?v=20260611" />
+    <link rel="stylesheet" href="/assets/shell.css?v=20260611" />
   </head>
   <body>
     <div class="page">
@@ -14,150 +14,151 @@
           <section class="card stack">
             <div class="entry-head">
               <span class="entry-title">测试记录</span>
+              <button class="secondary mini" id="refresh-btn" type="button">刷新</button>
             </div>
-            <div class="run-list" id="evaluation-run-list">正在读取...</div>
+            <div class="run-list" id="run-list">正在读取...</div>
+            <div class="sidebar-actions">
+              <button id="new-run-btn" type="button">＋ 新建测试</button>
+              <button class="secondary" id="compare-toggle-btn" type="button">⇄ 多轮对比</button>
+            </div>
           </section>
         </aside>
 
         <main class="stack">
-          <div class="tabbar" id="evaluation-tabs" role="tablist">
-            <button class="tab active" data-tab="setup" role="tab" aria-selected="true">① 发起</button>
-            <button class="tab" data-tab="monitor" role="tab" aria-selected="false">② 监控</button>
-            <button class="tab" data-tab="review" role="tab" aria-selected="false">③ 校验</button>
-            <button class="tab" data-tab="analysis" role="tab" aria-selected="false">④ 分析</button>
-            <button class="tab tab-compare" data-tab="compare" role="tab" aria-selected="false">⇄ 多轮对比</button>
-          </div>
+          <div class="message" id="message"></div>
 
-          <section class="tab-panel active" data-panel="setup">
-            <div class="card stack">
-              <div>
-                <label for="evaluation-file">上传测试数据</label>
-                <input id="evaluation-file" type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" />
-                <div class="hint">TSV/CSV 需包含 itemName、genreId、image、brand 四个字段。</div>
-              </div>
-              <div>
-                <label for="evaluation-vision-model">图片识别模型</label>
-                <input id="evaluation-vision-model" type="text" placeholder="openai/gpt-4o-mini" />
-              </div>
-              <div>
-                <label for="evaluation-category-model">分类模型</label>
-                <input id="evaluation-category-model" type="text" placeholder="openai/gpt-4o-mini" />
-              </div>
-              <div>
-                <label for="evaluation-product-model">商品数据模型</label>
-                <input id="evaluation-product-model" type="text" placeholder="openai/gpt-4o-mini" />
-              </div>
-              <div class="controls-row">
-                <div>
-                  <label for="evaluation-reasoning">推理程度</label>
-                  <select id="evaluation-reasoning">
-                    <option value="none">none</option>
-                    <option value="low">low</option>
-                    <option value="medium">medium</option>
-                    <option value="high">high</option>
-                  </select>
+          <section id="view-run" class="view active">
+            <div class="stack">
+              <div class="card stack">
+                <div class="entry-head">
+                  <div class="run-title-group">
+                    <span class="entry-title" id="run-title">未选择测试</span>
+                    <span class="pill idle" id="run-status">idle</span>
+                  </div>
+                  <div class="compact-actions">
+                    <button class="secondary" id="reuse-btn" type="button" disabled>复用配置</button>
+                    <a class="export-link" id="export-link-top" href="#" hidden>导出 CSV</a>
+                    <button class="secondary" id="archive-btn" type="button" hidden>归档</button>
+                  </div>
                 </div>
-                <div>
-                  <label for="evaluation-limit">数量限制</label>
-                  <input id="evaluation-limit" type="number" min="0" step="1" value="0" />
+                <div class="hint" id="run-meta">从左侧选择一条测试记录，或点击「＋ 新建测试」。</div>
+
+                <div id="progress-block" hidden>
+                  <div class="progress-num" id="progress-num">0 / 0</div>
+                  <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+                  <div class="hint" id="progress-meta"></div>
                 </div>
+
+                <div class="stat-row" id="stat-row" hidden></div>
               </div>
-              <div>
-                <label for="evaluation-language">语言</label>
-                <select id="evaluation-language">
-                  <option value="ja">ja</option>
-                  <option value="zh">zh</option>
-                  <option value="en">en</option>
-                </select>
-              </div>
-              <div class="message" id="evaluations-message"></div>
-              <div class="compact-actions">
-                <button id="evaluation-create-btn" type="button">开始测试</button>
-                <button class="secondary" id="evaluation-refresh-btn" type="button">刷新列表</button>
+
+              <div class="card stack" id="review-card" hidden>
+                <div class="review-toolbar">
+                  <div class="filter-bar" id="filter-bar"></div>
+                  <div class="batch-actions" id="batch-actions">
+                    <span class="batch-count" id="batch-count">已选 0</span>
+                    <select id="batch-field">
+                      <option value="customerCategoryCheck">分类校验</option>
+                      <option value="customerBrandCheck">品牌校验</option>
+                    </select>
+                    <button class="secondary batch-btn" type="button" data-batch="OK">批量正确</button>
+                    <button class="secondary batch-btn" type="button" data-batch="ACCEPTABLE">批量可接受</button>
+                    <button class="secondary batch-btn" type="button" data-batch="NG">批量错误</button>
+                  </div>
+                  <div class="review-save">
+                    <span class="dirty-count" id="dirty-count" hidden></span>
+                    <a class="export-link" id="export-link" href="#" hidden>导出 CSV</a>
+                    <button id="save-review-btn" type="button" disabled>保存校验</button>
+                  </div>
+                </div>
+                <div class="hint">键盘：↑/↓ 选行，Space 勾选，1/2/3 标分类（正确/可接受/错误），q/w/e 标品牌；打标后自动跳到下一行，大图打开时快捷键同样生效。</div>
+                <div id="results-host" class="hint">测试完成后展示 AI 结果和校验字段。</div>
               </div>
             </div>
           </section>
 
-          <section class="tab-panel" data-panel="monitor">
-            <div class="card stack">
-              <div class="entry-head">
-                <span class="entry-title" id="evaluation-active-title">未选择测试</span>
-                <span class="pill" id="evaluation-active-status">idle</span>
-              </div>
-              <div class="hint" id="evaluation-active-meta">上传测试数据后会在这里展示实时进度和统计。</div>
-              <div class="metric-grid" id="evaluation-metrics"></div>
-              <div class="compact-actions">
-                <a id="evaluation-download-link" href="#" hidden>下载结果 CSV</a>
-                <button class="secondary" id="evaluation-archive-btn" type="button" disabled>归档</button>
-              </div>
-            </div>
-          </section>
-
-          <section class="tab-panel" data-panel="review">
-            <div class="card stack">
-              <div class="entry-head">
-                <span class="entry-title">客服校验</span>
-                <div class="batch-actions" id="evaluation-batch-actions">
-                  <span class="batch-count" id="evaluation-batch-count">已选 0</span>
-                  <button class="secondary batch-btn" type="button" data-batch="OK">批量正确</button>
-                  <button class="secondary batch-btn" type="button" data-batch="ACCEPTABLE">批量可接受</button>
-                  <button class="secondary batch-btn" type="button" data-batch="NG">批量错误</button>
-                  <select id="evaluation-batch-field"><option value="customerCategoryCheck">分类校验</option><option value="customerBrandCheck">品牌校验</option></select>
-                </div>
-                <button class="secondary" id="evaluation-save-review-btn" type="button" disabled>保存校验</button>
-              </div>
-              <div class="filter-bar" id="evaluation-filter-bar"></div>
-              <div class="hint">键盘：↑/↓ 选行，1/2/3 标分类(正确/可接受/错误)，q/w/e 标品牌。</div>
-              <div id="evaluation-results-host" class="hint">测试完成后展示 AI 结果和客服校验字段。</div>
-            </div>
-          </section>
-
-          <section class="tab-panel" data-panel="analysis">
-            <div class="card stack">
-              <div class="entry-head">
-                <span class="entry-title">分析与迭代</span>
-                <div class="compact-actions">
-                  <button class="secondary" id="evaluation-clone-btn" type="button" disabled>复用配置重测</button>
-                  <button class="secondary" id="evaluation-save-analysis-btn" type="button" disabled>保存分析</button>
-                </div>
-              </div>
-              <div class="controls-row">
-                <div>
-                  <label for="evaluation-analysis-notes">可优化点</label>
-                  <textarea id="evaluation-analysis-notes" rows="5"></textarea>
-                </div>
-                <div>
-                  <label for="evaluation-actions">优化动作</label>
-                  <textarea id="evaluation-actions" rows="5"></textarea>
-                </div>
-              </div>
-              <div>
-                <label for="evaluation-next-run">下一轮测试建议</label>
-                <textarea id="evaluation-next-run" rows="3"></textarea>
-              </div>
-            </div>
-          </section>
-
-          <section class="tab-panel" data-panel="compare">
+          <section id="view-compare" class="view">
             <div class="card stack">
               <div class="entry-head"><span class="entry-title">多轮对比</span></div>
-              <div class="hint">勾选要对比的运行，下表并排展示指标（同一行最优值高亮）。</div>
-              <div class="compare-picker" id="evaluation-compare-picker"></div>
-              <div id="evaluation-compare-host" class="hint">请选择至少一个运行。</div>
+              <div class="hint">点选要对比的轮次（默认预选最近两轮已完成的测试）。配置差异蓝色高亮，指标最优值绿色高亮。</div>
+              <div class="compare-picker" id="compare-picker"></div>
+              <div id="compare-host" class="hint">请选择至少一轮已完成的测试。</div>
             </div>
           </section>
         </main>
       </div>
     </div>
 
-    <div class="lightbox" id="evaluation-lightbox" role="dialog" aria-modal="true" aria-label="图片预览" hidden>
+    <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
+    <aside class="drawer" id="drawer" hidden aria-label="新建测试">
+      <div class="entry-head">
+        <span class="entry-title">新建测试</span>
+        <button class="secondary mini" id="drawer-close-btn" type="button" aria-label="关闭">×</button>
+      </div>
+      <div class="stack">
+        <div>
+          <label for="f-file">测试数据</label>
+          <input id="f-file" type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" />
+          <div class="hint">TSV/CSV 需包含 itemName、genreId、image、brand 四个字段。</div>
+        </div>
+        <div>
+          <label for="f-vision">图片识别模型</label>
+          <input id="f-vision" type="text" placeholder="openai/gpt-4o-mini" />
+        </div>
+        <div>
+          <label for="f-category">分类模型</label>
+          <input id="f-category" type="text" placeholder="openai/gpt-4o-mini" />
+        </div>
+        <div>
+          <label for="f-product">商品数据模型</label>
+          <input id="f-product" type="text" placeholder="openai/gpt-4o-mini" />
+        </div>
+        <div class="controls-row">
+          <div>
+            <label for="f-reasoning">推理程度</label>
+            <select id="f-reasoning">
+              <option value="none">none</option>
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+            </select>
+          </div>
+          <div>
+            <label for="f-limit">数量限制</label>
+            <input id="f-limit" type="number" min="0" step="1" value="0" />
+          </div>
+          <div>
+            <label for="f-language">语言</label>
+            <select id="f-language">
+              <option value="ja">ja</option>
+              <option value="zh">zh</option>
+              <option value="en">en</option>
+            </select>
+          </div>
+        </div>
+        <div class="message" id="drawer-message"></div>
+        <button id="create-btn" type="button">开始测试</button>
+      </div>
+    </aside>
+
+    <div class="modal-backdrop" id="errors-backdrop" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-label="失败明细">
+        <div class="entry-head">
+          <span class="entry-title">失败明细（前 20 条）</span>
+          <button class="secondary mini" id="errors-close-btn" type="button" aria-label="关闭">×</button>
+        </div>
+        <div id="errors-host" class="errors-host"></div>
+      </div>
+    </div>
+
+    <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="图片预览" hidden>
       <button class="lightbox-close" id="lightbox-close" type="button" aria-label="关闭">×</button>
       <button class="lightbox-nav lightbox-prev" id="lightbox-prev" type="button" aria-label="上一张">‹</button>
       <img class="lightbox-img" id="lightbox-img" src="" alt="" />
       <button class="lightbox-nav lightbox-next" id="lightbox-next" type="button" aria-label="下一张">›</button>
     </div>
 
-    <script src="/assets/shell.js?v=20260610"></script>
-    <script src="/assets/evaluations.js?v=20260610"></script>
+    <script src="/assets/shell.js?v=20260611"></script>
+    <script src="/assets/evaluations.js?v=20260611"></script>
   </body>
 </html>
