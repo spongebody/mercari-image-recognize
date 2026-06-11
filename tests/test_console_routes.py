@@ -51,7 +51,7 @@ def test_evaluations_served_with_password(monkeypatch):
         r = client.get("/evaluations", headers=_auth("secret"))
         assert r.status_code == 200
         assert "shell.js" in r.text  # standalone evaluations page uses the shared shell
-        assert "evaluation-run-list" in r.text  # evaluations console markup
+        assert "run-list" in r.text  # evaluations console markup (sidebar run list)
 
 
 def test_config_no_longer_hosts_evaluations(monkeypatch):
