@@ -557,6 +557,7 @@ function openDrawer(prefillRun) {
   el("f-language").value = src.language || "ja";
   el("f-limit").value = String(src.limit ?? 0);
   clearMessage(el("drawer-message"));
+  renderDropzone();
   el("drawer-backdrop").hidden = false;
   el("drawer").hidden = false;
 }
@@ -564,6 +565,28 @@ function openDrawer(prefillRun) {
 function closeDrawer() {
   el("drawer").hidden = true;
   el("drawer-backdrop").hidden = true;
+}
+
+function renderDropzone() {
+  const file = el("f-file").files && el("f-file").files[0];
+  el("f-dropzone").classList.toggle("has-file", Boolean(file));
+  el("dropzone-idle").hidden = Boolean(file);
+  el("dropzone-file").hidden = !file;
+  el("dropzone-filename").textContent = file
+    ? `${file.name}（${Math.max(1, Math.ceil(file.size / 1024))} KB）`
+    : "";
+}
+
+function setDropzoneFile(file) {
+  const input = el("f-file");
+  if (file) {
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+  } else {
+    input.value = "";
+  }
+  renderDropzone();
 }
 
 async function createRun() {
@@ -586,7 +609,7 @@ async function createRun() {
   try {
     const data = await api("/api/v1/evaluations", { method: "POST", body: form });
     closeDrawer();
-    fileInput.value = "";
+    setDropzoneFile(null);
     showMessage(`已创建测试：${data.runId}`, "success");
     await refreshRuns();
     await selectRun(data.runId);
@@ -815,6 +838,36 @@ document.querySelectorAll("#batch-actions .batch-btn").forEach((btn) => {
 el("drawer-close-btn").addEventListener("click", closeDrawer);
 el("drawer-backdrop").addEventListener("click", closeDrawer);
 el("create-btn").addEventListener("click", createRun);
+const dropzone = el("f-dropzone");
+dropzone.addEventListener("click", (ev) => {
+  if (ev.target.closest("#dropzone-clear")) return;
+  el("f-file").click();
+});
+dropzone.addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); el("f-file").click(); }
+});
+dropzone.addEventListener("dragover", (ev) => {
+  ev.preventDefault();
+  dropzone.classList.add("dragover");
+});
+dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+dropzone.addEventListener("drop", (ev) => {
+  ev.preventDefault();
+  dropzone.classList.remove("dragover");
+  const file = ev.dataTransfer.files && ev.dataTransfer.files[0];
+  if (!file) return;
+  if (!/\.(csv|tsv)$/i.test(file.name)) {
+    showMessage("仅支持 .csv / .tsv 文件。", "error", el("drawer-message"));
+    return;
+  }
+  clearMessage(el("drawer-message"));
+  setDropzoneFile(file);
+});
+el("f-file").addEventListener("change", renderDropzone);
+el("dropzone-clear").addEventListener("click", (ev) => {
+  ev.stopPropagation();
+  setDropzoneFile(null);
+});
 el("errors-close-btn").addEventListener("click", () => { el("errors-backdrop").hidden = true; });
 el("errors-backdrop").addEventListener("click", (ev) => {
   if (ev.target === el("errors-backdrop")) el("errors-backdrop").hidden = true;

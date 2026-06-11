@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>模型测试</title>
-    <link rel="stylesheet" href="/assets/evaluations.css?v=20260612" />
-    <link rel="stylesheet" href="/assets/shell.css?v=20260612" />
+    <link rel="stylesheet" href="/assets/evaluations.css?v=20260613" />
+    <link rel="stylesheet" href="/assets/shell.css?v=20260613" />
   </head>
   <body>
     <div class="page">
@@ -98,7 +98,18 @@
       <div class="stack">
         <div>
           <label for="f-file">测试数据</label>
-          <input id="f-file" type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" />
+          <div class="dropzone" id="f-dropzone" role="button" tabindex="0" aria-label="选择或拖拽测试数据文件">
+            <input id="f-file" type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" hidden />
+            <div class="dropzone-idle" id="dropzone-idle">
+              <div class="dropzone-icon">⇪</div>
+              <div class="dropzone-text">点击选择文件，或将文件拖拽到此处</div>
+              <div class="dropzone-sub">支持 .csv / .tsv</div>
+            </div>
+            <div class="dropzone-file" id="dropzone-file" hidden>
+              <span class="dropzone-filename" id="dropzone-filename"></span>
+              <button class="secondary mini" id="dropzone-clear" type="button" aria-label="移除文件">×</button>
+            </div>
+          </div>
           <div class="hint">TSV/CSV 需包含 itemName、genreId、image、brand 四个字段。</div>
         </div>
         <div>
@@ -158,7 +169,7 @@
       <button class="lightbox-nav lightbox-next" id="lightbox-next" type="button" aria-label="下一张">›</button>
     </div>
 
-    <script src="/assets/shell.js?v=20260612"></script>
-    <script src="/assets/evaluations.js?v=20260612"></script>
+    <script src="/assets/shell.js?v=20260613"></script>
+    <script src="/assets/evaluations.js?v=20260613"></script>
   </body>
 </html>
