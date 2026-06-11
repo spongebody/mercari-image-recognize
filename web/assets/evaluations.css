@@ -228,12 +228,13 @@ button.secondary:not(:disabled):hover { box-shadow: none; }
 .batch-btn { width: auto; padding: 7px 12px; font-size: 12px; }
 #batch-field { width: auto; padding: 7px 10px; font-size: 12px; }
 
+/* The page itself scrolls; no inner vertical scrollbar. Horizontal overflow
+   only kicks in when the window is narrower than the table. */
 .results-table-wrap {
   width: 100%;
-  overflow: auto;
+  overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 10px;
-  max-height: calc(100vh - 340px);
 }
 table.results-table { width: 100%; border-collapse: collapse; min-width: 1180px; background: #fff; }
 .results-table th, .results-table td {
@@ -244,16 +245,26 @@ table.results-table { width: 100%; border-collapse: collapse; min-width: 1180px;
   font-size: 12px;
 }
 .results-table th {
-  position: sticky;
-  top: 0;
   background: #f8fafc;
-  z-index: 1;
   color: var(--muted);
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.02em;
   font-size: 11px;
+  white-space: nowrap;
 }
+/* Column widths: select / thumb / item / category / path / confidence /
+   brand / ai-title / two verdicts / notes */
+.results-table th:nth-child(1) { width: 36px; }
+.results-table th:nth-child(2) { width: 62px; }
+.results-table th:nth-child(3) { width: 16%; }
+.results-table th:nth-child(4) { width: 110px; }
+.results-table th:nth-child(5) { width: 18%; }
+.results-table th:nth-child(6) { width: 56px; }
+.results-table th:nth-child(7) { width: 12%; }
+.results-table th:nth-child(8) { width: 16%; }
+.results-table th:nth-child(9), .results-table th:nth-child(10) { width: 104px; }
+.results-table th:nth-child(11) { width: 15%; }
 .results-table select, .results-table textarea { min-width: 96px; padding: 8px 10px; border-width: 1px; border-radius: 8px; font-size: 12px; }
 .results-table textarea { min-width: 160px; min-height: 44px; }
 .results-table tr.row-bad td { background: #fef2f2; }
@@ -269,8 +280,16 @@ table.results-table { width: 100%; border-collapse: collapse; min-width: 1180px;
   overflow: hidden;
   word-break: break-word;
 }
-.cell-name .clamp2, .cell-title .clamp2 { max-width: 240px; }
-.cell-path .clamp2 { max-width: 260px; }
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 10px 2px 0;
+}
+.pager-info { font-size: 12px; color: var(--muted); }
+.pager-btn { width: auto; padding: 7px 14px; font-size: 12px; }
 
 .diff .orig { color: var(--muted); }
 .diff.ok .ai { color: var(--success); font-weight: 700; }

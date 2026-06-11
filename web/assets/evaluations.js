@@ -37,12 +37,15 @@ const state = {
   selectedRows: new Set(),
   focusIndex: -1,          // original row index, not visible position
   filter: "all",
+  page: 1,
   poller: null,
   lightbox: { urls: [], index: 0, rowIndex: -1 },
   compareIds: new Set(),
   compareDetails: {},
 };
 let configDefaults = {};
+// Rows per review page; overridable via localStorage for unusual datasets.
+const PAGE_SIZE = Math.max(1, Number(localStorage.getItem("eval_page_size")) || 50);
 
 const el = (id) => document.getElementById(id);
 
@@ -142,6 +145,7 @@ async function selectRun(runId) {
   state.filter = "all";
   state.selectedRows = new Set();
   state.focusIndex = -1;
+  state.page = 1;
   state.detail = null; // avoid flashing the previous run's metrics while loading
   setView("run");
   renderRunDetail();
@@ -302,6 +306,17 @@ function visibleIndices() {
   return out;
 }
 
+// Pagination over the filtered list. Clamps state.page so filter changes and
+// edits that shrink the list never leave us on a phantom page.
+function pageSlice() {
+  const vis = visibleIndices();
+  const pages = Math.max(1, Math.ceil(vis.length / PAGE_SIZE));
+  if (state.page > pages) state.page = pages;
+  if (state.page < 1) state.page = 1;
+  const start = (state.page - 1) * PAGE_SIZE;
+  return { vis, pages, slice: vis.slice(start, start + PAGE_SIZE) };
+}
+
 function renderFilterBar() {
   const rows = state.rows;
   const counts = {
@@ -326,6 +341,7 @@ function renderFilterBar() {
     node.addEventListener("click", () => {
       state.filter = node.getAttribute("data-filter");
       state.focusIndex = -1;
+      state.page = 1;
       renderReview();
     });
   });
@@ -360,11 +376,11 @@ function renderReview() {
   el("batch-actions").style.display = archived ? "none" : "";
   el("save-review-btn").hidden = archived;
   if (!state.rows.length) { host.textContent = "暂无结果。"; return; }
-  const vis = visibleIndices();
+  const { vis, pages, slice } = pageSlice();
   if (!vis.length) { host.innerHTML = "<div class='hint'>当前筛选无匹配条目。</div>"; return; }
 
   const dis = archived;
-  const body = vis.map((i) => {
+  const body = slice.map((i) => {
     const row = state.rows[i];
     const catCls = isCategoryCorrect(row) ? "ok" : "bad";
     const brandCls = isBrandCorrect(row) ? "ok" : (String(row.aiBrand || "").trim() ? "warn" : "bad");
@@ -396,18 +412,35 @@ function renderReview() {
     );
   }).join("");
 
+  const pager = pages > 1
+    ? `<div class="pager">` +
+      `<span class="pager-info">共 ${vis.length} 条 · 第 ${state.page} / ${pages} 页</span>` +
+      `<button class="secondary pager-btn" type="button" data-pager="prev"${state.page <= 1 ? " disabled" : ""}>上一页</button>` +
+      `<button class="secondary pager-btn" type="button" data-pager="next"${state.page >= pages ? " disabled" : ""}>下一页</button>` +
+      `</div>`
+    : "";
+
   host.innerHTML =
     `<div class="results-table-wrap"><table class="results-table"><thead><tr>` +
     `<th><input type="checkbox" id="select-all"${dis ? " disabled" : ""} /></th>` +
     `<th>图片</th><th>商品</th><th>分类 (原→AI)</th><th>AI 分类 Path</th><th>置信度</th>` +
     `<th>品牌 (原→AI)</th><th>AI 标题</th><th>分类校验</th><th>品牌校验</th><th>备注</th>` +
-    `</tr></thead><tbody>${body}</tbody></table></div>`;
+    `</tr></thead><tbody>${body}</tbody></table></div>` +
+    pager;
 
   bindReviewEvents(host);
   updateBatchCount();
 }
 
 function bindReviewEvents(host) {
+  host.querySelectorAll("[data-pager]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.page += btn.getAttribute("data-pager") === "next" ? 1 : -1;
+      state.focusIndex = -1;
+      renderReview();
+      el("review-card").scrollIntoView({ block: "start" });
+    });
+  });
   host.querySelectorAll("img.thumb").forEach((img) => {
     img.addEventListener("click", () => {
       openLightbox(img.getAttribute("data-full"), 0, Number(img.getAttribute("data-thumb-row")));
@@ -482,21 +515,58 @@ function scrollFocusIntoView() {
   if (tr) tr.scrollIntoView({ block: "nearest" });
 }
 
+// Move focus by delta within the current page, flipping pages at the edges.
+function moveFocus(delta) {
+  const { vis, pages, slice } = pageSlice();
+  if (!vis.length) return;
+  const pos = slice.indexOf(state.focusIndex);
+  if (pos < 0) {
+    state.focusIndex = delta > 0 ? slice[0] : slice[slice.length - 1];
+  } else if (pos + delta >= slice.length) {
+    if (state.page >= pages) return;
+    state.page += 1;
+    state.focusIndex = pageSlice().slice[0];
+    renderReview();
+    scrollFocusIntoView();
+    return;
+  } else if (pos + delta < 0) {
+    if (state.page <= 1) return;
+    state.page -= 1;
+    const prev = pageSlice().slice;
+    state.focusIndex = prev[prev.length - 1];
+    renderReview();
+    scrollFocusIntoView();
+    return;
+  } else {
+    state.focusIndex = slice[pos + delta];
+  }
+  refreshFocusClass();
+  scrollFocusIntoView();
+}
+
 function applyVerdictToFocused(field, value) {
   if (state.focusIndex < 0 || isArchivedActive()) return;
-  const prevVis = visibleIndices();
-  const prevPos = prevVis.indexOf(state.focusIndex);
+  const prevPos = pageSlice().slice.indexOf(state.focusIndex);
   state.rows[state.focusIndex][field] = value;
   state.dirty.add(state.focusIndex);
   // Auto-advance within the current filter. If the row just left the filter
   // (e.g. marked while on the pending chip), focus whatever took its place.
-  const vis = visibleIndices();
-  if (!vis.length) state.focusIndex = -1;
-  else if (vis.includes(state.focusIndex)) {
-    const p = vis.indexOf(state.focusIndex);
-    state.focusIndex = vis[Math.min(p + 1, vis.length - 1)];
+  const after = pageSlice();
+  if (!after.vis.length) {
+    state.focusIndex = -1;
+  } else if (after.slice.includes(state.focusIndex)) {
+    const p = after.slice.indexOf(state.focusIndex);
+    if (p + 1 < after.slice.length) {
+      state.focusIndex = after.slice[p + 1];
+    } else if (state.page < after.pages) {
+      state.page += 1;
+      state.focusIndex = pageSlice().slice[0];
+    }
   } else {
-    state.focusIndex = vis[Math.min(Math.max(prevPos, 0), vis.length - 1)];
+    const slice = pageSlice().slice;
+    state.focusIndex = slice.length
+      ? slice[Math.min(Math.max(prevPos, 0), slice.length - 1)]
+      : -1;
   }
   renderReview();
   scrollFocusIntoView();
@@ -799,15 +869,10 @@ document.addEventListener("keydown", (ev) => {
   if (state.view !== "run" || !state.rows.length || el("review-card").hidden) return;
   const tag = (ev.target.tagName || "").toLowerCase();
   if (tag === "textarea" || tag === "select" || tag === "input") return;
-  const vis = visibleIndices();
-  if (!vis.length) return;
+  if (!visibleIndices().length) return;
   if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
     ev.preventDefault();
-    const pos = vis.indexOf(state.focusIndex);
-    if (ev.key === "ArrowDown") state.focusIndex = vis[Math.min(pos < 0 ? 0 : pos + 1, vis.length - 1)];
-    else state.focusIndex = vis[Math.max(pos < 0 ? vis.length - 1 : pos - 1, 0)];
-    refreshFocusClass();
-    scrollFocusIntoView();
+    moveFocus(ev.key === "ArrowDown" ? 1 : -1);
   } else if (ev.key === " ") {
     if (state.focusIndex < 0 || isArchivedActive()) return;
     ev.preventDefault();
