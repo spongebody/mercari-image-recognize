@@ -116,4 +116,5 @@ def test_analysis_endpoint_removed():
 
     response = client.put("/api/v1/evaluations/some-run/analysis", json={})
 
-    assert response.status_code in (404, 405)
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Not Found"}

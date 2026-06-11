@@ -224,5 +224,5 @@ def test_read_run_omits_analysis_field(tmp_path):
 
     data = store.read_run(run.runId)
 
-    assert "analysis" not in data
+    assert set(data.keys()) == {"run", "status", "summary"}
     assert not hasattr(store, "save_analysis")

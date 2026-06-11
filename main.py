@@ -921,7 +921,6 @@ def save_evaluation_review(run_id: str, payload: Dict[str, Any]) -> Dict[str, An
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-
 @app.post("/api/v1/evaluations/{run_id}/archive")
 def archive_evaluation(run_id: str) -> Dict[str, Any]:
     try:
