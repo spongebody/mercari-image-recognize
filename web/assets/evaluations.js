@@ -1,7 +1,8 @@
 // ---------- generic helpers ----------
 function escapeHtml(s) {
   return String(s == null ? "" : s)
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 function firstImageUrl(image) {
@@ -261,7 +262,12 @@ function renderStats(isComplete) {
     `</div>`
   ).join("");
   const failedCard = el("stat-failed");
-  if (failedCard) failedCard.addEventListener("click", openErrors);
+  if (failedCard) {
+    failedCard.addEventListener("click", openErrors);
+    failedCard.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); openErrors(); }
+    });
+  }
 }
 
 async function openErrors() {
@@ -354,6 +360,7 @@ function renderReview() {
   const host = el("results-host");
   const archived = isArchivedActive();
   el("batch-actions").style.display = archived ? "none" : "";
+  el("save-review-btn").hidden = archived;
   if (!state.rows.length) { host.textContent = "暂无结果。"; return; }
   const vis = visibleIndices();
   if (!vis.length) { host.innerHTML = "<div class='hint'>当前筛选无匹配条目。</div>"; return; }
