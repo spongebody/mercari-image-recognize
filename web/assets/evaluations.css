@@ -126,6 +126,10 @@ button.secondary:not(:disabled):hover { box-shadow: none; }
 .entry-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
 .entry-title { font-size: 15px; font-weight: 700; color: var(--text); }
 .run-title-group { display: flex; align-items: center; gap: 10px; min-width: 0; }
+
+#run-meta .meta-item { display: inline-flex; align-items: baseline; gap: 5px; margin-right: 16px; }
+#run-meta .meta-k { font-size: 11px; color: #9ca3af; }
+#run-meta .meta-item { color: var(--text); font-weight: 600; }
 .run-title-group .entry-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .evaluation-layout {

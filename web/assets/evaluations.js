@@ -216,11 +216,22 @@ function renderRunDetail() {
   pill.textContent = st;
   pill.className = `pill ${st}`;
 
-  el("run-meta").textContent = state.activeRunId
-    ? `${run.visionModel || "-"} · ${run.categoryModel || "-"} · ${run.productDataModel || "-"}` +
-      ` · effort: ${run.reasoningEffort || "none"} · ${run.language || "ja"}` +
-      (Number(run.limit) > 0 ? ` · 限 ${run.limit} 条` : "")
-    : "从左侧选择一条测试记录，或点击「＋ 新建测试」。";
+  if (state.activeRunId) {
+    const metaPairs = [
+      ["图片识别", run.visionModel || "-"],
+      ["分类", run.categoryModel || "-"],
+      ["商品数据", run.productDataModel || "-"],
+      ["推理", run.reasoningEffort || "none"],
+      ["语言", run.language || "ja"],
+    ];
+    if (Number(run.limit) > 0) metaPairs.push(["数量限制", `${run.limit} 条`]);
+    if (run.imported) metaPairs.push(["来源", "外部导入"]);
+    el("run-meta").innerHTML = metaPairs.map(([k, v]) =>
+      `<span class="meta-item"><span class="meta-k">${escapeHtml(k)}</span>${escapeHtml(v)}</span>`
+    ).join("");
+  } else {
+    el("run-meta").textContent = "从左侧选择一条测试记录，或点击「＋ 新建测试」。";
+  }
 
   el("reuse-btn").disabled = !state.activeRunId;
   const exportTop = el("export-link-top");
