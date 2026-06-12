@@ -1,6 +1,8 @@
 import asyncio
 import hmac
+import ipaddress
 import json
+import socket
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -870,6 +872,57 @@ async def create_evaluation(
         case_runner=_evaluation_case_runner,
     )
     return {"runId": run.runId, "status": "pending"}
+
+
+def _resolves_to_public_addresses(hostname: str) -> bool:
+    try:
+        infos = socket.getaddrinfo(hostname, None)
+    except socket.gaierror:
+        return False
+    addresses = {info[4][0] for info in infos}
+    if not addresses:
+        return False
+    for raw in addresses:
+        try:
+            ip = ipaddress.ip_address(raw)
+        except ValueError:
+            return False
+        if not ip.is_global:
+            return False
+    return True
+
+
+@app.get("/api/v1/image-proxy")
+def image_proxy(request: Request, url: str) -> Response:
+    """Serve remote dataset images same-origin.
+
+    Browsers on networks with polluted DNS resolve some CDNs to private
+    addresses and then block the load (Private Network Access). The console
+    fetches through the server instead, which also hides client networks
+    from the image hosts.
+    """
+    if not is_console_authed(request, settings.logs_password):
+        raise HTTPException(status_code=403, detail="Not authorized.")
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise HTTPException(status_code=400, detail="Invalid image url.")
+    # SSRF guard: never let the proxy reach private or loopback addresses.
+    if not _resolves_to_public_addresses(parsed.hostname):
+        raise HTTPException(status_code=400, detail="Refusing non-public image host.")
+    try:
+        data, mime_type = fetch_image_from_url(
+            url,
+            timeout=15,
+            max_bytes=15 * 1024 * 1024,
+            allowed_mime_types=settings.allowed_mime_types,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(
+        content=data,
+        media_type=mime_type or "image/jpeg",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 @app.post("/api/v1/evaluations/import")

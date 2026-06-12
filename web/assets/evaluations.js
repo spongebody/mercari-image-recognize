@@ -9,6 +9,13 @@ function firstImageUrl(image) {
   return String(image || "").split("|").map((s) => s.trim()).filter(Boolean)[0] || "";
 }
 
+// Dataset images load through the server: browsers on networks with polluted
+// DNS resolve some CDNs to private addresses and block the direct load
+// (Private Network Access). Same-origin requests are immune.
+function proxiedImageUrl(url) {
+  return `/api/v1/image-proxy?url=${encodeURIComponent(url)}`;
+}
+
 // ---------- correctness helpers (mirror backend image_model_evaluation.py) ----------
 function isCategoryCorrect(row) {
   return String(row.genreId ?? "").trim() === String(row.aiCategory ?? "").trim();
@@ -407,7 +414,7 @@ function renderReview() {
     if (i === state.focusIndex) classes.push("row-focus");
     const url = firstImageUrl(row.image);
     const thumb = url
-      ? `<img class="thumb" src="${escapeHtml(url)}" loading="lazy" alt="" data-full="${escapeHtml(row.image)}" data-thumb-row="${i}" />`
+      ? `<img class="thumb" src="${escapeHtml(proxiedImageUrl(url))}" loading="lazy" alt="" data-full="${escapeHtml(row.image)}" data-thumb-row="${i}" />`
       : `<span class="thumb thumb-empty">无图</span>`;
     const clamp = (text) => {
       const safe = escapeHtml(text || "");
@@ -462,6 +469,15 @@ function bindReviewEvents(host) {
   host.querySelectorAll("img.thumb").forEach((img) => {
     img.addEventListener("click", () => {
       openLightbox(img.getAttribute("data-full"), 0, Number(img.getAttribute("data-thumb-row")));
+    });
+    // If the server-side proxy cannot reach the host, fall back to a direct
+    // load once; that still works on networks with clean DNS.
+    img.addEventListener("error", () => {
+      const original = firstImageUrl(img.getAttribute("data-full") || "");
+      if (original && !img.dataset.fellBack) {
+        img.dataset.fellBack = "1";
+        img.src = original;
+      }
     });
   });
   host.querySelectorAll(".row-select").forEach((cb) => {
@@ -954,7 +970,7 @@ function openLightbox(image, startIndex, rowIndex) {
 
 function renderLightbox() {
   const { urls, index } = state.lightbox;
-  el("lightbox-img").src = urls[index] || "";
+  el("lightbox-img").src = urls[index] ? proxiedImageUrl(urls[index]) : "";
   el("lightbox-prev").style.visibility = urls.length > 1 ? "visible" : "hidden";
   el("lightbox-next").style.visibility = urls.length > 1 ? "visible" : "hidden";
 }
@@ -1071,6 +1087,13 @@ el("confirm-backdrop").addEventListener("click", (ev) => {
 el("errors-close-btn").addEventListener("click", () => { el("errors-backdrop").hidden = true; });
 el("errors-backdrop").addEventListener("click", (ev) => {
   if (ev.target === el("errors-backdrop")) el("errors-backdrop").hidden = true;
+});
+el("lightbox-img").addEventListener("error", () => {
+  // Same direct-load fallback as the thumbnails.
+  const { urls, index } = state.lightbox;
+  const original = urls[index];
+  const img = el("lightbox-img");
+  if (original && img.src.includes("/api/v1/image-proxy")) img.src = original;
 });
 el("lightbox-close").addEventListener("click", closeLightbox);
 el("lightbox-prev").addEventListener("click", () => stepLightbox(-1));
