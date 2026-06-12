@@ -226,3 +226,67 @@ def test_read_run_omits_analysis_field(tmp_path):
 
     assert set(data.keys()) == {"run", "status", "summary"}
     assert not hasattr(store, "save_analysis")
+
+
+def _write_results_file(path):
+    header = (
+        "itemName\tgenreId\timage\tbrand\tvisionModel\tcategoryModel"
+        "\tproductDataModel\treasoningEffort\taiCategory\taiBrand\ttotalDurationS"
+    )
+    row1 = "item-a\t100\thttp://example.com/a.jpg\tnike\tv-model\tc-model\tp-model\tnone\t100\tnike\t2.0"
+    row2 = "item-b\t200\thttp://example.com/b.jpg\tasics\tv-model\tc-model\tp-model\tnone\t300\t\t4.0"
+    path.write_text(header + "\n" + row1 + "\n" + row2 + "\n", encoding="utf-8")
+
+
+def test_import_results_creates_completed_run(tmp_path):
+    store = EvaluationRunStore(tmp_path / "runs")
+    src = tmp_path / "results.csv"
+    _write_results_file(src)
+
+    run = store.import_results(src)
+
+    detail = store.read_run(run.runId)
+    assert detail["status"]["status"] == "completed"
+    assert detail["status"]["total"] == 2
+    assert detail["status"]["message"] == "imported"
+    assert detail["run"]["visionModel"] == "v-model"
+    assert detail["run"]["imported"] is True
+    assert detail["summary"]["overall"]["total"] == 2
+    assert detail["summary"]["overall"]["categoryAccuracy"] == 0.5
+    assert detail["summary"]["overall"]["avgTotalDurationS"] == 3.0
+    rows = store.read_results(run.runId)
+    assert rows[0]["customerCategoryCheck"] == ""
+
+
+def test_import_results_rejects_missing_columns(tmp_path):
+    store = EvaluationRunStore(tmp_path / "runs")
+    src = tmp_path / "bad.csv"
+    src.write_text("itemName\tgenreId\nx\t1\n", encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        store.import_results(src)
+
+
+def test_delete_run_removes_directory(tmp_path):
+    store = EvaluationRunStore(tmp_path)
+    run_dir = tmp_path / "2026-06-12-09-00"
+    run_dir.mkdir(parents=True)
+    (run_dir / "status.json").write_text("{}", encoding="utf-8")
+
+    store.delete_run("2026-06-12-09-00")
+
+    assert not run_dir.exists()
+
+
+def test_delete_run_missing_raises(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        EvaluationRunStore(tmp_path).delete_run("nope")
+
+
+def test_run_path_rejects_traversal_and_empty(tmp_path):
+    store = EvaluationRunStore(tmp_path)
+
+    with pytest.raises(FileNotFoundError):
+        store.run_path("..")
+    with pytest.raises(FileNotFoundError):
+        store.run_path("")

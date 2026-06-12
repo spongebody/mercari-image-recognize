@@ -118,3 +118,52 @@ def test_analysis_endpoint_removed():
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Not Found"}
+
+
+def test_import_evaluation_endpoint(monkeypatch, tmp_path):
+    from app.evaluation.runs import EvaluationRunStore
+
+    monkeypatch.setattr(main, "evaluation_store", EvaluationRunStore(tmp_path))
+    client = TestClient(main.app)
+    body = (
+        "itemName\tgenreId\timage\tbrand\taiCategory\n"
+        "item\t100\thttp://example.com/a.jpg\tnike\t100\n"
+    ).encode("utf-8")
+
+    response = client.post(
+        "/api/v1/evaluations/import",
+        files={"file": ("results.csv", body, "text/tab-separated-values")},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "completed"
+    assert client.get(f"/api/v1/evaluations/{data['runId']}").status_code == 200
+
+
+def test_import_evaluation_rejects_bad_file(monkeypatch, tmp_path):
+    from app.evaluation.runs import EvaluationRunStore
+
+    monkeypatch.setattr(main, "evaluation_store", EvaluationRunStore(tmp_path))
+    client = TestClient(main.app)
+
+    response = client.post(
+        "/api/v1/evaluations/import",
+        files={"file": ("bad.csv", b"itemName\tgenreId\nx\t1\n", "text/csv")},
+    )
+
+    assert response.status_code == 400
+
+
+def test_delete_evaluation_endpoint(monkeypatch, tmp_path):
+    from app.evaluation.runs import EvaluationRunStore
+
+    monkeypatch.setattr(main, "evaluation_store", EvaluationRunStore(tmp_path))
+    run_dir = tmp_path / "2026-06-12-10-00"
+    run_dir.mkdir(parents=True)
+    (run_dir / "status.json").write_text("{}", encoding="utf-8")
+    client = TestClient(main.app)
+
+    assert client.delete("/api/v1/evaluations/2026-06-12-10-00").status_code == 200
+    assert not run_dir.exists()
+    assert client.delete("/api/v1/evaluations/2026-06-12-10-00").status_code == 404

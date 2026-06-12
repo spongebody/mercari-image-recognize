@@ -96,6 +96,12 @@ class EvaluationRunStore:
 
     def run_path(self, run_id: str) -> Path:
         path = self.root / run_id
+        # Reject traversal ("..") and empty ids before anything reads or, worse,
+        # deletes the resolved path. Treat them as not found.
+        resolved = path.resolve()
+        root = self.root.resolve()
+        if resolved == root or not resolved.is_relative_to(root):
+            raise FileNotFoundError(run_id)
         if not path.exists():
             raise FileNotFoundError(run_id)
         return path
@@ -205,6 +211,65 @@ class EvaluationRunStore:
             etaSeconds=0,
             message="completed",
         )
+
+    def import_results(self, results_path: Path) -> EvaluationRun:
+        """Register an externally produced results.csv as a completed run."""
+        with results_path.open("r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f, delimiter="\t")
+            fieldnames = reader.fieldnames or []
+            missing = [
+                field
+                for field in ("itemName", "genreId", "image", "brand", "aiCategory")
+                if field not in fieldnames
+            ]
+            if missing:
+                raise ValueError(
+                    f"results file missing required columns: {', '.join(missing)}"
+                )
+            rows = [row for row in reader if str(row.get("itemName") or "").strip()]
+        if not rows:
+            raise ValueError("results file contains no data rows.")
+
+        run = self._unique_run_path()
+        write_result_rows(run.path / "results.csv", rows)
+        self._write_json(run.path / "summary.json", summarize_rows(rows))
+        first = rows[0]
+        created_at = beijing_now().isoformat()
+        self._write_json(
+            run.path / "run_config.json",
+            {
+                "runId": run.runId,
+                "visionModel": str(first.get("visionModel") or ""),
+                "categoryModel": str(first.get("categoryModel") or ""),
+                "productDataModel": str(first.get("productDataModel") or ""),
+                "reasoningEffort": str(first.get("reasoningEffort") or "none"),
+                "language": "ja",
+                "limit": 0,
+                "createdAt": created_at,
+                "archived": False,
+                "imported": True,
+            },
+        )
+        self._write_json(
+            run.path / "status.json",
+            {
+                "runId": run.runId,
+                "status": "completed",
+                "total": len(rows),
+                "completed": len(rows),
+                "success": len(rows),
+                "failed": 0,
+                "createdAt": created_at,
+                "updatedAt": created_at,
+                "elapsedSeconds": 0,
+                "etaSeconds": 0,
+                "message": "imported",
+            },
+        )
+        return run
+
+    def delete_run(self, run_id: str) -> None:
+        shutil.rmtree(self.run_path(run_id))
 
     def read_results(self, run_id: str) -> List[Dict[str, str]]:
         path = self.run_path(run_id) / "results.csv"

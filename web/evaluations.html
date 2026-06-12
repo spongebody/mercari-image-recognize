@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>模型测试</title>
-    <link rel="stylesheet" href="/assets/evaluations.css?v=20260615" />
-    <link rel="stylesheet" href="/assets/shell.css?v=20260615" />
+    <link rel="stylesheet" href="/assets/evaluations.css?v=20260616" />
+    <link rel="stylesheet" href="/assets/shell.css?v=20260616" />
   </head>
   <body>
     <div class="page">
@@ -19,6 +19,7 @@
             <div class="run-list" id="run-list">正在读取...</div>
             <div class="sidebar-actions">
               <button id="new-run-btn" type="button">＋ 新建测试</button>
+              <button class="secondary" id="import-open-btn" type="button">⬆ 导入测试结果</button>
               <button class="secondary" id="compare-toggle-btn" type="button">⇄ 多轮对比</button>
             </div>
           </section>
@@ -154,6 +155,43 @@
       </div>
     </aside>
 
+    <div class="modal-backdrop" id="import-backdrop" hidden>
+      <div class="modal modal-sm" role="dialog" aria-modal="true" aria-label="导入测试结果">
+        <div class="entry-head">
+          <span class="entry-title">导入测试结果</span>
+          <button class="secondary mini" id="import-close-btn" type="button" aria-label="关闭">×</button>
+        </div>
+        <div class="stack">
+          <div class="dropzone dropzone-compact" id="im-dropzone" role="button" tabindex="0" aria-label="选择或拖拽 results.csv">
+            <input id="im-file" type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" hidden />
+            <div class="dropzone-idle" id="im-idle">
+              <div class="dropzone-icon">⇪</div>
+              <div class="dropzone-text">点击选择文件，或将文件拖拽到此处</div>
+              <div class="dropzone-sub">本系统导出的 results.csv（tab 分隔）</div>
+            </div>
+            <div class="dropzone-file" id="im-file-row" hidden>
+              <span class="dropzone-filename" id="im-filename"></span>
+              <button class="secondary mini" id="im-clear" type="button" aria-label="移除文件">×</button>
+            </div>
+          </div>
+          <div class="hint">至少需包含 itemName、genreId、image、brand、aiCategory 列；导入后作为一条已完成的测试记录展示，可继续校验与对比。</div>
+          <div class="message" id="import-message"></div>
+          <button id="import-btn" type="button">导入</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="confirm-backdrop" hidden>
+      <div class="modal modal-sm" role="alertdialog" aria-modal="true" aria-label="确认操作">
+        <div class="entry-head"><span class="entry-title" id="confirm-title">确认操作</span></div>
+        <div class="confirm-text" id="confirm-text"></div>
+        <div class="confirm-actions">
+          <button class="secondary" id="confirm-cancel-btn" type="button">取消</button>
+          <button class="danger" id="confirm-ok-btn" type="button">确认删除</button>
+        </div>
+      </div>
+    </div>
+
     <div class="modal-backdrop" id="errors-backdrop" hidden>
       <div class="modal" role="dialog" aria-modal="true" aria-label="失败明细">
         <div class="entry-head">
@@ -171,7 +209,7 @@
       <button class="lightbox-nav lightbox-next" id="lightbox-next" type="button" aria-label="下一张">›</button>
     </div>
 
-    <script src="/assets/shell.js?v=20260615"></script>
-    <script src="/assets/evaluations.js?v=20260615"></script>
+    <script src="/assets/shell.js?v=20260616"></script>
+    <script src="/assets/evaluations.js?v=20260616"></script>
   </body>
 </html>

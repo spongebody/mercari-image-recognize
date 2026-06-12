@@ -872,6 +872,30 @@ async def create_evaluation(
     return {"runId": run.runId, "status": "pending"}
 
 
+@app.post("/api/v1/evaluations/import")
+async def import_evaluation(file: UploadFile = File(...)) -> Dict[str, Any]:
+    tmp_path = BASE_DIR / "logs" / "tmp" / f"evaluation-import-{uuid.uuid4().hex}.csv"
+    tmp_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path.write_bytes(await file.read())
+    try:
+        run = evaluation_store.import_results(tmp_path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        with suppress(Exception):
+            tmp_path.unlink()
+    return {"runId": run.runId, "status": "completed"}
+
+
+@app.delete("/api/v1/evaluations/{run_id}")
+def delete_evaluation(run_id: str) -> Dict[str, Any]:
+    try:
+        evaluation_store.delete_run(run_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Evaluation run not found.") from exc
+    return {"ok": True}
+
+
 @app.get("/api/v1/evaluations")
 def list_evaluations() -> Dict[str, Any]:
     return {"runs": evaluation_store.list_runs()}

@@ -106,6 +106,7 @@ function renderRunList() {
       `<div class="run-meta">${escapeHtml(status)} · ${escapeHtml(run.reasoningEffort || "none")}</div>` +
       `<div class="run-meta">${escapeHtml(run.visionModel || "")}</div>` +
       `<button class="run-clone" type="button" data-clone-id="${escapeHtml(run.runId)}">复用配置</button>` +
+      `<button class="run-del" type="button" data-del-id="${escapeHtml(run.runId)}">删除</button>` +
       `</div>`
     );
   }).join("");
@@ -117,6 +118,12 @@ function renderRunList() {
       ev.stopPropagation();
       const run = state.runs.find((r) => r.runId === node.getAttribute("data-clone-id"));
       openDrawer(run || null);
+    });
+  });
+  host.querySelectorAll("[data-del-id]").forEach((node) => {
+    node.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      deleteRun(node.getAttribute("data-del-id"));
     });
   });
 }
@@ -627,7 +634,7 @@ function openDrawer(prefillRun) {
   el("f-language").value = src.language || "ja";
   el("f-limit").value = String(src.limit ?? 0);
   clearMessage(el("drawer-message"));
-  renderDropzone();
+  drawerDrop.render();
   el("drawer-backdrop").hidden = false;
   el("drawer").hidden = false;
 }
@@ -637,26 +644,59 @@ function closeDrawer() {
   el("drawer-backdrop").hidden = true;
 }
 
-function renderDropzone() {
-  const file = el("f-file").files && el("f-file").files[0];
-  el("f-dropzone").classList.toggle("has-file", Boolean(file));
-  el("dropzone-idle").hidden = Boolean(file);
-  el("dropzone-file").hidden = !file;
-  el("dropzone-filename").textContent = file
-    ? `${file.name}（${Math.max(1, Math.ceil(file.size / 1024))} KB）`
-    : "";
-}
-
-function setDropzoneFile(file) {
-  const input = el("f-file");
-  if (file) {
-    const dt = new DataTransfer();
-    dt.items.add(file);
-    input.files = dt.files;
-  } else {
-    input.value = "";
-  }
-  renderDropzone();
+// Generic dropzone wiring shared by the new-run drawer and the import modal.
+function wireDropzone(ids) {
+  const zone = el(ids.zone);
+  const input = el(ids.input);
+  const render = () => {
+    const file = input.files && input.files[0];
+    zone.classList.toggle("has-file", Boolean(file));
+    el(ids.idle).hidden = Boolean(file);
+    el(ids.fileRow).hidden = !file;
+    el(ids.filename).textContent = file
+      ? `${file.name}（${Math.max(1, Math.ceil(file.size / 1024))} KB）`
+      : "";
+  };
+  const setFile = (file) => {
+    if (file) {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+    } else {
+      input.value = "";
+    }
+    render();
+  };
+  zone.addEventListener("click", (ev) => {
+    if (ev.target.closest(`#${ids.clearBtn}`)) return;
+    input.click();
+  });
+  zone.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); input.click(); }
+  });
+  zone.addEventListener("dragover", (ev) => {
+    ev.preventDefault();
+    zone.classList.add("dragover");
+  });
+  zone.addEventListener("dragleave", () => zone.classList.remove("dragover"));
+  zone.addEventListener("drop", (ev) => {
+    ev.preventDefault();
+    zone.classList.remove("dragover");
+    const file = ev.dataTransfer.files && ev.dataTransfer.files[0];
+    if (!file) return;
+    if (!/\.(csv|tsv)$/i.test(file.name)) {
+      showMessage("仅支持 .csv / .tsv 文件。", "error", el(ids.messageHost));
+      return;
+    }
+    clearMessage(el(ids.messageHost));
+    setFile(file);
+  });
+  input.addEventListener("change", render);
+  el(ids.clearBtn).addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    setFile(null);
+  });
+  return { render, setFile };
 }
 
 async function createRun() {
@@ -679,7 +719,7 @@ async function createRun() {
   try {
     const data = await api("/api/v1/evaluations", { method: "POST", body: form });
     closeDrawer();
-    setDropzoneFile(null);
+    drawerDrop.setFile(null);
     showMessage(`已创建测试：${data.runId}`, "success");
     await refreshRuns();
     await selectRun(data.runId);
@@ -688,6 +728,93 @@ async function createRun() {
   } finally {
     btn.disabled = false;
     btn.textContent = "开始测试";
+  }
+}
+
+// ---------- import results ----------
+function openImport() {
+  clearMessage(el("import-message"));
+  importDrop.render();
+  el("import-backdrop").hidden = false;
+}
+
+function closeImport() {
+  el("import-backdrop").hidden = true;
+}
+
+async function importResults() {
+  const input = el("im-file");
+  if (!input.files || !input.files[0]) {
+    showMessage("请先选择 results.csv 文件。", "error", el("import-message"));
+    return;
+  }
+  const form = new FormData();
+  form.append("file", input.files[0]);
+  const btn = el("import-btn");
+  btn.disabled = true;
+  btn.textContent = "导入中...";
+  try {
+    const data = await api("/api/v1/evaluations/import", { method: "POST", body: form });
+    closeImport();
+    importDrop.setFile(null);
+    showMessage(`已导入测试记录：${data.runId}`, "success");
+    await refreshRuns();
+    await selectRun(data.runId);
+  } catch (err) {
+    showMessage(String(err.message || err), "error", el("import-message"));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "导入";
+  }
+}
+
+// ---------- confirm modal + run deletion ----------
+let confirmResolve = null;
+
+function confirmModal(title, text) {
+  el("confirm-title").textContent = title;
+  el("confirm-text").textContent = text;
+  el("confirm-backdrop").hidden = false;
+  el("confirm-ok-btn").focus();
+  return new Promise((resolve) => { confirmResolve = resolve; });
+}
+
+function closeConfirm(result) {
+  el("confirm-backdrop").hidden = true;
+  if (confirmResolve) {
+    confirmResolve(result);
+    confirmResolve = null;
+  }
+}
+
+async function deleteRun(runId) {
+  const ok = await confirmModal(
+    `删除测试记录 ${runId}？`,
+    "该轮的测试结果与校验数据将被永久删除，无法恢复。"
+  );
+  if (!ok) return;
+  try {
+    await api(`/api/v1/evaluations/${encodeURIComponent(runId)}`, { method: "DELETE" });
+    delete state.compareDetails[runId];
+    state.compareIds.delete(runId);
+    if (state.activeRunId === runId) {
+      state.activeRunId = "";
+      state.detail = null;
+      state.rows = [];
+      state.dirty = new Set();
+      state.selectedRows = new Set();
+      state.focusIndex = -1;
+      el("results-host").textContent = "测试完成后展示 AI 结果和校验字段。";
+    }
+    showMessage(`已删除测试记录 ${runId}。`, "success");
+    await refreshRuns();
+    if (!state.activeRunId) {
+      if (state.runs[0]) await selectRun(state.runs[0].runId);
+      else renderRunDetail();
+    }
+    if (state.view === "compare") enterCompare();
+  } catch (err) {
+    showMessage(String(err.message || err), "error");
   }
 }
 
@@ -858,6 +985,14 @@ document.addEventListener("keydown", (ev) => {
     }
     return;
   }
+  if (!el("confirm-backdrop").hidden) {
+    if (ev.key === "Escape") closeConfirm(false);
+    return;
+  }
+  if (!el("import-backdrop").hidden) {
+    if (ev.key === "Escape") closeImport();
+    return;
+  }
   if (!el("errors-backdrop").hidden) {
     if (ev.key === "Escape") el("errors-backdrop").hidden = true;
     return;
@@ -903,35 +1038,24 @@ document.querySelectorAll("#batch-actions .batch-btn").forEach((btn) => {
 el("drawer-close-btn").addEventListener("click", closeDrawer);
 el("drawer-backdrop").addEventListener("click", closeDrawer);
 el("create-btn").addEventListener("click", createRun);
-const dropzone = el("f-dropzone");
-dropzone.addEventListener("click", (ev) => {
-  if (ev.target.closest("#dropzone-clear")) return;
-  el("f-file").click();
+const drawerDrop = wireDropzone({
+  zone: "f-dropzone", input: "f-file", idle: "dropzone-idle", fileRow: "dropzone-file",
+  filename: "dropzone-filename", clearBtn: "dropzone-clear", messageHost: "drawer-message",
 });
-dropzone.addEventListener("keydown", (ev) => {
-  if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); el("f-file").click(); }
+const importDrop = wireDropzone({
+  zone: "im-dropzone", input: "im-file", idle: "im-idle", fileRow: "im-file-row",
+  filename: "im-filename", clearBtn: "im-clear", messageHost: "import-message",
 });
-dropzone.addEventListener("dragover", (ev) => {
-  ev.preventDefault();
-  dropzone.classList.add("dragover");
+el("import-open-btn").addEventListener("click", openImport);
+el("import-close-btn").addEventListener("click", closeImport);
+el("import-backdrop").addEventListener("click", (ev) => {
+  if (ev.target === el("import-backdrop")) closeImport();
 });
-dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
-dropzone.addEventListener("drop", (ev) => {
-  ev.preventDefault();
-  dropzone.classList.remove("dragover");
-  const file = ev.dataTransfer.files && ev.dataTransfer.files[0];
-  if (!file) return;
-  if (!/\.(csv|tsv)$/i.test(file.name)) {
-    showMessage("仅支持 .csv / .tsv 文件。", "error", el("drawer-message"));
-    return;
-  }
-  clearMessage(el("drawer-message"));
-  setDropzoneFile(file);
-});
-el("f-file").addEventListener("change", renderDropzone);
-el("dropzone-clear").addEventListener("click", (ev) => {
-  ev.stopPropagation();
-  setDropzoneFile(null);
+el("import-btn").addEventListener("click", importResults);
+el("confirm-cancel-btn").addEventListener("click", () => closeConfirm(false));
+el("confirm-ok-btn").addEventListener("click", () => closeConfirm(true));
+el("confirm-backdrop").addEventListener("click", (ev) => {
+  if (ev.target === el("confirm-backdrop")) closeConfirm(false);
 });
 el("errors-close-btn").addEventListener("click", () => { el("errors-backdrop").hidden = true; });
 el("errors-backdrop").addEventListener("click", (ev) => {
