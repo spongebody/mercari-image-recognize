@@ -859,14 +859,46 @@ def list_console_users() -> Dict[str, Any]:
     return {"users": console_account_store.list_users()}
 
 
+def _console_payload_string(payload: Dict[str, Any], field: str) -> str:
+    value = payload.get(field)
+    if not isinstance(value, str):
+        raise ValueError(f"{field} must be a string.")
+    return value
+
+
+def _console_payload_username(payload: Dict[str, Any]) -> str:
+    username = _console_payload_string(payload, "username")
+    if "/" in username or "\\" in username:
+        raise ValueError("Username must not contain path separators.")
+    return username
+
+
+def _console_payload_menus(payload: Dict[str, Any]) -> List[str]:
+    value = payload.get("menus")
+    if not isinstance(value, list):
+        raise ValueError("menus must be a list of strings.")
+    if not all(isinstance(menu, str) for menu in value):
+        raise ValueError("menus must be a list of strings.")
+    return value
+
+
+def _console_payload_enabled(payload: Dict[str, Any], *, default: Optional[bool] = None) -> Optional[bool]:
+    if "enabled" not in payload:
+        return default
+    value = payload["enabled"]
+    if not isinstance(value, bool):
+        raise ValueError("enabled must be a boolean.")
+    return value
+
+
 @app.post("/api/v1/console/users", dependencies=[Depends(accounts_auth)])
 def create_console_user(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         return console_account_store.create_user(
-            str(payload.get("username", "")),
-            str(payload.get("password", "")),
-            payload.get("menus", []),
-            enabled=bool(payload.get("enabled", True)),
+            _console_payload_username(payload),
+            _console_payload_string(payload, "password"),
+            _console_payload_menus(payload),
+            enabled=bool(_console_payload_enabled(payload, default=True)),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -874,14 +906,14 @@ def create_console_user(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 @app.put("/api/v1/console/users/{username}", dependencies=[Depends(accounts_auth)])
 def update_console_user(username: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-    password = None
-    if "password" in payload:
-        requested_password = str(payload.get("password") or "")
-        if requested_password:
-            password = requested_password
-    menus = payload.get("menus") if "menus" in payload else None
-    enabled = bool(payload.get("enabled")) if "enabled" in payload else None
     try:
+        password = None
+        if "password" in payload:
+            requested_password = _console_payload_string(payload, "password")
+            if requested_password:
+                password = requested_password
+        menus = _console_payload_menus(payload) if "menus" in payload else None
+        enabled = _console_payload_enabled(payload)
         return console_account_store.update_user(
             username,
             password=password,

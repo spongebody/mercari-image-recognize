@@ -137,6 +137,88 @@ def test_empty_or_invalid_menus_return_400(monkeypatch, tmp_path):
         assert invalid.status_code == 400
 
 
+def test_create_username_null_returns_400(monkeypatch, tmp_path):
+    m = _reload(monkeypatch, tmp_path)
+    with TestClient(m.app) as client:
+        _login_admin(client)
+
+        created = client.post(
+            "/api/v1/console/users",
+            json={"username": None, "password": "secret123", "menus": ["evaluations"]},
+        )
+
+        assert created.status_code == 400
+        assert client.get("/api/v1/console/users").json()["users"] == []
+
+
+def test_create_menus_null_returns_400_without_500(monkeypatch, tmp_path):
+    m = _reload(monkeypatch, tmp_path)
+    with TestClient(m.app, raise_server_exceptions=False) as client:
+        _login_admin(client)
+
+        created = client.post(
+            "/api/v1/console/users",
+            json={"username": "model-tester", "password": "secret123", "menus": None},
+        )
+
+        assert created.status_code == 400
+
+
+def test_create_enabled_string_false_returns_400(monkeypatch, tmp_path):
+    m = _reload(monkeypatch, tmp_path)
+    with TestClient(m.app) as client:
+        _login_admin(client)
+
+        created = client.post(
+            "/api/v1/console/users",
+            json={
+                "username": "model-tester",
+                "password": "secret123",
+                "menus": ["evaluations"],
+                "enabled": "false",
+            },
+        )
+
+        assert created.status_code == 400
+
+
+def test_create_username_with_path_separator_returns_400(monkeypatch, tmp_path):
+    m = _reload(monkeypatch, tmp_path)
+    with TestClient(m.app) as client:
+        _login_admin(client)
+
+        slash = client.post(
+            "/api/v1/console/users",
+            json={"username": "a/b", "password": "secret123", "menus": ["evaluations"]},
+        )
+        backslash = client.post(
+            "/api/v1/console/users",
+            json={"username": "a\\b", "password": "secret123", "menus": ["evaluations"]},
+        )
+
+        assert slash.status_code == 400
+        assert backslash.status_code == 400
+
+
+def test_create_valid_enabled_false_boolean_works(monkeypatch, tmp_path):
+    m = _reload(monkeypatch, tmp_path)
+    with TestClient(m.app) as client:
+        _login_admin(client)
+
+        created = client.post(
+            "/api/v1/console/users",
+            json={
+                "username": "model-tester",
+                "password": "secret123",
+                "menus": ["evaluations"],
+                "enabled": False,
+            },
+        )
+
+        assert created.status_code == 200
+        assert created.json()["enabled"] is False
+
+
 def test_basic_and_bearer_logs_password_can_call_account_api_as_superadmin(monkeypatch, tmp_path):
     m = _reload(monkeypatch, tmp_path)
     with TestClient(m.app) as client:
