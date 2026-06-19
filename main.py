@@ -710,7 +710,12 @@ _DEFAULT_PATH_PRIORITY = ("test", "evaluations", "config", "logs", "accounts")
 
 
 def _safe_compare_digest(left: str, right: str) -> bool:
-    return hmac.compare_digest(left.encode("utf-8"), right.encode("utf-8"))
+    try:
+        left_bytes = left.encode("utf-8")
+        right_bytes = right.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return hmac.compare_digest(left_bytes, right_bytes)
 
 
 def _default_path(menus: List[str]) -> str:

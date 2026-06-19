@@ -1,17 +1,24 @@
 import importlib
+import sys
 
 import app.config
-import main
+import pytest
 from app.observability.auth import COOKIE_NAME
 from fastapi.testclient import TestClient
+
+
+@pytest.fixture(autouse=True)
+def _isolated_console_users_path(monkeypatch, tmp_path):
+    monkeypatch.setenv("CONSOLE_USERS_PATH", str(tmp_path / "console_users.json"))
 
 
 def _reload(monkeypatch, user="admin", password="secret"):
     monkeypatch.setenv("LOGS_USER", user)
     monkeypatch.setenv("LOGS_PASSWORD", password)
     importlib.reload(app.config)
-    importlib.reload(main)
-    return main
+    if "main" in sys.modules:
+        return importlib.reload(sys.modules["main"])
+    return importlib.import_module("main")
 
 
 def test_login_success_sets_cookie(monkeypatch):
@@ -187,6 +194,18 @@ def test_non_ascii_login_credentials_return_401(monkeypatch):
         r = client.post(
             "/api/v1/console/login",
             json={"username": "管理员", "password": "秘密", "remember": False},
+        )
+
+        assert r.status_code == 401
+
+
+def test_malformed_unicode_login_credentials_return_401(monkeypatch):
+    m = _reload(monkeypatch)
+    with TestClient(m.app, raise_server_exceptions=False) as client:
+        r = client.post(
+            "/api/v1/console/login",
+            content='{"username":"\\ud800","password":"x","remember":false}',
+            headers={"content-type": "application/json"},
         )
 
         assert r.status_code == 401
