@@ -324,12 +324,13 @@ API_PORT=8010 UI_PORT=8012 ./run.sh
 
 ## 控制台登录
 
-控制台页面（`/`、`/config`、`/evaluations`、`/logs`）需要登录后访问：
+控制台页面（`/`、`/config`、`/evaluations`、`/logs`、`/accounts`）需要登录后访问：
 
 - 用户名：环境变量 `LOGS_USER`（默认 `admin`）
 - 密码：环境变量 `LOGS_PASSWORD`（为空时禁用控制台）
 
 访问任意控制台页面会跳转到 `/login`，登录成功后回到目标页面。勾选「记住我」可保持 30 天免登录。
+`.env` 中的账号是超级管理员，可在 `/accounts` 创建子账号并分配一级菜单权限；子账号数据保存在 `data/console_users.json`，密码以 PBKDF2 哈希保存。
 程序化访问仍可使用 `Authorization: Bearer <LOGS_PASSWORD>`。
 
 ## Observability
