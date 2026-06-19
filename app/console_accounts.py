@@ -77,11 +77,24 @@ def sanitize_subaccount_menus(menus: Iterable[str]) -> list[str]:
 
 
 class ConsoleAccountStore:
+    _registry_lock = threading.Lock()
+    _locks_by_path: dict[Path, threading.RLock] = {}
+
     def __init__(self, path: str | os.PathLike[str], superadmin_username: str = "admin"):
         self.path = Path(path)
         self.superadmin_username = superadmin_username.strip()
-        self._lock = threading.RLock()
+        self._lock = self._lock_for_path(self.path)
         self._ensure_file()
+
+    @classmethod
+    def _lock_for_path(cls, path: Path) -> threading.RLock:
+        canonical_path = path.expanduser().resolve(strict=False)
+        with cls._registry_lock:
+            lock = cls._locks_by_path.get(canonical_path)
+            if lock is None:
+                lock = threading.RLock()
+                cls._locks_by_path[canonical_path] = lock
+            return lock
 
     def list_users(self) -> list[dict[str, Any]]:
         with self._lock:

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import threading
 import time
 
 import pytest
@@ -200,6 +201,40 @@ def test_store_public_operations_hold_lock_during_file_access(tmp_path, monkeypa
 
     assert observed.count("read") == 6
     assert observed.count("write") == 3
+
+
+def test_store_instances_for_same_path_share_lock_and_preserve_concurrent_creates(tmp_path):
+    path = tmp_path / "console_users.json"
+    first_store = ConsoleAccountStore(path)
+    second_store = ConsoleAccountStore(path)
+
+    assert first_store._lock is second_store._lock
+
+    barrier = threading.Barrier(3)
+    errors = []
+
+    def create_user(store, username):
+        try:
+            barrier.wait(timeout=5)
+            store.create_user(username, "secret123", ["test"])
+        except Exception as exc:
+            errors.append(exc)
+
+    threads = [
+        threading.Thread(target=create_user, args=(first_store, "first-user")),
+        threading.Thread(target=create_user, args=(second_store, "second-user")),
+    ]
+    for thread in threads:
+        thread.start()
+    barrier.wait(timeout=5)
+    for thread in threads:
+        thread.join(timeout=5)
+
+    assert errors == []
+    assert sorted(user["username"] for user in first_store.list_users()) == [
+        "first-user",
+        "second-user",
+    ]
 
 
 def test_store_rejects_duplicate_empty_password_and_empty_menus(tmp_path):
