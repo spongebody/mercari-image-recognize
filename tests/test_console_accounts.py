@@ -8,6 +8,8 @@ from app.console_accounts import (
     ALL_MENUS,
     ASSIGNABLE_MENUS,
     ConsoleAccountStore,
+    SUBACCOUNT_ROLE,
+    SUPERADMIN_ROLE,
     hash_password,
     sanitize_subaccount_menus,
     verify_password,
@@ -26,7 +28,11 @@ def _encoded_password_hash(password, *, iterations=260_000, salt=b"0" * 16):
 
 def test_hash_password_roundtrips_and_rejects_wrong_password():
     encoded = hash_password("secret123")
-    assert encoded.startswith("pbkdf2_sha256$")
+    algorithm, iterations, salt_hex, digest_hex = encoded.split("$")
+    assert algorithm == "pbkdf2_sha256"
+    assert iterations == "260000"
+    assert len(bytes.fromhex(salt_hex)) == 16
+    assert len(bytes.fromhex(digest_hex)) == hashlib.sha256().digest_size
     assert verify_password("secret123", encoded) is True
     assert verify_password("nope", encoded) is False
 
@@ -64,8 +70,13 @@ def test_sanitize_subaccount_menus_filters_accounts_and_sorts():
         "evaluations",
         "test",
     ]
-    assert "accounts" in ALL_MENUS
-    assert "accounts" not in ASSIGNABLE_MENUS
+
+
+def test_console_account_constants_match_required_values():
+    assert ALL_MENUS == ("test", "config", "evaluations", "logs", "accounts")
+    assert ASSIGNABLE_MENUS == ("test", "config", "evaluations", "logs")
+    assert SUPERADMIN_ROLE == "superadmin"
+    assert SUBACCOUNT_ROLE == "subaccount"
 
 
 def test_store_initializes_missing_file_and_creates_user(tmp_path):
