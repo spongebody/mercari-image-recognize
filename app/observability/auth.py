@@ -91,7 +91,11 @@ def _decode_session_payload(token: Optional[str], password: str) -> Optional[dic
         return None
     if not isinstance(data, dict):
         return None
-    if int(data.get("exp", 0)) <= int(time.time()):
+    try:
+        exp = int(data.get("exp", 0))
+    except (TypeError, ValueError):
+        return None
+    if exp <= int(time.time()):
         return None
     return data
 

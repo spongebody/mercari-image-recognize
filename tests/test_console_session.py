@@ -1,5 +1,8 @@
 import time
 import base64
+import hashlib
+import hmac
+import json
 
 import pytest
 from fastapi import HTTPException, Request
@@ -48,6 +51,17 @@ def test_token_rejected_when_tampered():
 
 def test_token_rejected_when_password_empty():
     assert verify_session_token(make_session_token("", 3600), "") is False
+
+
+def test_token_with_non_integer_exp_is_rejected():
+    payload = base64.urlsafe_b64encode(json.dumps({"exp": "not-an-int"}).encode()).rstrip(b"=").decode()
+    sig = base64.urlsafe_b64encode(
+        hmac.new(b"hunter2", payload.encode(), hashlib.sha256).digest()
+    ).rstrip(b"=").decode()
+    token = f"{payload}.{sig}"
+
+    assert verify_session_identity(token, "hunter2") is None
+    assert verify_session_token(token, "hunter2") is False
 
 
 def _request(headers: dict[str, str] | None = None) -> Request:
