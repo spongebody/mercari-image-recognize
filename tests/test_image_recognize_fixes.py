@@ -16,6 +16,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from console_auth_helpers import auth_headers
 import main
 from app.errors import LLMRequestError
 from app.llm.prompts import (
@@ -158,6 +159,7 @@ class FallbackTimerStartsAtPrimarySubmitTest(unittest.TestCase):
             pre_request_time = time.monotonic()
             response = self.client.post(
                 "/api/v1/mercari/image/analyze",
+                headers=auth_headers(),
                 files=[("image_list", ("front.png", b"\x89PNG\r\n\x1a\n", "image/png"))],
                 data={"language": "ja"},
             )

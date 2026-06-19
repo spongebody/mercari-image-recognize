@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
+from console_auth_helpers import auth_headers
 from app.errors import LLMAllAttemptsFailedError
 from app.llm.resilient import AttemptRecord
 import main
@@ -12,6 +13,7 @@ import main
 class _BaseFallbackTest(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(main.app)
+        self.headers = auth_headers()
         self._original_fallback_model = main.settings.product_data_fallback_model
         self._original_fallback_timeout = main.settings.product_data_fallback_timeout_seconds
         main.settings.product_data_fallback_model = "openai/gpt-4o-mini"
@@ -62,6 +64,7 @@ class _BaseFallbackTest(unittest.TestCase):
     def _post_analyze(self):
         return self.client.post(
             "/api/v1/mercari/image/analyze",
+            headers=self.headers,
             files=[("image_list", ("front.png", b"\x89PNG\r\n\x1a\n", "image/png"))],
             data={"language": "ja"},
         )
@@ -117,13 +120,13 @@ class ProductDataFallbackTest(_BaseFallbackTest):
         self.assertEqual(response.status_code, 200)
         body = response.json()
 
-        early_poll = self.client.get(f"/api/v1/mercari/image/analyze/{body['job_id']}")
+        early_poll = self.client.get(f"/api/v1/mercari/image/analyze/{body['job_id']}", headers=self.headers)
         self.assertEqual(early_poll.status_code, 200)
         self.assertEqual(early_poll.json()["status"], "product_pending")
 
         fallback_future.set_result(self._product_payload(product_data_ms=300.0))
 
-        late_poll = self.client.get(f"/api/v1/mercari/image/analyze/{body['job_id']}")
+        late_poll = self.client.get(f"/api/v1/mercari/image/analyze/{body['job_id']}", headers=self.headers)
         self.assertEqual(late_poll.status_code, 200)
         completed = late_poll.json()
         self.assertEqual(completed["status"], "completed")
@@ -155,7 +158,7 @@ class ProductDataFallbackTest(_BaseFallbackTest):
         fallback_payload["description"]["recommendation"] = "家庭やオフィスの監視に最適です。"
         fallback_future.set_result(fallback_payload)
 
-        poll = self.client.get(f"/api/v1/mercari/image/analyze/{job_id}")
+        poll = self.client.get(f"/api/v1/mercari/image/analyze/{job_id}", headers=self.headers)
         self.assertEqual(poll.status_code, 200)
         self.assertEqual(poll.json()["status"], "product_pending")
         self.assertNotIn("product_data_source", poll.json())
@@ -164,7 +167,7 @@ class ProductDataFallbackTest(_BaseFallbackTest):
             self._product_payload(brand_name="Adidas", brand_rakuten="adi-r", product_data_ms=500.0)
         )
 
-        completed_response = self.client.get(f"/api/v1/mercari/image/analyze/{job_id}")
+        completed_response = self.client.get(f"/api/v1/mercari/image/analyze/{job_id}", headers=self.headers)
         self.assertEqual(completed_response.status_code, 200)
         completed = completed_response.json()
         self.assertEqual(completed["status"], "completed")
@@ -190,7 +193,7 @@ class ProductDataFallbackTest(_BaseFallbackTest):
 
         fallback_future.set_result(self._product_payload(product_data_ms=400.0))
 
-        poll = self.client.get(f"/api/v1/mercari/image/analyze/{job_id}")
+        poll = self.client.get(f"/api/v1/mercari/image/analyze/{job_id}", headers=self.headers)
         self.assertEqual(poll.status_code, 200)
         self.assertEqual(poll.json()["status"], "product_pending")
         self.assertNotIn("product_data_source", poll.json())
@@ -214,7 +217,7 @@ class ProductDataFallbackTest(_BaseFallbackTest):
             self._product_payload(brand_name="Adidas", brand_rakuten="adi-r", product_data_ms=500.0)
         )
 
-        poll = self.client.get(f"/api/v1/mercari/image/analyze/{job_id}")
+        poll = self.client.get(f"/api/v1/mercari/image/analyze/{job_id}", headers=self.headers)
         self.assertEqual(poll.status_code, 200)
         completed = poll.json()
         self.assertEqual(completed["status"], "completed")
@@ -247,7 +250,7 @@ class ProductDataFallbackTest(_BaseFallbackTest):
         self.assertEqual(response.status_code, 200)
         job_id = response.json()["job_id"]
 
-        poll = self.client.get(f"/api/v1/mercari/image/analyze/{job_id}")
+        poll = self.client.get(f"/api/v1/mercari/image/analyze/{job_id}", headers=self.headers)
         self.assertEqual(poll.status_code, 200)
         completed = poll.json()
         self.assertEqual(completed["status"], "completed")
@@ -279,7 +282,7 @@ class ProductDataFallbackTest(_BaseFallbackTest):
         self.assertEqual(response.status_code, 200)
         job_id = response.json()["job_id"]
 
-        poll = self.client.get(f"/api/v1/mercari/image/analyze/{job_id}")
+        poll = self.client.get(f"/api/v1/mercari/image/analyze/{job_id}", headers=self.headers)
         self.assertEqual(poll.status_code, 502)
 
 

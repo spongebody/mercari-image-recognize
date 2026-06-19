@@ -8,6 +8,7 @@ wheels/
 
 # Runtime prompt overrides (edited via /config, not source-controlled)
 data/prompt_overrides.json
+data/console_users.json
 
 # Virtual environments
 .venv

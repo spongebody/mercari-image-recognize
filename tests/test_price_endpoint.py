@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from console_auth_helpers import auth_headers
 from app.service import MercariAnalyzer
 import main
 
@@ -126,6 +127,7 @@ class PriceEndpointTest(unittest.TestCase):
 
         resp = self.client.post(
             "/api/v1/mercari/image/price",
+            headers=auth_headers(),
             files=[
                 ("image_list", ("a.png", b"\x89PNG\r\n\x1a\n", "image/png")),
                 ("image_list", ("b.png", b"\x89PNG\r\n\x1a\n", "image/png")),
@@ -154,6 +156,7 @@ class PriceEndpointTest(unittest.TestCase):
         with patch.object(main.settings, "enable_debug_param", True):
             resp = self.client.post(
                 "/api/v1/mercari/image/price",
+                headers=auth_headers(),
                 files=[
                     ("image_list", ("a.png", b"\x89PNG\r\n\x1a\n", "image/png")),
                     ("image_list", ("b.png", b"\x89PNG\r\n\x1a\n", "image/png")),

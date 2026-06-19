@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
+from console_auth_helpers import auth_headers
 from app.errors import LLMAllAttemptsFailedError
 from app.llm.resilient import AttemptRecord
 import main
@@ -12,6 +13,7 @@ import main
 class ImageAnalyzeJobsTest(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(main.app)
+        self.headers = auth_headers()
 
     @patch.object(main, "product_data_executor")
     @patch.object(main, "analyzer")
@@ -48,6 +50,7 @@ class ImageAnalyzeJobsTest(unittest.TestCase):
 
         response = self.client.post(
             "/api/v1/mercari/image/analyze",
+            headers=self.headers,
             files=[
                 ("image_list", ("front.png", b"\x89PNG\r\n\x1a\n", "image/png")),
                 ("image_list", ("back.png", b"\x89PNG\r\n\x1a\n", "image/png")),
@@ -72,7 +75,10 @@ class ImageAnalyzeJobsTest(unittest.TestCase):
         )
         self.assertEqual(body["timings"], {"total_ms": 100.0, "classification_ms": 100.0})
 
-        pending_response = self.client.get(f"/api/v1/mercari/image/analyze/{body['job_id']}")
+        pending_response = self.client.get(
+            f"/api/v1/mercari/image/analyze/{body['job_id']}",
+            headers=self.headers,
+        )
         self.assertEqual(pending_response.status_code, 200)
         self.assertEqual(pending_response.json()["status"], "product_pending")
         self.assertIsNone(pending_response.json()["tax_excluded"])
@@ -108,7 +114,10 @@ class ImageAnalyzeJobsTest(unittest.TestCase):
             }
         )
 
-        completed_response = self.client.get(f"/api/v1/mercari/image/analyze/{body['job_id']}")
+        completed_response = self.client.get(
+            f"/api/v1/mercari/image/analyze/{body['job_id']}",
+            headers=self.headers,
+        )
         self.assertEqual(completed_response.status_code, 200)
         completed = completed_response.json()
         self.assertEqual(completed["status"], "completed")
@@ -202,6 +211,7 @@ class ImageAnalyzeJobsTest(unittest.TestCase):
 
         response = self.client.post(
             "/api/v1/mercari/image/analyze",
+            headers=self.headers,
             files=[("image_list", ("front.png", b"\x89PNG\r\n\x1a\n", "image/png"))],
             data={"language": "ja"},
         )
@@ -211,13 +221,19 @@ class ImageAnalyzeJobsTest(unittest.TestCase):
         self.assertEqual(body["status"], "product_pending")
         self.assertEqual(body["categories"][0]["confidence"], 0.92)
 
-        poll_response = self.client.get(f"/api/v1/mercari/image/analyze/{body['job_id']}")
+        poll_response = self.client.get(
+            f"/api/v1/mercari/image/analyze/{body['job_id']}",
+            headers=self.headers,
+        )
         self.assertEqual(poll_response.status_code, 502)
         self.assertEqual(poll_response.json()["detail"]["stage"], "product_data")
 
     @patch.object(main, "analyzer")
     def test_polling_unknown_job_returns_404(self, analyzer):
-        response = self.client.get("/api/v1/mercari/image/analyze/not-found")
+        response = self.client.get(
+            "/api/v1/mercari/image/analyze/not-found",
+            headers=self.headers,
+        )
 
         self.assertEqual(response.status_code, 404)
 

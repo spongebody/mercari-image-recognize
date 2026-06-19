@@ -25,6 +25,7 @@ def test_analyze_creates_request_with_llm_calls(monkeypatch):
         png = (b"\x89PNG\r\n\x1a\n" + b"\x00" * 64)
         files = [("image_list", ("a.png", png, "image/png"))]
         r = client.post("/api/v1/mercari/image/analyze",
+                        headers=headers,
                         data={"language": "ja", "debug": "false"},
                         files=files)
         assert r.status_code == 200

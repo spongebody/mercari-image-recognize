@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from console_auth_helpers import auth_headers
 import main as main_module
 
 
@@ -39,13 +40,16 @@ class GenerateShowcaseRouteTest(unittest.TestCase):
 
     def test_rejects_missing_file(self):
         response = self.client.post(
-            "/api/v1/showcase/generate", data={"prompt_hint": "studio"}
+            "/api/v1/showcase/generate",
+            headers=auth_headers(),
+            data={"prompt_hint": "studio"},
         )
         self.assertEqual(response.status_code, 422)
 
     def test_rejects_non_image_content_type(self):
         response = self.client.post(
             "/api/v1/showcase/generate",
+            headers=auth_headers(),
             files={"file": ("notes.txt", b"hello", "text/plain")},
         )
         self.assertEqual(response.status_code, 400)
@@ -54,6 +58,7 @@ class GenerateShowcaseRouteTest(unittest.TestCase):
     def test_rejects_empty_image(self):
         response = self.client.post(
             "/api/v1/showcase/generate",
+            headers=auth_headers(),
             files={"file": ("bag.jpg", b"", "image/jpeg")},
         )
         self.assertEqual(response.status_code, 400)
@@ -65,6 +70,7 @@ class GenerateShowcaseRouteTest(unittest.TestCase):
 
         response = self.client.post(
             "/api/v1/showcase/generate",
+            headers=auth_headers(),
             files={"file": ("bag.jpg", b"fake-image", "image/jpeg")},
             data={"prompt_hint": "studio"},
         )
@@ -88,6 +94,7 @@ class GenerateShowcaseRouteTest(unittest.TestCase):
 
         response = self.client.post(
             "/api/v1/showcase/generate",
+            headers=auth_headers(),
             files={"file": ("bag.jpg", b"fake-image", "image/jpeg")},
             data={"prompt_hint": "studio", "model": "openai/gpt-image-1"},
         )
@@ -102,6 +109,7 @@ class GenerateShowcaseRouteTest(unittest.TestCase):
 
         response = self.client.post(
             "/api/v1/showcase/generate",
+            headers=auth_headers(),
             files={"file": ("chair.jpg", b"fake-image", "image/jpeg")},
         )
 

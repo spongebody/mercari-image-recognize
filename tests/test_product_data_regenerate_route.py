@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from console_auth_helpers import auth_headers
 import main
 
 
@@ -37,6 +38,7 @@ class ProductDataRegenerateRouteTest(unittest.TestCase):
 
         response = self.client.post(
             "/api/v1/mercari/product-data/regenerate",
+            headers=auth_headers(),
             files=[("image_list", ("front.png", b"\x89PNG\r\n\x1a\n", "image/png"))],
             data={
                 "language": "ja",
@@ -66,6 +68,7 @@ class ProductDataRegenerateRouteTest(unittest.TestCase):
     def test_rejects_invalid_original_product_data_json(self):
         response = self.client.post(
             "/api/v1/mercari/product-data/regenerate",
+            headers=auth_headers(),
             files=[("image_list", ("front.png", b"\x89PNG\r\n\x1a\n", "image/png"))],
             data={"language": "ja", "original_product_data": "{not-json"},
         )

@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.errors import BadRequestError, LLMAllAttemptsFailedError
 from app.llm.resilient import AttemptRecord
+from console_auth_helpers import auth_headers
 import main as main_module
 
 
@@ -30,6 +31,7 @@ class MainErrorResponseTest(unittest.TestCase):
 
         resp = self.client.post(
             "/api/v1/mercari/image/analyze",
+            headers=auth_headers(),
             files=[("image_list", ("a.png", b"\x89PNG\r\n\x1a\n", "image/png"))],
             data={"language": "en"},
         )
@@ -51,6 +53,7 @@ class MainErrorResponseTest(unittest.TestCase):
 
         resp = self.client.post(
             "/api/v1/mercari/image/analyze",
+            headers=auth_headers(),
             files=[("image_list", ("a.png", b"\x89PNG\r\n\x1a\n", "image/png"))],
             data={"language": "en"},
         )
