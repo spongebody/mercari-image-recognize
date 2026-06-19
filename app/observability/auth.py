@@ -53,6 +53,13 @@ def _encode_payload(data: dict[str, Any], password: str) -> str:
     return f"{payload}.{sig}"
 
 
+def _safe_compare_digest(left: str, right: str) -> bool:
+    try:
+        return hmac.compare_digest(left, right)
+    except TypeError:
+        return False
+
+
 def make_session_token(password: str, ttl_seconds: int) -> str:
     """Return a signed `<payload>.<sig>` session token bound to `password`."""
     return _encode_payload({"exp": int(time.time()) + ttl_seconds}, password)
@@ -83,7 +90,7 @@ def _decode_session_payload(token: Optional[str], password: str) -> Optional[dic
         return None
     payload, _, sig = token.partition(".")
     expected = _b64url(hmac.new(password.encode(), payload.encode(), hashlib.sha256).digest())
-    if not hmac.compare_digest(sig, expected):
+    if not _safe_compare_digest(sig, expected):
         return None
     try:
         data = json.loads(_b64url_decode(payload))
@@ -165,7 +172,7 @@ def _identity_from_credentials(
             return identity
     if authorization:
         provided = _password_from_header(authorization)
-        if provided and hmac.compare_digest(provided, password):
+        if provided and _safe_compare_digest(provided, password):
             return _superadmin_identity()
     return None
 

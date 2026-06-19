@@ -64,6 +64,14 @@ def test_token_with_non_integer_exp_is_rejected():
     assert verify_session_token(token, "hunter2") is False
 
 
+def test_token_with_non_ascii_signature_is_rejected():
+    payload, _, _ = make_session_token("hunter2", 3600).partition(".")
+    token = f"{payload}.é"
+
+    assert verify_session_identity(token, "hunter2") is None
+    assert verify_session_token(token, "hunter2") is False
+
+
 def _request(headers: dict[str, str] | None = None) -> Request:
     return Request(
         {
@@ -132,6 +140,11 @@ def test_identity_from_request_accepts_password_headers_as_superadmin(authorizat
         role="superadmin",
         menus=("test", "config", "evaluations", "logs", "accounts"),
     )
+
+
+@pytest.mark.parametrize("authorization", [_basic_auth("é"), "Bearer é"])
+def test_identity_from_request_rejects_non_ascii_credentials(authorization):
+    assert identity_from_request(_request({"Authorization": authorization}), "hunter2") is None
 
 
 def test_identity_from_request_prefers_cookie_identity_over_header():

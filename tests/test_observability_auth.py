@@ -52,6 +52,13 @@ def test_bearer_token_also_accepted():
     assert r.status_code == 200
 
 
+def test_non_ascii_basic_credentials_return_401():
+    client = TestClient(_app("hunter2"))
+    authorization = f"Basic {base64.b64encode('admin:é'.encode()).decode()}"
+    r = client.get("/secret", headers={"Authorization": authorization})
+    assert r.status_code == 401
+
+
 def test_malformed_base64_returns_401():
     client = TestClient(_app("hunter2"))
     r = client.get("/secret", headers={"Authorization": "Basic !!!"})
