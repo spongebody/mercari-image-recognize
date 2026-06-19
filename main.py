@@ -2,6 +2,7 @@ import asyncio
 import hmac
 import ipaddress
 import json
+import os
 import socket
 import time
 import uuid
@@ -23,6 +24,7 @@ from starlette.responses import Response as _Resp
 
 from app.config import BASE_DIR, load_settings
 from app.constants import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES
+from app.console_accounts import ALL_MENUS, SUBACCOUNT_ROLE, SUPERADMIN_ROLE, ConsoleAccountStore
 from app.data.brands import BrandStore
 from app.data.categories import CategoryStore
 from app.evaluation.image_model_evaluation import ModelCombination, build_result_row
@@ -37,8 +39,9 @@ from app.observability.auth import (
     COOKIE_NAME,
     REMEMBER_TTL,
     SESSION_TTL,
+    identity_from_request,
     is_console_authed,
-    make_session_token,
+    make_identity_session_token,
     require_logs_auth,
 )
 from app.observability.recorder import Recorder
@@ -55,6 +58,8 @@ from app.showcase.storage import StorageManager as ShowcaseStorageManager
 from app.utils import fetch_image_from_url, parse_bool_param
 
 settings = load_settings()
+CONSOLE_USERS_PATH = Path(os.getenv("CONSOLE_USERS_PATH", str(BASE_DIR / "data" / "console_users.json")))
+console_account_store = ConsoleAccountStore(CONSOLE_USERS_PATH, superadmin_username=settings.logs_user)
 _obs_store = ObsStore(BASE_DIR / "logs" / "observability.db")
 _obs_store.init_schema()
 recorder = Recorder(store=_obs_store, store_root=BASE_DIR / "logs" / "store")
@@ -694,6 +699,26 @@ def index_page(request: Request):
 
 
 LOGIN_PAGE_PATH = WEB_DIR / "login.html"
+_MENU_DEFAULT_PATHS = {
+    "test": "/",
+    "evaluations": "/evaluations",
+    "config": "/config",
+    "logs": "/logs",
+    "accounts": "/accounts",
+}
+_DEFAULT_PATH_PRIORITY = ("test", "evaluations", "config", "logs", "accounts")
+
+
+def _safe_compare_digest(left: str, right: str) -> bool:
+    return hmac.compare_digest(left.encode("utf-8"), right.encode("utf-8"))
+
+
+def _default_path(menus: List[str]) -> str:
+    available = set(menus)
+    for menu in _DEFAULT_PATH_PRIORITY:
+        if menu in available:
+            return _MENU_DEFAULT_PATHS[menu]
+    return "/"
 
 
 @app.post("/api/v1/console/login")
@@ -703,12 +728,27 @@ def console_login(payload: Dict[str, Any], request: Request, response: Response)
     username = str(payload.get("username", ""))
     password = str(payload.get("password", ""))
     remember = bool(payload.get("remember", False))
-    user_ok = hmac.compare_digest(username, settings.logs_user)
-    pass_ok = hmac.compare_digest(password, settings.logs_password)
-    if not (user_ok and pass_ok):
-        raise HTTPException(status_code=401, detail="用户名或密码错误")
+
+    if _safe_compare_digest(username, settings.logs_user) and _safe_compare_digest(password, settings.logs_password):
+        token_username = settings.logs_user
+        role = SUPERADMIN_ROLE
+        menus = list(ALL_MENUS)
+    else:
+        subaccount = console_account_store.authenticate(username, password)
+        if subaccount is None:
+            raise HTTPException(status_code=401, detail="用户名或密码错误")
+        token_username = subaccount.username
+        role = SUBACCOUNT_ROLE
+        menus = list(subaccount.menus)
+
     ttl = REMEMBER_TTL if remember else SESSION_TTL
-    token = make_session_token(settings.logs_password, ttl)
+    token = make_identity_session_token(
+        settings.logs_password,
+        ttl,
+        username=token_username,
+        role=role,
+        menus=menus,
+    )
     response.set_cookie(
         COOKIE_NAME,
         token,
@@ -719,6 +759,26 @@ def console_login(payload: Dict[str, Any], request: Request, response: Response)
         path="/",
     )
     return {"ok": True}
+
+
+@app.get("/api/v1/console/me")
+def console_me(request: Request) -> Dict[str, Any]:
+    identity = identity_from_request(request, settings.logs_password)
+    if identity is None:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if identity.role == SUBACCOUNT_ROLE:
+        live_user = console_account_store.get_user(identity.username)
+        if live_user is None:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        menus = list(live_user.menus)
+    else:
+        menus = list(ALL_MENUS)
+    return {
+        "username": identity.username,
+        "role": identity.role,
+        "menus": menus,
+        "defaultPath": _default_path(menus),
+    }
 
 
 @app.post("/api/v1/console/logout")

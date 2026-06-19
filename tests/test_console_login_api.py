@@ -109,3 +109,84 @@ def test_authed_user_visiting_login_is_redirected_home(monkeypatch):
         r = client.get("/login", follow_redirects=False)
         assert r.status_code == 302
         assert r.headers["location"] == "/"
+
+
+def test_me_returns_superadmin_identity(monkeypatch):
+    m = _reload(monkeypatch)
+    with TestClient(m.app) as client:
+        client.post(
+            "/api/v1/console/login",
+            json={"username": "admin", "password": "secret", "remember": True},
+        )
+
+        r = client.get("/api/v1/console/me")
+
+        assert r.status_code == 200
+        assert r.json()["username"] == "admin"
+        assert r.json()["role"] == "superadmin"
+        assert "accounts" in r.json()["menus"]
+        assert r.json()["defaultPath"] == "/"
+
+
+def test_subaccount_login_uses_json_store_permissions(monkeypatch, tmp_path):
+    monkeypatch.setenv("CONSOLE_USERS_PATH", str(tmp_path / "console_users.json"))
+    m = _reload(monkeypatch)
+    m.console_account_store.create_user("model-tester", "secret123", ["evaluations"])
+
+    with TestClient(m.app) as client:
+        r = client.post(
+            "/api/v1/console/login",
+            json={"username": "model-tester", "password": "secret123", "remember": True},
+        )
+        assert r.status_code == 200
+
+        me = client.get("/api/v1/console/me")
+        assert me.status_code == 200
+        assert me.json()["username"] == "model-tester"
+        assert me.json()["role"] == "subaccount"
+        assert me.json()["menus"] == ["evaluations"]
+        assert me.json()["defaultPath"] == "/evaluations"
+
+
+def test_subaccount_wrong_password_returns_401(monkeypatch, tmp_path):
+    monkeypatch.setenv("CONSOLE_USERS_PATH", str(tmp_path / "console_users.json"))
+    m = _reload(monkeypatch)
+    m.console_account_store.create_user("model-tester", "secret123", ["evaluations"])
+
+    with TestClient(m.app) as client:
+        r = client.post(
+            "/api/v1/console/login",
+            json={"username": "model-tester", "password": "wrong123", "remember": True},
+        )
+
+        assert r.status_code == 401
+        assert COOKIE_NAME not in r.cookies
+
+
+def test_disabled_subaccount_existing_token_returns_403(monkeypatch, tmp_path):
+    monkeypatch.setenv("CONSOLE_USERS_PATH", str(tmp_path / "console_users.json"))
+    m = _reload(monkeypatch)
+    m.console_account_store.create_user("model-tester", "secret123", ["evaluations"])
+
+    with TestClient(m.app) as client:
+        login = client.post(
+            "/api/v1/console/login",
+            json={"username": "model-tester", "password": "secret123", "remember": True},
+        )
+        assert login.status_code == 200
+
+        m.console_account_store.update_user("model-tester", enabled=False)
+        me = client.get("/api/v1/console/me")
+
+        assert me.status_code == 403
+
+
+def test_non_ascii_login_credentials_return_401(monkeypatch):
+    m = _reload(monkeypatch)
+    with TestClient(m.app) as client:
+        r = client.post(
+            "/api/v1/console/login",
+            json={"username": "管理员", "password": "秘密", "remember": False},
+        )
+
+        assert r.status_code == 401
