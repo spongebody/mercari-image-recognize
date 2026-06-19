@@ -12,9 +12,22 @@ def _reload_with_password(monkeypatch, password: str):
     return main
 
 
+def _reload_with_console_store(monkeypatch, tmp_path, password: str = "secret"):
+    monkeypatch.setenv("LOGS_USER", "admin")
+    monkeypatch.setenv("LOGS_PASSWORD", password)
+    monkeypatch.setenv("CONSOLE_USERS_PATH", str(tmp_path / "console_users.json"))
+    importlib.reload(app.config)
+    importlib.reload(main)
+    return main
+
+
 def _auth(password: str) -> dict:
     creds = base64.b64encode(f"a:{password}".encode()).decode()
     return {"Authorization": f"Basic {creds}"}
+
+
+def _bearer(password: str) -> dict:
+    return {"Authorization": f"Bearer {password}"}
 
 
 def test_index_requires_password(monkeypatch):
@@ -69,3 +82,90 @@ def test_shell_assets_served_without_password(monkeypatch):
     with TestClient(m.app) as client:
         assert client.get("/assets/shell.js").status_code == 200
         assert client.get("/assets/shell.css").status_code == 200
+
+
+def test_subaccount_can_only_access_allowed_page(monkeypatch, tmp_path):
+    m = _reload_with_console_store(monkeypatch, tmp_path)
+    m.console_account_store.create_user("model-tester", "secret123", ["evaluations"])
+
+    from fastapi.testclient import TestClient
+    with TestClient(m.app) as client:
+        client.post(
+            "/api/v1/console/login",
+            json={"username": "model-tester", "password": "secret123", "remember": True},
+        )
+        assert client.get("/evaluations", follow_redirects=False).status_code == 200
+        assert client.get("/config", follow_redirects=False).status_code == 403
+        assert client.get("/accounts", follow_redirects=False).status_code == 403
+
+
+def test_subaccount_can_only_call_allowed_api(monkeypatch, tmp_path):
+    m = _reload_with_console_store(monkeypatch, tmp_path)
+    m.console_account_store.create_user("model-tester", "secret123", ["evaluations"])
+
+    from fastapi.testclient import TestClient
+    with TestClient(m.app) as client:
+        client.post(
+            "/api/v1/console/login",
+            json={"username": "model-tester", "password": "secret123", "remember": True},
+        )
+        assert client.get("/api/v1/evaluations").status_code == 200
+        assert client.get("/api/v1/config").status_code == 403
+
+
+def test_config_subaccount_can_only_access_config_menu(monkeypatch, tmp_path):
+    m = _reload_with_console_store(monkeypatch, tmp_path)
+    m.console_account_store.create_user("config-user", "secret123", ["config"])
+
+    from fastapi.testclient import TestClient
+    with TestClient(m.app) as client:
+        client.post(
+            "/api/v1/console/login",
+            json={"username": "config-user", "password": "secret123", "remember": True},
+        )
+        assert client.get("/config", follow_redirects=False).status_code == 200
+        assert client.get("/api/v1/config").status_code == 200
+        assert client.get("/evaluations", follow_redirects=False).status_code == 403
+
+
+def test_logs_password_headers_act_as_superadmin_for_pages_and_apis(monkeypatch, tmp_path):
+    m = _reload_with_console_store(monkeypatch, tmp_path)
+
+    from fastapi.testclient import TestClient
+    with TestClient(m.app) as client:
+        assert client.get("/config", headers=_auth("secret")).status_code == 200
+        assert client.get("/evaluations", headers=_auth("secret")).status_code == 200
+        assert client.get("/api/v1/config", headers=_auth("secret")).status_code == 200
+        assert client.get("/api/v1/evaluations", headers=_auth("secret")).status_code == 200
+
+        assert client.get("/config", headers=_bearer("secret")).status_code == 200
+        assert client.get("/api/v1/config", headers=_bearer("secret")).status_code == 200
+
+
+def test_disabled_subaccount_token_rejected_for_pages_and_apis(monkeypatch, tmp_path):
+    m = _reload_with_console_store(monkeypatch, tmp_path)
+    m.console_account_store.create_user("model-tester", "secret123", ["evaluations"])
+
+    from fastapi.testclient import TestClient
+    with TestClient(m.app) as client:
+        login = client.post(
+            "/api/v1/console/login",
+            json={"username": "model-tester", "password": "secret123", "remember": True},
+        )
+        assert login.status_code == 200
+
+        m.console_account_store.update_user("model-tester", enabled=False)
+
+        page = client.get("/evaluations", follow_redirects=False)
+        assert page.status_code == 302
+        assert page.headers["location"].startswith("/login")
+        assert client.get("/api/v1/evaluations").status_code == 403
+
+
+def test_unauthenticated_protected_apis_return_401(monkeypatch, tmp_path):
+    m = _reload_with_console_store(monkeypatch, tmp_path)
+
+    from fastapi.testclient import TestClient
+    with TestClient(m.app) as client:
+        assert client.get("/api/v1/config").status_code == 401
+        assert client.get("/api/v1/evaluations").status_code == 401

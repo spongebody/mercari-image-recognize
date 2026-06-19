@@ -37,12 +37,14 @@ from app.observability import context as obs_ctx
 from app.observability.api import build_router as build_obs_router
 from app.observability.auth import (
     COOKIE_NAME,
+    ConsoleIdentity,
     REMEMBER_TTL,
     SESSION_TTL,
     identity_from_request,
     is_console_authed,
     make_identity_session_token,
-    require_logs_auth,
+    require_menu_auth,
+    require_superadmin_auth,
 )
 from app.observability.recorder import Recorder
 from app.observability.retention import prune as obs_prune
@@ -60,6 +62,55 @@ from app.utils import fetch_image_from_url, parse_bool_param
 settings = load_settings()
 CONSOLE_USERS_PATH = Path(os.getenv("CONSOLE_USERS_PATH", str(BASE_DIR / "data" / "console_users.json")))
 console_account_store = ConsoleAccountStore(CONSOLE_USERS_PATH, superadmin_username=settings.logs_user)
+
+
+def _live_subaccount_identity(identity: ConsoleIdentity) -> Optional[ConsoleIdentity]:
+    if identity.role != SUBACCOUNT_ROLE:
+        return ConsoleIdentity(
+            username=identity.username,
+            role=SUPERADMIN_ROLE,
+            menus=tuple(ALL_MENUS),
+        )
+    live_user = console_account_store.get_user(identity.username)
+    if live_user is None:
+        return None
+    return ConsoleIdentity(
+        username=live_user.username,
+        role=SUBACCOUNT_ROLE,
+        menus=tuple(live_user.menus),
+    )
+
+
+def _live_menu_auth(menu_id: str):
+    token_auth = require_menu_auth(settings.logs_password, menu_id)
+
+    def _dep(identity: ConsoleIdentity = Depends(token_auth)) -> ConsoleIdentity:
+        live_identity = _live_subaccount_identity(identity)
+        if live_identity is None:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        if not live_identity.has_menu(menu_id):
+            raise HTTPException(status_code=403, detail="Forbidden")
+        return live_identity
+
+    return _dep
+
+
+def _live_superadmin_auth():
+    token_auth = require_superadmin_auth(settings.logs_password)
+
+    def _dep(identity: ConsoleIdentity = Depends(token_auth)) -> ConsoleIdentity:
+        live_identity = _live_subaccount_identity(identity)
+        if live_identity is None or not live_identity.is_superadmin:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        return live_identity
+
+    return _dep
+
+
+config_auth = _live_menu_auth("config")
+evaluation_auth = _live_menu_auth("evaluations")
+logs_auth = _live_menu_auth("logs")
+accounts_auth = _live_superadmin_auth()
 _obs_store = ObsStore(BASE_DIR / "logs" / "observability.db")
 _obs_store.init_schema()
 recorder = Recorder(store=_obs_store, store_root=BASE_DIR / "logs" / "store")
@@ -349,7 +400,7 @@ app.add_middleware(
 app.include_router(build_obs_router(
     store=_obs_store,
     store_root=BASE_DIR / "logs" / "store",
-    auth_dep=require_logs_auth(settings.logs_password),
+    auth_dep=logs_auth,
 ))
 
 
@@ -690,8 +741,9 @@ def index_page(request: Request):
     /api/v1/mercari/image/price) resolve to this server automatically, so the
     endpoint field can be left blank.
     """
-    if not is_console_authed(request, settings.logs_password):
-        return RedirectResponse("/login?next=/", status_code=302)
+    gate = _require_page_menu(request, "test", "/")
+    if gate is not None:
+        return gate
     index_path = WEB_DIR / "index.html"
     if not index_path.exists():
         raise HTTPException(status_code=404, detail="Test UI not found.")
@@ -724,6 +776,22 @@ def _default_path(menus: List[str]) -> str:
         if menu in available:
             return _MENU_DEFAULT_PATHS[menu]
     return "/"
+
+
+def _console_identity_for_page(request: Request) -> Optional[ConsoleIdentity]:
+    identity = identity_from_request(request, settings.logs_password)
+    if identity is None:
+        return None
+    return _live_subaccount_identity(identity)
+
+
+def _require_page_menu(request: Request, menu_id: str, next_path: str) -> Optional[Response]:
+    identity = _console_identity_for_page(request)
+    if identity is None:
+        return RedirectResponse(f"/login?next={next_path}", status_code=302)
+    if not identity.has_menu(menu_id):
+        return HTMLResponse("Forbidden", status_code=403)
+    return None
 
 
 @app.post("/api/v1/console/login")
@@ -821,8 +889,9 @@ def favicon():
 
 @app.get("/config", response_class=HTMLResponse)
 def config_page(request: Request):
-    if not is_console_authed(request, settings.logs_password):
-        return RedirectResponse("/login?next=/config", status_code=302)
+    gate = _require_page_menu(request, "config", "/config")
+    if gate is not None:
+        return gate
     try:
         return HTMLResponse(CONFIG_PAGE_PATH.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
@@ -831,8 +900,9 @@ def config_page(request: Request):
 
 @app.get("/evaluations", response_class=HTMLResponse)
 def evaluations_page(request: Request):
-    if not is_console_authed(request, settings.logs_password):
-        return RedirectResponse("/login?next=/evaluations", status_code=302)
+    gate = _require_page_menu(request, "evaluations", "/evaluations")
+    if gate is not None:
+        return gate
     try:
         return HTMLResponse(EVALUATIONS_PAGE_PATH.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
@@ -841,12 +911,21 @@ def evaluations_page(request: Request):
 
 @app.get("/logs", response_class=HTMLResponse)
 def logs_page(request: Request):
-    if not is_console_authed(request, settings.logs_password):
-        return RedirectResponse("/login?next=/logs", status_code=302)
+    gate = _require_page_menu(request, "logs", "/logs")
+    if gate is not None:
+        return gate
     return FileResponse(BASE_DIR / "web" / "logs.html")
 
 
-@app.get("/api/v1/config")
+@app.get("/accounts", response_class=HTMLResponse)
+def accounts_page(request: Request):
+    gate = _require_page_menu(request, "accounts", "/accounts")
+    if gate is not None:
+        return gate
+    raise HTTPException(status_code=404, detail="Accounts page not found.")
+
+
+@app.get("/api/v1/config", dependencies=[Depends(config_auth)])
 def read_config() -> Dict[str, Any]:
     return get_public_config(settings)
 
@@ -860,8 +939,7 @@ def _reject_cross_origin(request: Request) -> None:
             raise HTTPException(status_code=403, detail="Cross-origin updates are not allowed.")
 
 
-@app.put("/api/v1/config",
-         dependencies=[Depends(require_logs_auth(settings.logs_password))])
+@app.put("/api/v1/config", dependencies=[Depends(config_auth)])
 def save_config(payload: Dict[str, Any], request: Request) -> Dict[str, Any]:
     _reject_cross_origin(request)
     try:
@@ -875,13 +953,12 @@ def save_config(payload: Dict[str, Any], request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.get("/api/v1/prompts")
+@app.get("/api/v1/prompts", dependencies=[Depends(config_auth)])
 def read_prompts() -> Dict[str, Any]:
     return {"prompts": prompt_store.list_prompts()}
 
 
-@app.put("/api/v1/prompts",
-         dependencies=[Depends(require_logs_auth(settings.logs_password))])
+@app.put("/api/v1/prompts", dependencies=[Depends(config_auth)])
 def save_prompts(payload: Dict[str, Any], request: Request) -> Dict[str, Any]:
     _reject_cross_origin(request)
     try:
@@ -890,8 +967,7 @@ def save_prompts(payload: Dict[str, Any], request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/api/v1/prompts/reset",
-          dependencies=[Depends(require_logs_auth(settings.logs_password))])
+@app.post("/api/v1/prompts/reset", dependencies=[Depends(config_auth)])
 def reset_prompts(payload: Dict[str, Any], request: Request) -> Dict[str, Any]:
     _reject_cross_origin(request)
     try:
@@ -900,7 +976,7 @@ def reset_prompts(payload: Dict[str, Any], request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/api/v1/evaluations")
+@app.post("/api/v1/evaluations", dependencies=[Depends(evaluation_auth)])
 async def create_evaluation(
     file: UploadFile = File(...),
     visionModel: str = Form(...),
@@ -957,7 +1033,7 @@ def _resolves_to_public_addresses(hostname: str) -> bool:
     return True
 
 
-@app.get("/api/v1/image-proxy")
+@app.get("/api/v1/image-proxy", dependencies=[Depends(evaluation_auth)])
 def image_proxy(request: Request, url: str) -> Response:
     """Serve remote dataset images same-origin.
 
@@ -990,7 +1066,7 @@ def image_proxy(request: Request, url: str) -> Response:
     )
 
 
-@app.post("/api/v1/evaluations/import")
+@app.post("/api/v1/evaluations/import", dependencies=[Depends(evaluation_auth)])
 async def import_evaluation(file: UploadFile = File(...)) -> Dict[str, Any]:
     tmp_path = BASE_DIR / "logs" / "tmp" / f"evaluation-import-{uuid.uuid4().hex}.csv"
     tmp_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1005,7 +1081,7 @@ async def import_evaluation(file: UploadFile = File(...)) -> Dict[str, Any]:
     return {"runId": run.runId, "status": "completed"}
 
 
-@app.delete("/api/v1/evaluations/{run_id}")
+@app.delete("/api/v1/evaluations/{run_id}", dependencies=[Depends(evaluation_auth)])
 def delete_evaluation(run_id: str) -> Dict[str, Any]:
     try:
         evaluation_store.delete_run(run_id)
@@ -1014,12 +1090,12 @@ def delete_evaluation(run_id: str) -> Dict[str, Any]:
     return {"ok": True}
 
 
-@app.get("/api/v1/evaluations")
+@app.get("/api/v1/evaluations", dependencies=[Depends(evaluation_auth)])
 def list_evaluations() -> Dict[str, Any]:
     return {"runs": evaluation_store.list_runs()}
 
 
-@app.get("/api/v1/evaluations/{run_id}")
+@app.get("/api/v1/evaluations/{run_id}", dependencies=[Depends(evaluation_auth)])
 def read_evaluation(run_id: str) -> Dict[str, Any]:
     try:
         return evaluation_store.read_run(run_id)
@@ -1027,7 +1103,7 @@ def read_evaluation(run_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="Evaluation run not found.") from exc
 
 
-@app.get("/api/v1/evaluations/{run_id}/results")
+@app.get("/api/v1/evaluations/{run_id}/results", dependencies=[Depends(evaluation_auth)])
 def read_evaluation_results(run_id: str) -> Dict[str, Any]:
     try:
         return {"rows": evaluation_store.read_results(run_id)}
@@ -1035,7 +1111,7 @@ def read_evaluation_results(run_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="Evaluation run not found.") from exc
 
 
-@app.get("/api/v1/evaluations/{run_id}/results.csv")
+@app.get("/api/v1/evaluations/{run_id}/results.csv", dependencies=[Depends(evaluation_auth)])
 def download_evaluation_results(run_id: str):
     try:
         return FileResponse(evaluation_store.run_path(run_id) / "results.csv")
@@ -1043,7 +1119,7 @@ def download_evaluation_results(run_id: str):
         raise HTTPException(status_code=404, detail="Evaluation run not found.") from exc
 
 
-@app.get("/api/v1/evaluations/{run_id}/errors")
+@app.get("/api/v1/evaluations/{run_id}/errors", dependencies=[Depends(evaluation_auth)])
 def read_evaluation_errors(run_id: str) -> Dict[str, Any]:
     try:
         return {"errors": evaluation_store.read_errors(run_id)}
@@ -1053,7 +1129,7 @@ def read_evaluation_errors(run_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="Evaluation run not found.") from exc
 
 
-@app.put("/api/v1/evaluations/{run_id}/review")
+@app.put("/api/v1/evaluations/{run_id}/review", dependencies=[Depends(evaluation_auth)])
 def save_evaluation_review(run_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         return {"summary": evaluation_store.save_review(run_id, payload.get("rows", []))}
@@ -1063,7 +1139,7 @@ def save_evaluation_review(run_id: str, payload: Dict[str, Any]) -> Dict[str, An
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/api/v1/evaluations/{run_id}/archive")
+@app.post("/api/v1/evaluations/{run_id}/archive", dependencies=[Depends(evaluation_auth)])
 def archive_evaluation(run_id: str) -> Dict[str, Any]:
     try:
         return evaluation_store.archive(run_id)

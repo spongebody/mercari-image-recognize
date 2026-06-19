@@ -1,8 +1,25 @@
 from __future__ import annotations
 
+import base64
+import importlib
+
+import app.config
+import pytest
 from fastapi.testclient import TestClient
 
 import main
+
+
+@pytest.fixture(autouse=True)
+def _reload_with_password(monkeypatch):
+    monkeypatch.setenv("LOGS_PASSWORD", "testpass")
+    importlib.reload(app.config)
+    importlib.reload(main)
+
+
+def _auth() -> dict[str, str]:
+    creds = base64.b64encode(b"admin:testpass").decode()
+    return {"Authorization": f"Basic {creds}"}
 
 
 def test_create_evaluation_rejects_bad_file():
@@ -10,6 +27,7 @@ def test_create_evaluation_rejects_bad_file():
 
     response = client.post(
         "/api/v1/evaluations",
+        headers=_auth(),
         files={"file": ("bad.csv", b"itemName\tgenreId\nx\t1\n", "text/csv")},
         data={
             "visionModel": "vision-a",
@@ -27,7 +45,7 @@ def test_create_evaluation_rejects_bad_file():
 def test_list_evaluations_returns_runs():
     client = TestClient(main.app)
 
-    response = client.get("/api/v1/evaluations")
+    response = client.get("/api/v1/evaluations", headers=_auth())
 
     assert response.status_code == 200
     assert "runs" in response.json()
@@ -57,6 +75,7 @@ def test_create_evaluation_returns_run_id_and_submits_background(monkeypatch, tm
 
     response = client.post(
         "/api/v1/evaluations",
+        headers=_auth(),
         files={
             "file": (
                 "input.csv",
@@ -94,7 +113,7 @@ def test_read_evaluation_errors_endpoint(monkeypatch, tmp_path):
     monkeypatch.setattr(main, "evaluation_store", store)
     client = TestClient(main.app)
 
-    response = client.get("/api/v1/evaluations/2026-06-11-09-00/errors")
+    response = client.get("/api/v1/evaluations/2026-06-11-09-00/errors", headers=_auth())
 
     assert response.status_code == 200
     assert response.json() == {
@@ -108,7 +127,7 @@ def test_read_evaluation_errors_404_for_unknown_run(monkeypatch, tmp_path):
     monkeypatch.setattr(main, "evaluation_store", EvaluationRunStore(tmp_path))
     client = TestClient(main.app)
 
-    assert client.get("/api/v1/evaluations/nope/errors").status_code == 404
+    assert client.get("/api/v1/evaluations/nope/errors", headers=_auth()).status_code == 404
 
 
 def test_analysis_endpoint_removed():
@@ -132,13 +151,14 @@ def test_import_evaluation_endpoint(monkeypatch, tmp_path):
 
     response = client.post(
         "/api/v1/evaluations/import",
+        headers=_auth(),
         files={"file": ("results.csv", body, "text/tab-separated-values")},
     )
 
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "completed"
-    assert client.get(f"/api/v1/evaluations/{data['runId']}").status_code == 200
+    assert client.get(f"/api/v1/evaluations/{data['runId']}", headers=_auth()).status_code == 200
 
 
 def test_import_evaluation_rejects_bad_file(monkeypatch, tmp_path):
@@ -149,6 +169,7 @@ def test_import_evaluation_rejects_bad_file(monkeypatch, tmp_path):
 
     response = client.post(
         "/api/v1/evaluations/import",
+        headers=_auth(),
         files={"file": ("bad.csv", b"itemName\tgenreId\nx\t1\n", "text/csv")},
     )
 
@@ -164,6 +185,6 @@ def test_delete_evaluation_endpoint(monkeypatch, tmp_path):
     (run_dir / "status.json").write_text("{}", encoding="utf-8")
     client = TestClient(main.app)
 
-    assert client.delete("/api/v1/evaluations/2026-06-12-10-00").status_code == 200
+    assert client.delete("/api/v1/evaluations/2026-06-12-10-00", headers=_auth()).status_code == 200
     assert not run_dir.exists()
-    assert client.delete("/api/v1/evaluations/2026-06-12-10-00").status_code == 404
+    assert client.delete("/api/v1/evaluations/2026-06-12-10-00", headers=_auth()).status_code == 404

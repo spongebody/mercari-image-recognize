@@ -37,7 +37,7 @@ class PromptsApiTest(unittest.TestCase):
 
     def test_get_prompts_returns_registry(self):
         client = TestClient(main.app)
-        resp = client.get("/api/v1/prompts")
+        resp = client.get("/api/v1/prompts", headers=_auth())
         self.assertEqual(resp.status_code, 200)
         prompts = resp.json()["prompts"]
         self.assertEqual(len(prompts), 19)
