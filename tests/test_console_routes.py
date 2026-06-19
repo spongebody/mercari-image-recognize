@@ -99,6 +99,22 @@ def test_subaccount_can_only_access_allowed_page(monkeypatch, tmp_path):
         assert client.get("/accounts", follow_redirects=False).status_code == 403
 
 
+def test_accounts_page_only_served_to_superadmin(monkeypatch, tmp_path):
+    monkeypatch.setenv("LOGS_USER", "admin")
+    monkeypatch.setenv("LOGS_PASSWORD", "secret")
+    monkeypatch.setenv("CONSOLE_USERS_PATH", str(tmp_path / "console_users.json"))
+    importlib.reload(app.config)
+    importlib.reload(main)
+    from fastapi.testclient import TestClient
+
+    with TestClient(main.app) as client:
+        client.post("/api/v1/console/login", json={"username": "admin", "password": "secret", "remember": True})
+        r = client.get("/accounts", follow_redirects=False)
+        assert r.status_code == 200
+        assert "账号管理" in r.text
+        assert "console/users" in r.text
+
+
 def test_subaccount_can_only_call_allowed_api(monkeypatch, tmp_path):
     m = _reload_with_console_store(monkeypatch, tmp_path)
     m.console_account_store.create_user("model-tester", "secret123", ["evaluations"])

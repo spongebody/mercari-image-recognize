@@ -387,6 +387,7 @@ app = FastAPI(lifespan=lifespan, title="Mercari Image Analyzer", version="1.0.0"
 CONFIG_ENV_PATH = BASE_DIR / ".env"
 CONFIG_PAGE_PATH = BASE_DIR / "web" / "config.html"
 EVALUATIONS_PAGE_PATH = BASE_DIR / "web" / "evaluations.html"
+ACCOUNTS_PAGE_PATH = BASE_DIR / "web" / "accounts.html"
 
 # Allow local dev CORS for the test page or other origins.
 app.add_middleware(
@@ -1004,7 +1005,10 @@ def accounts_page(request: Request):
     gate = _require_page_menu(request, "accounts", "/accounts")
     if gate is not None:
         return gate
-    raise HTTPException(status_code=404, detail="Accounts page not found.")
+    try:
+        return HTMLResponse(ACCOUNTS_PAGE_PATH.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Accounts page not found.") from exc
 
 
 @app.get("/api/v1/config", dependencies=[Depends(config_auth)])
