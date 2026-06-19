@@ -168,6 +168,40 @@ def test_store_delete_user_removes_user_and_rejects_missing_user(tmp_path):
         store.delete_user("model-tester")
 
 
+def test_store_public_operations_hold_lock_during_file_access(tmp_path, monkeypatch):
+    store = ConsoleAccountStore(tmp_path / "console_users.json")
+    store.create_user("model-tester", "secret123", ["evaluations"])
+    original_read = store._read_data
+    original_write = store._write_data
+    observed = []
+
+    def assert_locked():
+        assert store._lock._is_owned()
+
+    def locked_read():
+        assert_locked()
+        observed.append("read")
+        return original_read()
+
+    def locked_write(data):
+        assert_locked()
+        observed.append("write")
+        return original_write(data)
+
+    monkeypatch.setattr(store, "_read_data", locked_read)
+    monkeypatch.setattr(store, "_write_data", locked_write)
+
+    store.list_users()
+    store.get_user("model-tester")
+    store.authenticate("model-tester", "secret123")
+    store.create_user("log-viewer", "secret456", ["logs"])
+    store.update_user("log-viewer", enabled=False)
+    store.delete_user("log-viewer")
+
+    assert observed.count("read") == 6
+    assert observed.count("write") == 3
+
+
 def test_store_rejects_duplicate_empty_password_and_empty_menus(tmp_path):
     store = ConsoleAccountStore(tmp_path / "console_users.json")
     store.create_user("model-tester", "secret123", ["evaluations"])
