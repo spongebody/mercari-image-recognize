@@ -11,9 +11,10 @@ from typing import Any, Callable, Optional
 from fastapi import Cookie, Header, HTTPException, Request
 
 try:
-    from app.console_accounts import ALL_MENUS, SUBACCOUNT_ROLE, SUPERADMIN_ROLE
+    from app.console_accounts import ALL_MENUS, ASSIGNABLE_MENUS, SUBACCOUNT_ROLE, SUPERADMIN_ROLE
 except ImportError:  # pragma: no cover - defensive fallback for partial imports
     ALL_MENUS = ("test", "config", "evaluations", "logs", "accounts")
+    ASSIGNABLE_MENUS = ("config", "evaluations", "logs")
     SUPERADMIN_ROLE = "superadmin"
     SUBACCOUNT_ROLE = "subaccount"
 
@@ -21,7 +22,7 @@ COOKIE_NAME = "console_session"
 REMEMBER_TTL = 30 * 24 * 3600  # 30 days
 SESSION_TTL = 12 * 3600        # 12 hours
 _DEFAULT_SUPERADMIN_USERNAME = "admin"
-_SUBACCOUNT_MENUS = tuple(menu for menu in ALL_MENUS if menu != "accounts")
+_SUBACCOUNT_MENUS = tuple(ASSIGNABLE_MENUS)
 
 
 @dataclass(frozen=True)

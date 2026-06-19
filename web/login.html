@@ -118,10 +118,11 @@
   });
 
   // Sanitize ?next= to a same-origin path only (avoid open redirect)
-  function safeNext(){
-    const raw = new URLSearchParams(location.search).get("next") || "/";
+  function safeNext(defaultPath){
+    const fallback = (defaultPath && defaultPath.startsWith("/") && !defaultPath.startsWith("//")) ? defaultPath : "/";
+    const raw = new URLSearchParams(location.search).get("next") || fallback;
     if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
-    return "/";
+    return fallback;
   }
 
   const form = document.getElementById("form");
@@ -160,7 +161,11 @@
         credentials: "same-origin",
         body: JSON.stringify(body),
       });
-      if (r.ok) { location.replace(safeNext()); return; }
+      if (r.ok) {
+        const payload = await r.json();
+        location.replace(safeNext(payload.defaultPath));
+        return;
+      }
       showError(r.status === 503 ? t.notConfigured : t.err);
     } catch (err) {
       showError(t.err);

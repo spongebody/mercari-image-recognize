@@ -14,7 +14,7 @@ from typing import Any, Iterable
 
 
 ALL_MENUS = ("test", "config", "evaluations", "logs", "accounts")
-ASSIGNABLE_MENUS = ("test", "config", "evaluations", "logs")
+ASSIGNABLE_MENUS = ("config", "evaluations", "logs")
 
 SUPERADMIN_ROLE = "superadmin"
 SUBACCOUNT_ROLE = "subaccount"

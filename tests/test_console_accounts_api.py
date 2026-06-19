@@ -52,9 +52,9 @@ def test_superadmin_can_create_update_delete_subaccount(monkeypatch, tmp_path):
         assert listed.json()["users"][0]["username"] == "model-tester"
         assert "password_hash" not in listed.text
 
-        updated = client.put("/api/v1/console/users/model-tester", json={"menus": ["test"], "enabled": False})
+        updated = client.put("/api/v1/console/users/model-tester", json={"menus": ["logs"], "enabled": False})
         assert updated.status_code == 200
-        assert updated.json()["menus"] == ["test"]
+        assert updated.json()["menus"] == ["logs"]
         assert updated.json()["enabled"] is False
 
         deleted = client.delete("/api/v1/console/users/model-tester")
@@ -132,9 +132,14 @@ def test_empty_or_invalid_menus_return_400(monkeypatch, tmp_path):
             "/api/v1/console/users",
             json={"username": "invalid-menu", "password": "secret123", "menus": ["accounts"]},
         )
+        default_test = client.post(
+            "/api/v1/console/users",
+            json={"username": "default-test", "password": "secret123", "menus": ["test"]},
+        )
 
         assert empty.status_code == 400
         assert invalid.status_code == 400
+        assert default_test.status_code == 400
 
 
 def test_create_username_null_returns_400(monkeypatch, tmp_path):
@@ -230,7 +235,7 @@ def test_basic_and_bearer_logs_password_can_call_account_api_as_superadmin(monke
         bearer = client.post(
             "/api/v1/console/users",
             headers=_bearer(),
-            json={"username": "bearer-user", "password": "secret456", "menus": ["test"]},
+            json={"username": "bearer-user", "password": "secret456", "menus": ["evaluations"]},
         )
 
         assert basic.status_code == 200

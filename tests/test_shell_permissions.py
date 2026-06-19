@@ -4,6 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SHELL_JS = ROOT / "web" / "assets" / "shell.js"
+ACCOUNTS_HTML = ROOT / "web" / "accounts.html"
 
 
 def test_shell_fetches_identity_with_same_origin_credentials():
@@ -14,6 +15,22 @@ def test_shell_fetches_identity_with_same_origin_credentials():
     assert "userNode.textContent" in source
     assert ".innerHTML = identity.username" not in source
     assert ".innerHTML = me.username" not in source
+
+
+def test_accounts_page_does_not_offer_default_test_menu_to_subaccounts():
+    source = ACCOUNTS_HTML.read_text(encoding="utf-8")
+
+    assert "{ id: 'test'" not in source
+    assert "['test']" not in source
+    assert "{ id: 'evaluations', label: '模型测试' }" in source
+    assert "['evaluations']" in source
+
+
+def test_login_page_uses_api_default_path_when_next_is_absent():
+    source = (ROOT / "web" / "login.html").read_text(encoding="utf-8")
+
+    assert "const payload = await r.json()" in source
+    assert "location.replace(safeNext(payload.defaultPath))" in source
 
 
 def test_shell_menu_rendering_follows_loaded_identity(tmp_path):

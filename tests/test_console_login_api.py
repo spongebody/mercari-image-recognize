@@ -27,7 +27,7 @@ def test_login_success_sets_cookie(monkeypatch):
         r = client.post("/api/v1/console/login",
                         json={"username": "admin", "password": "secret", "remember": True})
         assert r.status_code == 200
-        assert r.json() == {"ok": True}
+        assert r.json() == {"ok": True, "defaultPath": "/"}
         assert COOKIE_NAME in r.cookies
 
 

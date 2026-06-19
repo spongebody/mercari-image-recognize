@@ -95,8 +95,44 @@ def test_subaccount_can_only_access_allowed_page(monkeypatch, tmp_path):
             json={"username": "model-tester", "password": "secret123", "remember": True},
         )
         assert client.get("/evaluations", follow_redirects=False).status_code == 200
+        assert client.get("/", follow_redirects=False).status_code == 403
         assert client.get("/config", follow_redirects=False).status_code == 403
         assert client.get("/accounts", follow_redirects=False).status_code == 403
+
+
+def test_evaluations_subaccount_defaults_to_evaluations_not_index(monkeypatch, tmp_path):
+    m = _reload_with_console_store(monkeypatch, tmp_path)
+    m.console_account_store.create_user("model-tester", "secret123", ["evaluations"])
+
+    from fastapi.testclient import TestClient
+    with TestClient(m.app) as client:
+        client.post(
+            "/api/v1/console/login",
+            json={"username": "model-tester", "password": "secret123", "remember": True},
+        )
+
+        login_page = client.get("/login", follow_redirects=False)
+        me = client.get("/api/v1/console/me")
+
+        assert login_page.status_code == 302
+        assert login_page.headers["location"] == "/evaluations"
+        assert me.status_code == 200
+        assert me.json()["defaultPath"] == "/evaluations"
+
+
+def test_subaccount_login_response_uses_first_allowed_menu_as_default(monkeypatch, tmp_path):
+    m = _reload_with_console_store(monkeypatch, tmp_path)
+    m.console_account_store.create_user("model-tester", "secret123", ["evaluations"])
+
+    from fastapi.testclient import TestClient
+    with TestClient(m.app) as client:
+        login = client.post(
+            "/api/v1/console/login",
+            json={"username": "model-tester", "password": "secret123", "remember": True},
+        )
+
+        assert login.status_code == 200
+        assert login.json()["defaultPath"] == "/evaluations"
 
 
 def test_accounts_page_only_served_to_superadmin(monkeypatch, tmp_path):

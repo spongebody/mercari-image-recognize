@@ -833,7 +833,7 @@ def console_login(payload: Dict[str, Any], request: Request, response: Response)
         secure=request.url.scheme == "https",
         path="/",
     )
-    return {"ok": True}
+    return {"ok": True, "defaultPath": _default_path(menus)}
 
 
 @app.get("/api/v1/console/me")
