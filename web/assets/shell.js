@@ -26,6 +26,7 @@
 
   let config = null;
   let identity = null;
+  let identityLoaded = false;
   let userNode = null;
 
   function el(tag, props = {}, children = []) {
@@ -45,6 +46,8 @@
 
   function mount(cfg) {
     config = cfg;
+    identity = null;
+    identityLoaded = false;
     document.body.classList.add('shell-page');
 
     // Move existing page content (everything that's not a script/style/overlay)
@@ -99,11 +102,14 @@
       if (!response.ok) throw new Error('Unable to load console identity.');
       const me = await response.json();
       identity = me;
+      identityLoaded = true;
       renderUser();
       renderSidebar();
     } catch (_) {
       identity = null;
+      identityLoaded = true;
       renderUser();
+      renderSidebar();
     }
   }
 
@@ -115,9 +121,14 @@
   }
 
   function allowedPages() {
-    if (!identity || !Array.isArray(identity.menus)) return PAGES;
+    if (!identityLoaded || !identity || !Array.isArray(identity.menus)) return currentPageOnly();
     const menus = new Set(identity.menus);
     return PAGES.filter((page) => menus.has(page.id));
+  }
+
+  function currentPageOnly() {
+    if (!config || !config.page) return [];
+    return PAGES.filter((page) => page.id === config.page);
   }
 
   function currentRoute() {
