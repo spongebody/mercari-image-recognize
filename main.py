@@ -1376,7 +1376,7 @@ async def observe_request(request: Request, call_next):
         obs_ctx.reset_request_id(token)
 
 
-@app.post("/api/v1/mercari/image/analyze", dependencies=[Depends(test_auth)])
+@app.post("/api/v1/mercari/image/analyze")
 async def analyze_image(
     image_list: List[UploadFile] = File(...),
     language: str = Form(DEFAULT_LANGUAGE),
@@ -1458,7 +1458,7 @@ async def analyze_image(
     return JSONResponse(result)
 
 
-@app.post("/api/v1/mercari/image/price", dependencies=[Depends(test_auth)])
+@app.post("/api/v1/mercari/image/price")
 async def analyze_image_price(
     image_list: List[UploadFile] = File(...),
     debug: str = Form("false"),
@@ -1495,7 +1495,7 @@ async def analyze_image_price(
     return JSONResponse(result)
 
 
-@app.post("/api/v1/mercari/image/size", dependencies=[Depends(test_auth)])
+@app.post("/api/v1/mercari/image/size")
 async def analyze_image_size(
     image_list: List[UploadFile] = File(...),
     debug: str = Form("false"),
@@ -1533,7 +1533,7 @@ async def analyze_image_size(
     return JSONResponse(result)
 
 
-@app.post("/api/v1/mercari/product-data/regenerate", dependencies=[Depends(test_auth)])
+@app.post("/api/v1/mercari/product-data/regenerate")
 async def regenerate_product_data(
     image_list: List[UploadFile] = File(...),
     language: str = Form(DEFAULT_LANGUAGE),
@@ -1570,7 +1570,7 @@ async def regenerate_product_data(
     return JSONResponse(result)
 
 
-@app.get("/api/v1/mercari/image/analyze/{job_id}", dependencies=[Depends(test_auth)])
+@app.get("/api/v1/mercari/image/analyze/{job_id}")
 async def poll_image_analysis(job_id: str):
     job = analysis_job_store.get(job_id)
     if not job:
@@ -1600,7 +1600,7 @@ class TitleCategoryRequest(BaseModel):
     language: Optional[str] = DEFAULT_LANGUAGE
 
 
-@app.post("/api/v1/mercari/title/analyze", dependencies=[Depends(test_auth)])
+@app.post("/api/v1/mercari/title/analyze")
 async def analyze_title(request: TitleCategoryRequest):
     language = request.language or DEFAULT_LANGUAGE
     if language not in SUPPORTED_LANGUAGES:
@@ -1623,7 +1623,7 @@ async def analyze_title(request: TitleCategoryRequest):
     return JSONResponse(result)
 
 
-@app.post("/api/v1/showcase/generate", dependencies=[Depends(test_auth)])
+@app.post("/api/v1/showcase/generate")
 async def generate_showcase(
     file: UploadFile = File(...),
     prompt_hint: Optional[str] = Form(default=None),

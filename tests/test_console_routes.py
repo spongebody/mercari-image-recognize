@@ -184,21 +184,32 @@ def test_subaccount_can_only_call_allowed_api(monkeypatch, tmp_path):
         assert client.get("/api/v1/config").status_code == 403
 
 
-def test_subaccount_without_test_menu_cannot_call_test_api(monkeypatch, tmp_path):
+def test_business_apis_do_not_require_console_auth(monkeypatch, tmp_path):
     m = _reload_with_console_store(monkeypatch, tmp_path)
-    m.console_account_store.create_user("config-user", "secret123", ["config"])
+    monkeypatch.setattr(
+        m.analyzer,
+        "analyze_title",
+        lambda **_kwargs: {"categories": [], "timings": {"title_ms": 1.0}},
+    )
 
     from fastapi.testclient import TestClient
     with TestClient(m.app) as client:
-        client.post(
-            "/api/v1/console/login",
-            json={"username": "config-user", "password": "secret123", "remember": True},
-        )
-        response = client.post(
+        assert client.post(
+            "/api/v1/mercari/image/analyze",
+            data={"language": "ja"},
+        ).status_code != 401
+        assert client.post("/api/v1/mercari/image/price").status_code != 401
+        assert client.post("/api/v1/mercari/image/size").status_code != 401
+        assert client.post("/api/v1/mercari/product-data/regenerate").status_code != 401
+        assert client.get("/api/v1/mercari/image/analyze/not-found").status_code == 404
+
+        title_response = client.post(
             "/api/v1/mercari/title/analyze",
             json={"title": "demo", "language": "ja"},
         )
-        assert response.status_code == 403
+        assert title_response.status_code == 200
+
+        assert client.post("/api/v1/showcase/generate").status_code != 401
 
 
 def test_config_subaccount_can_only_access_config_menu(monkeypatch, tmp_path):
