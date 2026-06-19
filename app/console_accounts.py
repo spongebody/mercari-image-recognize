@@ -51,13 +51,19 @@ def verify_password(password: str, encoded: str) -> bool:
         algorithm, iterations, salt_hex, digest_hex = encoded.split("$", 3)
         if algorithm != _HASH_ALGORITHM:
             return False
+        if int(iterations) != _HASH_ITERATIONS:
+            return False
         salt = bytes.fromhex(salt_hex)
+        if len(salt) != _SALT_BYTES:
+            return False
         expected = bytes.fromhex(digest_hex)
+        if len(expected) != hashlib.sha256().digest_size:
+            return False
         actual = hashlib.pbkdf2_hmac(
             "sha256",
             password.encode("utf-8"),
             salt,
-            int(iterations),
+            _HASH_ITERATIONS,
         )
     except (AttributeError, TypeError, ValueError):
         return False

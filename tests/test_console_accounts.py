@@ -1,3 +1,4 @@
+import hashlib
 import json
 import time
 
@@ -11,6 +12,16 @@ from app.console_accounts import (
     sanitize_subaccount_menus,
     verify_password,
 )
+
+
+def _encoded_password_hash(password, *, iterations=260_000, salt=b"0" * 16):
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt,
+        iterations,
+    )
+    return f"pbkdf2_sha256${iterations}${salt.hex()}${digest.hex()}"
 
 
 def test_hash_password_roundtrips_and_rejects_wrong_password():
@@ -33,6 +44,18 @@ def test_hash_password_roundtrips_and_rejects_wrong_password():
     ],
 )
 def test_verify_password_rejects_malformed_hashes(encoded):
+    assert verify_password("secret123", encoded) is False
+
+
+def test_verify_password_rejects_hashes_with_non_spec_iterations():
+    encoded = _encoded_password_hash("secret123", iterations=1)
+
+    assert verify_password("secret123", encoded) is False
+
+
+def test_verify_password_rejects_hashes_with_wrong_salt_length():
+    encoded = _encoded_password_hash("secret123", salt=b"0")
+
     assert verify_password("secret123", encoded) is False
 
 
