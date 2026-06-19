@@ -854,6 +854,55 @@ def console_me(request: Request) -> Dict[str, Any]:
     }
 
 
+@app.get("/api/v1/console/users", dependencies=[Depends(accounts_auth)])
+def list_console_users() -> Dict[str, Any]:
+    return {"users": console_account_store.list_users()}
+
+
+@app.post("/api/v1/console/users", dependencies=[Depends(accounts_auth)])
+def create_console_user(payload: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        return console_account_store.create_user(
+            str(payload.get("username", "")),
+            str(payload.get("password", "")),
+            payload.get("menus", []),
+            enabled=bool(payload.get("enabled", True)),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.put("/api/v1/console/users/{username}", dependencies=[Depends(accounts_auth)])
+def update_console_user(username: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    password = None
+    if "password" in payload:
+        requested_password = str(payload.get("password") or "")
+        if requested_password:
+            password = requested_password
+    menus = payload.get("menus") if "menus" in payload else None
+    enabled = bool(payload.get("enabled")) if "enabled" in payload else None
+    try:
+        return console_account_store.update_user(
+            username,
+            password=password,
+            menus=menus,
+            enabled=enabled,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="User not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/v1/console/users/{username}", dependencies=[Depends(accounts_auth)])
+def delete_console_user(username: str) -> Dict[str, Any]:
+    try:
+        console_account_store.delete_user(username)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="User not found.") from exc
+    return {"ok": True}
+
+
 @app.post("/api/v1/console/logout")
 def console_logout(request: Request, response: Response) -> Dict[str, Any]:
     # Mirror the attributes used when the cookie was set (see console_login) so
