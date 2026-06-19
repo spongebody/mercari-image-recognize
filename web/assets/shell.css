@@ -37,6 +37,19 @@ body.shell-page {
 }
 .shell-topbar .brand-text { font-weight: 800; letter-spacing: -0.2px; }
 .shell-topbar .spacer { flex: 1; }
+.shell-topbar .shell-user {
+  display: inline-block;
+  max-width: min(28vw, 220px);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 10px;
+  color: var(--shell-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 30px;
+}
 .shell-topbar .shell-logout {
   display: inline-flex; align-items: center; gap: 6px;
   width: auto; flex: none;

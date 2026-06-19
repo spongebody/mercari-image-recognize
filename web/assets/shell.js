@@ -1,8 +1,8 @@
-/* Shared console chrome for the config + test pages.
+/* Shared console chrome for console pages.
  *
  * Usage:
  *   Shell.mount({
- *     page: 'config',                 // 'config' | 'test'
+ *     page: 'config',                 // 'config' | 'test' | 'evaluations' | 'logs' | 'accounts'
  *     defaultRoute: 'api',
  *     brand: { logo: 'M', text: 'Mercari 识别' },   // optional
  *     sidebar: () => [{ id, label }, ...],          // lvl2 items for active page
@@ -17,12 +17,16 @@
     { id: 'config',      label: '配置', href: '/config' },
     { id: 'test',        label: '测试', href: '/' },
     { id: 'evaluations', label: '模型测试', href: '/evaluations' },
+    { id: 'logs',        label: '日志', href: '/logs' },
+    { id: 'accounts',    label: '账号管理', href: '/accounts' },
   ];
 
   // Body-level overlays that must NOT be moved into the shell main area.
   const OVERLAY_IDS = new Set(['lightbox', 'image-lightbox', 'evaluation-lightbox', 'toast', 'modalBackdrop']);
 
   let config = null;
+  let identity = null;
+  let userNode = null;
 
   function el(tag, props = {}, children = []) {
     const n = document.createElement(tag);
@@ -58,6 +62,7 @@
       el('span', { class: 'brand-logo', html: `<span class="logo" aria-hidden="true">${escapeHtml(brand.logo)}</span>` }),
       el('span', { class: 'brand-text', text: brand.text }),
       el('span', { class: 'spacer' }),
+      el('span', { class: 'shell-user', 'aria-live': 'polite' }),
       el('button', {
         class: 'shell-logout',
         type: 'button',
@@ -76,13 +81,43 @@
 
     document.body.prepend(topbar);
     document.body.append(body);
+    userNode = topbar.querySelector('.shell-user');
+    renderUser();
 
     renderSidebar();
+    loadIdentity();
     window.addEventListener('hashchange', onHashChange);
     if (!window.location.hash && config.defaultRoute) {
       history.replaceState(null, '', '#' + config.defaultRoute);
     }
     onHashChange();  // initial dispatch
+  }
+
+  async function loadIdentity() {
+    try {
+      const response = await fetch('/api/v1/console/me', { credentials: 'same-origin' });
+      if (!response.ok) throw new Error('Unable to load console identity.');
+      const me = await response.json();
+      identity = me;
+      renderUser();
+      renderSidebar();
+    } catch (_) {
+      identity = null;
+      renderUser();
+    }
+  }
+
+  function renderUser() {
+    if (!userNode) return;
+    const username = identity && identity.username ? String(identity.username) : '';
+    userNode.textContent = username;
+    userNode.hidden = !username;
+  }
+
+  function allowedPages() {
+    if (!identity || !Array.isArray(identity.menus)) return PAGES;
+    const menus = new Set(identity.menus);
+    return PAGES.filter((page) => menus.has(page.id));
   }
 
   function currentRoute() {
@@ -96,7 +131,7 @@
     const lvl2 = config.sidebar ? config.sidebar() : [];
     const route = currentRoute();
 
-    for (const p of PAGES) {
+    for (const p of allowedPages()) {
       const isCurrent = p.id === config.page;
       root.append(el('a', {
         class: 'nav-group' + (isCurrent ? ' on' : ''),
