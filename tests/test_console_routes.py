@@ -95,9 +95,28 @@ def test_subaccount_can_only_access_allowed_page(monkeypatch, tmp_path):
             json={"username": "model-tester", "password": "secret123", "remember": True},
         )
         assert client.get("/evaluations", follow_redirects=False).status_code == 200
-        assert client.get("/", follow_redirects=False).status_code == 403
+        index = client.get("/", follow_redirects=False)
+        assert index.status_code == 302
+        assert index.headers["location"] == "/evaluations"
         assert client.get("/config", follow_redirects=False).status_code == 403
         assert client.get("/accounts", follow_redirects=False).status_code == 403
+
+
+def test_subaccount_with_test_menu_can_access_index(monkeypatch, tmp_path):
+    m = _reload_with_console_store(monkeypatch, tmp_path)
+    m.console_account_store.create_user("image-tester", "secret123", ["test"])
+
+    from fastapi.testclient import TestClient
+    with TestClient(m.app) as client:
+        client.post(
+            "/api/v1/console/login",
+            json={"username": "image-tester", "password": "secret123", "remember": True},
+        )
+
+        response = client.get("/", follow_redirects=False)
+
+        assert response.status_code == 200
+        assert "shell.js" in response.text
 
 
 def test_evaluations_subaccount_defaults_to_evaluations_not_index(monkeypatch, tmp_path):

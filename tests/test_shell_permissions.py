@@ -17,11 +17,10 @@ def test_shell_fetches_identity_with_same_origin_credentials():
     assert ".innerHTML = me.username" not in source
 
 
-def test_accounts_page_does_not_offer_default_test_menu_to_subaccounts():
+def test_accounts_page_offers_test_menu_to_subaccounts():
     source = ACCOUNTS_HTML.read_text(encoding="utf-8")
 
-    assert "{ id: 'test'" not in source
-    assert "['test']" not in source
+    assert "{ id: 'test', label: '测试' }" in source
     assert "{ id: 'evaluations', label: '模型测试' }" in source
     assert "['evaluations']" in source
 

@@ -69,12 +69,13 @@ def test_verify_password_rejects_hashes_with_wrong_salt_length():
 def test_sanitize_subaccount_menus_filters_accounts_and_sorts():
     assert sanitize_subaccount_menus(["accounts", "evaluations", "test", "evaluations"]) == [
         "evaluations",
+        "test",
     ]
 
 
 def test_console_account_constants_match_required_values():
     assert ALL_MENUS == ("test", "config", "evaluations", "logs", "accounts")
-    assert ASSIGNABLE_MENUS == ("config", "evaluations", "logs")
+    assert ASSIGNABLE_MENUS == ("test", "config", "evaluations", "logs")
     assert SUPERADMIN_ROLE == "superadmin"
     assert SUBACCOUNT_ROLE == "subaccount"
 
@@ -123,7 +124,7 @@ def test_store_get_user_returns_enabled_user_only(tmp_path):
     user = store.get_user("model-tester")
 
     assert user.username == "model-tester"
-    assert user.menus == ("evaluations",)
+    assert user.menus == ("evaluations", "test")
     assert user.enabled is True
     store.update_user("model-tester", enabled=False)
     assert store.get_user("model-tester") is None
@@ -144,7 +145,7 @@ def test_store_update_user_changes_password_menus_enabled_and_updated_at(tmp_pat
         enabled=False,
     )
 
-    assert updated["menus"] == ["logs"]
+    assert updated["menus"] == ["logs", "test"]
     assert updated["enabled"] is False
     assert updated["updated_at"] != created["updated_at"]
     assert store.authenticate("model-tester", "secret456") is None
@@ -152,7 +153,7 @@ def test_store_update_user_changes_password_menus_enabled_and_updated_at(tmp_pat
     assert updated_raw["password_hash"] != original_raw["password_hash"]
     store.update_user("model-tester", enabled=True)
     assert store.authenticate("model-tester", "secret123") is None
-    assert store.authenticate("model-tester", "secret456").menus == ("logs",)
+    assert store.authenticate("model-tester", "secret456").menus == ("logs", "test")
 
 
 def test_store_delete_user_removes_user_and_rejects_missing_user(tmp_path):
@@ -215,7 +216,7 @@ def test_store_instances_for_same_path_share_lock_and_preserve_concurrent_create
     def create_user(store, username):
         try:
             barrier.wait(timeout=5)
-            store.create_user(username, "secret123", ["evaluations"])
+            store.create_user(username, "secret123", ["test"])
         except Exception as exc:
             errors.append(exc)
 
@@ -240,14 +241,14 @@ def test_store_rejects_duplicate_empty_password_and_empty_menus(tmp_path):
     store = ConsoleAccountStore(tmp_path / "console_users.json")
     store.create_user("model-tester", "secret123", ["evaluations"])
     with pytest.raises(ValueError, match="already exists"):
-        store.create_user("model-tester", "secret123", ["evaluations"])
+        store.create_user("model-tester", "secret123", ["test"])
     with pytest.raises(ValueError, match="Password"):
-        store.create_user("short-pass", "123", ["evaluations"])
+        store.create_user("short-pass", "123", ["test"])
     with pytest.raises(ValueError, match="at least one menu"):
-        store.create_user("no-menu", "secret123", ["accounts", "test"])
+        store.create_user("no-menu", "secret123", ["accounts"])
 
 
 def test_store_blocks_superadmin_username(tmp_path):
     store = ConsoleAccountStore(tmp_path / "console_users.json", superadmin_username="admin")
     with pytest.raises(ValueError, match="reserved"):
-        store.create_user("admin", "secret123", ["evaluations"])
+        store.create_user("admin", "secret123", ["test"])

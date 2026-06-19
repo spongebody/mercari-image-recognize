@@ -743,9 +743,14 @@ def index_page(request: Request):
     /api/v1/mercari/image/price) resolve to this server automatically, so the
     endpoint field can be left blank.
     """
-    gate = _require_page_menu(request, "test", "/")
-    if gate is not None:
-        return gate
+    identity = _console_identity_for_page(request)
+    if identity is None:
+        return RedirectResponse("/login?next=/", status_code=302)
+    if not identity.has_menu("test"):
+        default_path = _default_path(list(identity.menus))
+        if default_path != "/":
+            return RedirectResponse(default_path, status_code=302)
+        return HTMLResponse("Forbidden", status_code=403)
     index_path = WEB_DIR / "index.html"
     if not index_path.exists():
         raise HTTPException(status_code=404, detail="Test UI not found.")

@@ -14,7 +14,7 @@ try:
     from app.console_accounts import ALL_MENUS, ASSIGNABLE_MENUS, SUBACCOUNT_ROLE, SUPERADMIN_ROLE
 except ImportError:  # pragma: no cover - defensive fallback for partial imports
     ALL_MENUS = ("test", "config", "evaluations", "logs", "accounts")
-    ASSIGNABLE_MENUS = ("config", "evaluations", "logs")
+    ASSIGNABLE_MENUS = ("test", "config", "evaluations", "logs")
     SUPERADMIN_ROLE = "superadmin"
     SUBACCOUNT_ROLE = "subaccount"
 
