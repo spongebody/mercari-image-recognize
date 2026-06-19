@@ -872,8 +872,9 @@ def console_logout(request: Request, response: Response) -> Dict[str, Any]:
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
-    if settings.logs_password and is_console_authed(request, settings.logs_password):
-        return RedirectResponse("/", status_code=302)
+    identity = _console_identity_for_page(request) if settings.logs_password else None
+    if identity is not None:
+        return RedirectResponse(_default_path(list(identity.menus)), status_code=302)
     if not LOGIN_PAGE_PATH.exists():
         raise HTTPException(status_code=404, detail="Login page not found.")
     return HTMLResponse(LOGIN_PAGE_PATH.read_text(encoding="utf-8"))

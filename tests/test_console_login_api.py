@@ -118,6 +118,42 @@ def test_authed_user_visiting_login_is_redirected_home(monkeypatch):
         assert r.headers["location"] == "/"
 
 
+def test_subaccount_visiting_login_redirects_to_default_menu(monkeypatch, tmp_path):
+    monkeypatch.setenv("CONSOLE_USERS_PATH", str(tmp_path / "console_users.json"))
+    m = _reload(monkeypatch)
+    m.console_account_store.create_user("model-tester", "secret123", ["evaluations"])
+
+    with TestClient(m.app) as client:
+        client.post(
+            "/api/v1/console/login",
+            json={"username": "model-tester", "password": "secret123", "remember": True},
+        )
+
+        r = client.get("/login", follow_redirects=False)
+
+        assert r.status_code == 302
+        assert r.headers["location"] == "/evaluations"
+
+
+def test_disabled_subaccount_existing_token_can_reach_login_page(monkeypatch, tmp_path):
+    monkeypatch.setenv("CONSOLE_USERS_PATH", str(tmp_path / "console_users.json"))
+    m = _reload(monkeypatch)
+    m.console_account_store.create_user("model-tester", "secret123", ["evaluations"])
+
+    with TestClient(m.app) as client:
+        login = client.post(
+            "/api/v1/console/login",
+            json={"username": "model-tester", "password": "secret123", "remember": True},
+        )
+        assert login.status_code == 200
+
+        m.console_account_store.update_user("model-tester", enabled=False)
+        r = client.get("/login", follow_redirects=False)
+
+        assert r.status_code == 200
+        assert "console/login" in r.text
+
+
 def test_me_returns_superadmin_identity(monkeypatch):
     m = _reload(monkeypatch)
     with TestClient(m.app) as client:
